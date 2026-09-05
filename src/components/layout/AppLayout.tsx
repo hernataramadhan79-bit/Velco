@@ -19,6 +19,30 @@ import { SettingsView } from '../../features/settings/SettingsView';
 import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
 
+interface DragDropIndicatorProps {
+  isDragging: boolean;
+}
+
+const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => {
+  if (!isDragging) return null;
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 text-white shadow-2xl border border-blue-500/40 backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-150">
+      <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md animate-bounce">
+        <Upload className="w-4 h-4" />
+      </div>
+      <div className="flex flex-col text-left">
+        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+          Drop files to import
+          <span className="text-[10px] font-medium bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded">Velco</span>
+        </div>
+        <div className="text-[10px] text-slate-400 font-normal">
+          Release anywhere to save attachments
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const AppLayout: React.FC = () => {
   const itemStore = useItemStore();
   const tagStore = useTagStore();
@@ -145,22 +169,8 @@ export const AppLayout: React.FC = () => {
           </div>
         )}
 
-        {/* Global Drag & Drop Overlay */}
-        {isGlobalDragging && (
-          <div className="fixed inset-0 z-50 pointer-events-none bg-blue-600/15 backdrop-blur-[2px] flex items-center justify-center border-4 border-dashed border-blue-500 rounded-2xl m-4 transition-all animate-in fade-in duration-150">
-            <div className="bg-white/95 dark:bg-slate-900/95 p-8 rounded-3xl shadow-2xl border border-blue-500/30 text-center max-w-md pointer-events-auto">
-              <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-4 border border-blue-200 dark:border-blue-800 shadow-inner animate-bounce">
-                <Upload className="w-8 h-8" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
-                Drop Files into Velco
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Release anywhere to instantly import and index documents, images, and attachments locally.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Global Drag & Drop Indicator (Compact Floating Dock) */}
+        <DragDropIndicator isDragging={isGlobalDragging} />
       </div>
     );
   }
@@ -332,22 +342,8 @@ export const AppLayout: React.FC = () => {
         </div>
       )}
 
-      {/* Global Drag & Drop Overlay */}
-      {isGlobalDragging && (
-        <div className="fixed inset-0 z-50 pointer-events-none bg-blue-600/15 backdrop-blur-[2px] flex items-center justify-center border-4 border-dashed border-blue-500 rounded-2xl m-4 transition-all animate-in fade-in duration-150">
-          <div className="bg-white/95 dark:bg-slate-900/95 p-8 rounded-3xl shadow-2xl border border-blue-500/30 text-center max-w-md pointer-events-auto">
-            <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-4 border border-blue-200 dark:border-blue-800 shadow-inner animate-bounce">
-              <Upload className="w-8 h-8" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
-              Drop Files into Velco
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Release anywhere to instantly import and index documents, images, and attachments locally.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Global Drag & Drop Indicator (Compact Floating Dock) */}
+      <DragDropIndicator isDragging={isGlobalDragging} />
     </div>
   );
 };
