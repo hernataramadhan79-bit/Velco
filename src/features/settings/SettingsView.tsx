@@ -54,6 +54,51 @@ function formatContextLength(ctx?: number): string | null {
   return `${ctx} ctx`;
 }
 
+const CURATED_OPENROUTER_FREE_MODELS: AIModelInfo[] = [
+  {
+    id: 'google/gemini-2.0-flash-exp:free',
+    name: 'Google: Gemini 2.0 Flash Exp (free)',
+    isFree: true,
+    contextLength: 1048576,
+    description: 'Multimodal, high speed, 1M token context window',
+  },
+  {
+    id: 'meta-llama/llama-3.3-70b-instruct:free',
+    name: 'Meta: Llama 3.3 70B Instruct (free)',
+    isFree: true,
+    contextLength: 131072,
+    description: 'Flagship 70B open weights model with 128k context',
+  },
+  {
+    id: 'deepseek/deepseek-r1:free',
+    name: 'DeepSeek: DeepSeek R1 (free)',
+    isFree: true,
+    contextLength: 64000,
+    description: 'State-of-the-art open reasoning model',
+  },
+  {
+    id: 'deepseek/deepseek-chat:free',
+    name: 'DeepSeek: DeepSeek V3 (free)',
+    isFree: true,
+    contextLength: 64000,
+    description: 'Flagship general purpose chat model',
+  },
+  {
+    id: 'qwen/qwen-2.5-coder-32b-instruct:free',
+    name: 'Qwen: Qwen 2.5 Coder 32B (free)',
+    isFree: true,
+    contextLength: 32768,
+    description: 'Top open-source code reasoning model',
+  },
+  {
+    id: 'mistralai/mistral-7b-instruct:free',
+    name: 'Mistral: Mistral 7B Instruct (free)',
+    isFree: true,
+    contextLength: 32768,
+    description: 'Fast, efficient general instruction model',
+  },
+];
+
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const { settings, updateSettings } = useSettings();
   const [activeSection, setActiveSection] = useState<SettingsSection>('ai');
@@ -67,8 +112,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     models?: string[];
   } | null>(null);
 
-  // Live real-time models catalog
-  const [detailedModels, setDetailedModels] = useState<AIModelInfo[]>([]);
+  // Live real-time models catalog (initialized with curated models for immediate availability)
+  const [detailedModels, setDetailedModels] = useState<AIModelInfo[]>(() =>
+    settings.aiProvider === 'openrouter' ? CURATED_OPENROUTER_FREE_MODELS : []
+  );
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelFilter, setModelFilter] = useState<'all' | 'free'>('free');
   const [modelSearch, setModelSearch] = useState('');
@@ -182,6 +229,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     try {
       const baseUrl = getProviderBaseUrl();
       const apiKey = getProviderApiKey();
+
+      // 1. Primary: Rich model listing with isFree, contextLength, and descriptions
+      try {
+        const detailed = await aiService.listDetailedModels(
+          baseUrl,
+          apiKey,
+          settings.aiProvider
+        );
+        if (detailed && detailed.length > 0) {
+          const normalized: AIModelInfo[] = detailed.map((m: any) => {
+            const isFree =
+              m.isFree === true ||
+              m.is_free === true ||
+              (typeof m.id === 'string' && (m.id.endsWith(':free') || m.id.includes(':free')));
+            return {
+              id: m.id,
+              name: m.name || m.id,
+              isFree,
+              contextLength: m.contextLength ?? m.context_length,
+              description: m.description,
+            };
+          });
+          setDetailedModels(normalized);
+          return;
+        }
+      } catch (errDetailed) {
+        console.warn('listDetailedModels failed, trying testConnection fallback:', errDetailed);
+      }
+
+      // 2. Fallback: testConnection returns string model IDs
       const result = await aiService.testConnection(
         baseUrl,
         apiKey,
@@ -189,10 +266,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         getProviderModel()
       );
       if (result.models && result.models.length > 0) {
-        setDetailedModels(result.models.map((m) => ({ id: m, name: m })));
+        const mapped: AIModelInfo[] = result.models.map((m: any) => {
+          const id = typeof m === 'string' ? m : m.id || '';
+          const name = typeof m === 'string' ? m : m.name || id;
+          const isFree =
+            m.isFree === true ||
+            m.is_free === true ||
+            id.endsWith(':free') ||
+            id.includes(':free');
+          return {
+            id,
+            name,
+            isFree,
+            contextLength: m.contextLength ?? m.context_length,
+            description: m.description,
+          };
+        });
+        setDetailedModels(mapped);
+        return;
+      }
+
+      // 3. Last-resort fallback for OpenRouter
+      if (settings.aiProvider === 'openrouter') {
+        setDetailedModels(CURATED_OPENROUTER_FREE_MODELS);
       }
     } catch (err) {
       console.warn('Failed to fetch live models:', err);
+      if (settings.aiProvider === 'openrouter') {
+        setDetailedModels(CURATED_OPENROUTER_FREE_MODELS);
+      }
     } finally {
       setIsLoadingModels(false);
     }
@@ -272,10 +374,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     reader.readAsText(file);
   };
 
+  // Check if a model is free
+  const isModelFree = useCallback((m: AIModelInfo): boolean => {
+    return (
+      m.isFree === true ||
+      (m as any).is_free === true ||
+      (typeof m.id === 'string' && (m.id.endsWith(':free') || m.id.includes(':free')))
+    );
+  }, []);
+
   // Filtered OpenRouter models
   const filteredOpenRouterModels = useMemo(() => {
     return detailedModels.filter((m) => {
-      if (modelFilter === 'free' && !m.isFree) return false;
+      const free = isModelFree(m);
+      if (modelFilter === 'free' && !free) return false;
       if (!modelSearch.trim()) return true;
       const q = modelSearch.toLowerCase().trim();
       return (
@@ -284,12 +396,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         (m.description && m.description.toLowerCase().includes(q))
       );
     });
-  }, [detailedModels, modelFilter, modelSearch]);
+  }, [detailedModels, modelFilter, modelSearch, isModelFree]);
 
   const totalOpenRouterCount = detailedModels.length;
   const freeOpenRouterCount = useMemo(
-    () => detailedModels.filter((m) => m.isFree).length,
-    [detailedModels]
+    () => detailedModels.filter(isModelFree).length,
+    [detailedModels, isModelFree]
   );
 
   return (
@@ -597,7 +709,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                         <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
                                           {m.name}
                                         </span>
-                                        {m.isFree && (
+                                        {isModelFree(m) && (
                                           <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                                             FREE
                                           </span>

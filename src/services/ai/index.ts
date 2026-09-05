@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { RecipeOutput, LlmProviderConfig } from '../../types/ai';
+import { RecipeOutput, LlmProviderConfig, AIModelInfo } from '../../types/ai';
 
 /**
  * AI service — thin IPC wrapper over Rust backend commands.
@@ -31,9 +31,17 @@ export const aiService = {
   checkStatus: (baseUrl?: string, apiKey?: string) =>
     invoke<boolean>('check_ollama_status', { baseUrl, apiKey }),
 
-  /** List available models from an AI provider. */
+  /** List available models from an AI provider (simple string IDs). */
   listModels: (baseUrl?: string, apiKey?: string) =>
     invoke<string[]>('list_ollama_models', { baseUrl, apiKey }),
+
+  /** List models with rich capabilities, isFree status, contextLength, and description. */
+  listDetailedModels: (baseUrl?: string, apiKey?: string, provider?: string) =>
+    invoke<AIModelInfo[]>('list_ai_models_detailed', {
+      baseUrl: baseUrl || null,
+      apiKey: apiKey || null,
+      provider: provider || null,
+    }),
 
   /** Test AI provider connection. */
   testConnection: (baseUrl?: string, apiKey?: string, provider?: string, model?: string) =>

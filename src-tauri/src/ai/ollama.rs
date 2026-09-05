@@ -9,6 +9,7 @@ pub struct ConnectionTestResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct DetailedModelInfo {
     pub id: String,
     pub name: String,
@@ -223,12 +224,16 @@ impl LocalAiClient {
                                     let context_length = m.get("context_length").and_then(|c| c.as_u64());
                                     let description = m.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
 
-                                    let is_free_by_id = id.ends_with(":free");
+                                    let is_free_by_id = id.ends_with(":free") || id.contains(":free");
                                     let is_free_by_pricing = m.get("pricing").map(|p| {
-                                        let prompt_free = p.get("prompt").and_then(|pr| pr.as_str()).map(|s| s == "0" || s == "0.0").unwrap_or(false)
-                                            || p.get("prompt").and_then(|pr| pr.as_f64()).map(|f| f == 0.0).unwrap_or(false);
-                                        let comp_free = p.get("completion").and_then(|cp| cp.as_str()).map(|s| s == "0" || s == "0.0").unwrap_or(false)
-                                            || p.get("completion").and_then(|cp| cp.as_f64()).map(|f| f == 0.0).unwrap_or(false);
+                                        let prompt_free = p.get("prompt")
+                                            .and_then(|pr| pr.as_str().and_then(|s| s.parse::<f64>().ok()).or_else(|| pr.as_f64()))
+                                            .map(|val| val == 0.0)
+                                            .unwrap_or(false);
+                                        let comp_free = p.get("completion")
+                                            .and_then(|cp| cp.as_str().and_then(|s| s.parse::<f64>().ok()).or_else(|| cp.as_f64()))
+                                            .map(|val| val == 0.0)
+                                            .unwrap_or(false);
                                         prompt_free && comp_free
                                     }).unwrap_or(false);
 
@@ -244,20 +249,68 @@ impl LocalAiClient {
                                 })
                                 .collect();
 
-                            // Sort: free models first, then alphabetical by name
-                            models.sort_by(|a, b| {
-                                match (a.is_free, b.is_free) {
-                                    (true, false) => std::cmp::Ordering::Less,
-                                    (false, true) => std::cmp::Ordering::Greater,
-                                    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-                                }
-                            });
+                            if !models.is_empty() {
+                                // Sort: free models first, then alphabetical by name
+                                models.sort_by(|a, b| {
+                                    match (a.is_free, b.is_free) {
+                                        (true, false) => std::cmp::Ordering::Less,
+                                        (false, true) => std::cmp::Ordering::Greater,
+                                        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                                    }
+                                });
 
-                            return Ok(models);
+                                return Ok(models);
+                            }
                         }
                     }
                 }
             }
+
+            // Fallback: curated list of top free OpenRouter models
+            return Ok(vec![
+                DetailedModelInfo {
+                    id: "google/gemini-2.0-flash-exp:free".to_string(),
+                    name: "Google: Gemini 2.0 Flash Exp (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(1048576),
+                    description: Some("Multimodal, high speed, 1M token context window".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "meta-llama/llama-3.3-70b-instruct:free".to_string(),
+                    name: "Meta: Llama 3.3 70B Instruct (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(131072),
+                    description: Some("Flagship 70B open weights model with 128k context".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "deepseek/deepseek-r1:free".to_string(),
+                    name: "DeepSeek: DeepSeek R1 (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(64000),
+                    description: Some("State-of-the-art open reasoning model".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "deepseek/deepseek-chat:free".to_string(),
+                    name: "DeepSeek: DeepSeek V3 (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(64000),
+                    description: Some("Flagship general purpose chat model".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "qwen/qwen-2.5-coder-32b-instruct:free".to_string(),
+                    name: "Qwen: Qwen 2.5 Coder 32B (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(32768),
+                    description: Some("Top open-source code reasoning model".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "mistralai/mistral-7b-instruct:free".to_string(),
+                    name: "Mistral: Mistral 7B Instruct (free)".to_string(),
+                    is_free: true,
+                    context_length: Some(32768),
+                    description: Some("Fast, efficient general instruction model".to_string()),
+                },
+            ]);
         }
 
         // 2. Google Gemini
@@ -716,6 +769,10 @@ impl LocalAiClient {
         if self.base_url.starts_with("https://") || self.api_key.is_some() {
             let api_key = match self.api_key.as_deref() {
                 Some(k) if !k.is_empty() => k,
+                _ if provider_id == "openrouter" => {
+                    // OpenRouter model catalog is public and works without an API key
+                    ""
+                }
                 _ if self.base_url.starts_with("https://") => {
                     return Ok(ConnectionTestResult {
                         success: false,
