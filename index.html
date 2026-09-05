@@ -9,6 +9,21 @@
     <meta name="color-scheme" content="light dark" />
     <script>
       (function () {
+        // Disable default browser context menu to feel like a native desktop app
+        document.addEventListener('contextmenu', function (e) {
+          e.preventDefault();
+        });
+
+        // Disable standard web shortcuts (F5, Ctrl+R reload, Ctrl+P print, Ctrl+U view-source)
+        window.addEventListener('keydown', function (e) {
+          if (
+            e.key === 'F5' ||
+            ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R' || e.key === 'p' || e.key === 'P' || e.key === 'u' || e.key === 'U'))
+          ) {
+            e.preventDefault();
+          }
+        });
+
         try {
           const raw = localStorage.getItem('velco_settings_v1') || localStorage.getItem('lifeinbox_settings_v1');
           const theme = raw ? JSON.parse(raw).theme : 'system';
