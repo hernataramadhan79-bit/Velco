@@ -33,3 +33,27 @@ export interface AIModelInfo {
 
 /** Recipe types available in the Context Foundry. */
 export type RecipeType = 'synthesize' | 'extract_tasks' | 'triage' | 'custom';
+
+/** Chat role definition. */
+export type ChatRole = 'user' | 'assistant' | 'system';
+
+/** A single chat message in the Context Workstation conversation. */
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  timestamp: number;
+  stagedItemIds?: string[];
+  stagedItemTitles?: string[];
+  isStreaming?: boolean;
+  error?: string;
+}
+
+/** Streaming token payload emitted from Rust backend over Tauri events. */
+export interface ChatChunkEvent {
+  request_id: string;
+  delta: string;
+  done: boolean;
+  error?: string | null;
+}
+

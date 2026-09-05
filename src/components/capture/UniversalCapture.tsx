@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import { CreateItemInput, ItemType, PriorityLevel } from '../../types/item';
+import { DueDatePicker } from '../tasks/DueDatePicker';
 
 interface UniversalCaptureProps {
   onCapture: (input: CreateItemInput) => Promise<any>;
@@ -256,11 +257,10 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
                 {p}
               </button>
             ))}
-            <input
-              type="date"
+            <DueDatePicker
               value={taskDueDate}
-              onChange={(e) => setTaskDueDate(e.target.value)}
-              className="ml-auto px-2 py-0.5 rounded bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+              onChange={setTaskDueDate}
+              className="ml-auto"
             />
           </div>
         )}

@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
+import { MarkdownViewer } from '../common/MarkdownViewer';
+import { DueDatePicker } from '../tasks/DueDatePicker';
 
 interface ItemDetailModalProps {
   item: Item | null;
@@ -451,6 +453,83 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           </div>
         )}
 
+        {/* Task Details Editor (Priority & Due Date & Reminder) */}
+        {item.type === 'task' && (
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                Task Settings
+              </label>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-400 text-[11px]">Status:</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdate(item.id, {
+                      task: {
+                        ...(item.task || { priority: 'medium' }),
+                        completed: !item.task?.completed,
+                        completedAt: !item.task?.completed ? new Date().toISOString() : null,
+                      },
+                    })
+                  }
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    item.task?.completed
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
+                  }`}
+                >
+                  {item.task?.completed ? 'Completed' : 'Pending'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              {/* Priority Selector */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-400 text-[11px]">Priority:</span>
+                {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => {
+                  const active = (item.task?.priority || 'medium') === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() =>
+                        onUpdate(item.id, {
+                          task: {
+                            ...(item.task || { completed: false }),
+                            priority: p,
+                          },
+                        })
+                      }
+                      className={`px-2 py-0.5 rounded-md capitalize text-[11px] font-medium transition-colors cursor-pointer ${
+                        active
+                          ? 'bg-blue-600 text-white font-semibold shadow-2xs'
+                          : 'bg-slate-200/70 hover:bg-slate-300/70 dark:bg-slate-700/60 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Due Date & Reminder */}
+              <DueDatePicker
+                value={item.task?.dueDate || ''}
+                onChange={(newDueDate) =>
+                  onUpdate(item.id, {
+                    task: {
+                      ...(item.task || { priority: 'medium', completed: false }),
+                      dueDate: newDueDate || null,
+                    },
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+
         {/* Tags Editor */}
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
@@ -587,8 +666,8 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
               />
             ) : (
               item.content ? (
-                <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 min-h-[100px] text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
-                  {item.content}
+                <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 min-h-[100px] text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
+                  <MarkdownViewer content={item.content} />
                 </div>
               ) : null
             )}

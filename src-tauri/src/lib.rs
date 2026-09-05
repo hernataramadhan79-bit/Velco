@@ -12,6 +12,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(storage)
         .manage(db)
         .invoke_handler(tauri::generate_handler![
@@ -42,6 +43,7 @@ pub fn run() {
             commands::ai::test_ai_connection,
             commands::ai::execute_context_recipe,
             commands::ai::apply_recipe_artifacts,
+            commands::ai::execute_context_chat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Velco application");

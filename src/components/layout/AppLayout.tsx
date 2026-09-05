@@ -18,6 +18,8 @@ import { TrashView } from '../../features/trash/TrashView';
 import { SettingsView } from '../../features/settings/SettingsView';
 import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
+import { reminderService } from '../../services/reminder/reminderService';
+import { isTaskOverdue } from '../../utils/dateUtils';
 
 interface DragDropIndicatorProps {
   isDragging: boolean;
@@ -48,6 +50,7 @@ export const AppLayout: React.FC = () => {
   const tagStore = useTagStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFoundryOpen, setIsFoundryOpen] = useState(false);
+  const [isFoundryExpanded, setIsFoundryExpanded] = useState(false);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const previousViewRef = useRef<NavigationView>('inbox');
@@ -65,6 +68,21 @@ export const AppLayout: React.FC = () => {
   };
 
   const stagedCount = useContextStore((state) => state.stagedItems.length);
+
+  const overdueCount = itemStore.items.filter(
+    (item) => item.type === 'task' && !item.task?.completed && isTaskOverdue(item.task?.dueDate)
+  ).length;
+
+  // Background Reminder Service: checks tasks every 30s and sends OS banner + in-app notification
+  useEffect(() => {
+    reminderService.start(
+      () => itemStoreRef.current.items,
+      (msg) => itemStoreRef.current.notify(msg, 'info')
+    );
+    return () => {
+      reminderService.stop();
+    };
+  }, []);
 
   // Native Tauri Drag-and-Drop listener
   useEffect(() => {
@@ -187,6 +205,7 @@ export const AppLayout: React.FC = () => {
           currentView={itemStore.currentView}
           onSelectView={navigateToView}
           itemCounts={itemStore.itemCounts}
+          overdueCount={overdueCount}
           tags={tagStore.tags}
           selectedTagId={tagStore.selectedTagId}
           onSelectTag={(tagId) => {
@@ -305,14 +324,26 @@ export const AppLayout: React.FC = () => {
 
       {/* Pane 3: The Foundry (Context Workstation) */}
       {isFoundryOpen && (
-        <aside className="w-88 xl:w-96 shrink-0 h-full overflow-hidden transition-all duration-200 shadow-xl z-20">
+        <aside
+          className={`${
+            isFoundryExpanded ? 'w-[520px] xl:w-[600px]' : 'w-88 xl:w-96'
+          } shrink-0 h-full overflow-hidden transition-all duration-200 shadow-xl z-20`}
+        >
           <TheFoundry
             onClose={() => setIsFoundryOpen(false)}
+            isExpanded={isFoundryExpanded}
+            onToggleExpand={() => setIsFoundryExpanded((prev) => !prev)}
             onArtifactsApplied={() => {
               itemStore.refreshItems();
               itemStore.refreshCounts();
               itemStore.notify('Recipe artifacts committed to SQLite!', 'success');
             }}
+            onArtifactCreated={(msg) => {
+              itemStore.refreshItems();
+              itemStore.refreshCounts();
+              itemStore.notify(msg, 'success');
+            }}
+            onOpenSettings={() => navigateToView('settings')}
           />
         </aside>
       )}

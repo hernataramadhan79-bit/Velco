@@ -29,6 +29,7 @@ interface SidebarProps {
     archive: number;
     trash: number;
   };
+  overdueCount?: number;
   tags: Tag[];
   selectedTagId: string | null;
   onSelectTag: (tagId: string | null) => void;
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentView,
   onSelectView,
   itemCounts,
+  overdueCount = 0,
   tags,
   selectedTagId,
   onSelectTag,
@@ -140,17 +142,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                   <span>{item.label}</span>
                 </div>
-                {item.count !== undefined && item.count > 0 && (
-                  <span
-                    className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isActive
-                        ? 'bg-blue-200/60 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200'
-                        : 'bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    {item.count}
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {item.id === 'tasks' && overdueCount > 0 && (
+                    <span
+                      className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-2xs"
+                      title={`${overdueCount} task overdue!`}
+                    >
+                      {overdueCount}
+                    </span>
+                  )}
+                  {item.count !== undefined && item.count > 0 && (
+                    <span
+                      className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isActive
+                          ? 'bg-blue-200/60 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200'
+                          : 'bg-slate-200/60 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}

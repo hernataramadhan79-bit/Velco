@@ -60,4 +60,18 @@ export const aiService = {
       prompt,
       apiKey: apiKey || null,
     }),
+
+  /** Execute streaming context chat against staged items. */
+  executeChat: (
+    requestId: string,
+    messages: Array<{ role: string; content: string }>,
+    itemIds: string[],
+    providerConfig?: LlmProviderConfig,
+  ) =>
+    invoke<string>('execute_context_chat', {
+      requestId,
+      messages,
+      itemIds,
+      providerConfig: providerConfig || null,
+    }),
 };

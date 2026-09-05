@@ -11,10 +11,15 @@ import {
   Sparkles,
   Paperclip,
   Layers,
+  Calendar,
+  Clock,
+  AlertCircle,
+  Check,
 } from 'lucide-react';
 import { Item } from '../../types/item';
 import { Badge } from '../common/Badge';
 import { useContextStore, estimateTokens } from '../../stores/contextStore';
+import { formatTaskDueDate } from '../../utils/dateUtils';
 
 interface ItemCardProps {
   item: Item;
@@ -200,10 +205,43 @@ export const ItemCard: React.FC<ItemCardProps> = ({
               </div>
             )}
 
-            {/* Tags row */}
-            {item.tags && item.tags.length > 0 && (
+            {/* Task Due Date & Tags row */}
+            {((item.tags && item.tags.length > 0) || (item.type === 'task' && item.task?.dueDate)) && (
               <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                {item.tags.map((tag) => (
+                {/* Due Date Badge */}
+                {item.type === 'task' && item.task?.dueDate && (() => {
+                  const dueInfo = formatTaskDueDate(item.task.dueDate, item.task.completed);
+                  if (dueInfo.status === 'none') return null;
+
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors ${
+                        item.task?.completed
+                          ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 line-through'
+                          : dueInfo.status === 'overdue'
+                          ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold border border-rose-200/80 dark:border-rose-800/80'
+                          : dueInfo.status === 'today'
+                          ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 font-semibold border border-amber-200/80 dark:border-amber-800/80'
+                          : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60'
+                      }`}
+                      title={`Due Date: ${dueInfo.fullDateStr}`}
+                    >
+                      {item.task?.completed ? (
+                        <Check className="w-2.5 h-2.5 text-slate-400" />
+                      ) : dueInfo.status === 'overdue' ? (
+                        <AlertCircle className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+                      ) : dueInfo.hasTime ? (
+                        <Clock className="w-2.5 h-2.5 text-amber-500 shrink-0" />
+                      ) : (
+                        <Calendar className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                      )}
+                      <span>{dueInfo.label}</span>
+                    </span>
+                  );
+                })()}
+
+                {/* Tags */}
+                {item.tags?.map((tag) => (
                   <span
                     key={tag.id}
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"

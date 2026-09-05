@@ -18,47 +18,58 @@ import {
   ChevronUp,
   Link2,
   FileIcon,
+  MessageSquare,
+  Maximize2,
+  Minimize2,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useContextStore } from '../../stores/contextStore';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
 import { RecipeOutput, RecipeType, LlmProviderConfig } from '../../types/ai';
 import { Badge } from '../common/Badge';
+import { MarkdownViewer } from '../common/MarkdownViewer';
+import { FoundryChat } from './FoundryChat';
 
 interface TheFoundryProps {
   onClose?: () => void;
   onArtifactsApplied?: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+  onArtifactCreated?: (msg: string) => void;
+  onOpenSettings?: () => void;
 }
 
 export const TheFoundry: React.FC<TheFoundryProps> = ({
   onClose,
   onArtifactsApplied,
+  isExpanded,
+  onToggleExpand,
+  onArtifactCreated,
+  onOpenSettings,
 }) => {
+  const [activeTab, setActiveTab] = useState<'recipes' | 'chat'>('chat');
   const {
     stagedItems,
     unstageItem,
     clearStage,
     totalTokens,
     contextLimit,
-    activeProvider,
-    setActiveProvider,
   } = useContextStore();
 
   const { settings, updateSettings } = useSettings();
 
-  const isLocalMode = activeProvider === 'local' || activeProvider === 'ollama';
+  // The true source of truth is settings.aiProvider
+  const isLocalMode = ['ollama', 'lmstudio'].includes(settings.aiProvider);
 
-  // Determine local engine from settings (ollama or lmstudio)
-  const currentLocalEngine: 'lmstudio' | 'ollama' =
-    settings.aiProvider === 'ollama' ? 'ollama' : 'lmstudio';
-
+  // Active local model and endpoint
   const activeLocalModel =
-    currentLocalEngine === 'ollama'
+    settings.aiProvider === 'ollama'
       ? (settings.ollamaModel || 'qwen2.5:latest')
       : (settings.lmstudioModel || 'qwen2.5-coder-7b-instruct');
 
   const activeLocalUrl =
-    currentLocalEngine === 'ollama'
+    settings.aiProvider === 'ollama'
       ? (settings.ollamaUrl || 'http://localhost:11434')
       : (settings.lmstudioUrl || 'http://localhost:1234/v1');
 
@@ -75,6 +86,12 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
     settings.aiProvider === 'anthropic' ? (settings.anthropicModel || 'claude-3-5-haiku-20241022') :
     settings.aiProvider === 'custom' ? (settings.customModel || 'custom-model') :
     (settings.openrouterModel || 'openai/gpt-4o-mini');
+
+  const activeProviderName = isLocalMode
+    ? (settings.aiProvider === 'ollama' ? 'Ollama' : 'LM Studio')
+    : cloudProviderName;
+
+  const activeModelName = isLocalMode ? activeLocalModel : activeCloudModel;
 
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeType>('synthesize');
   const [customPrompt, setCustomPrompt] = useState('');
@@ -96,7 +113,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
 
   const getProviderConfig = (): LlmProviderConfig => {
     if (isLocalMode) {
-      if (currentLocalEngine === 'ollama') {
+      if (settings.aiProvider === 'ollama') {
         return {
           type: 'Ollama',
           config: {
@@ -219,7 +236,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
   return (
     <div className="flex flex-col h-full bg-slate-50/70 dark:bg-slate-900/70 border-l border-slate-200 dark:border-slate-800 select-none overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
             <Zap className="w-4 h-4 fill-indigo-600 dark:fill-indigo-400" />
@@ -231,24 +248,79 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                 Workstation
               </span>
             </h2>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">Context-Bound AI Recipes</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Context-Bound AI Recipes &amp; Chat</p>
           </div>
         </div>
 
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Close The Foundry"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title={isExpanded ? 'Collapse panel width' : 'Expand panel width for comfortable reading'}
+            >
+              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+          )}
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Close The Foundry"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Main Content Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {/* Context Meter Card */}
+      {/* Workstation Mode Switcher Tabs */}
+      <div className="px-4 py-2 border-b border-slate-200/80 dark:border-slate-800/80 bg-slate-100/50 dark:bg-slate-900/40">
+        <div className="grid grid-cols-2 gap-1 p-0.5 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab('recipes')}
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              activeTab === 'recipes'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Zap className={`w-3.5 h-3.5 ${activeTab === 'recipes' ? 'fill-indigo-600 dark:fill-indigo-400' : ''}`} />
+            <span>AI Recipes</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              activeTab === 'chat'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Context Chat</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Content Area */}
+      {activeTab === 'chat' ? (
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <FoundryChat
+            providerConfig={getProviderConfig()}
+            activeProviderName={activeProviderName}
+            activeModelName={activeModelName}
+            isLocal={isLocalMode}
+            onArtifactCreated={(msg) => {
+              if (onArtifactCreated) onArtifactCreated(msg);
+              if (onArtifactsApplied) onArtifactsApplied();
+            }}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          {/* Context Meter Card */}
         <div className="p-3.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
@@ -349,7 +421,10 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
           {/* Primary Mode: Local AI vs Cloud BYOK */}
           <div className="grid grid-cols-2 gap-1.5 p-1 rounded-lg bg-slate-100 dark:bg-slate-900/80 text-xs font-medium">
             <button
-              onClick={() => setActiveProvider('local')}
+              onClick={() => {
+                const targetLocal = settings.aiProvider === 'ollama' ? 'ollama' : 'lmstudio';
+                updateSettings({ aiProvider: targetLocal });
+              }}
               className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md transition-all cursor-pointer ${
                 isLocalMode
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-semibold'
@@ -360,7 +435,15 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
               <span>Local AI</span>
             </button>
             <button
-              onClick={() => setActiveProvider('cloud')}
+              onClick={() => {
+                const targetCloud =
+                  settings.geminiApiKey ? 'gemini' :
+                  settings.openaiApiKey ? 'openai' :
+                  settings.anthropicApiKey ? 'anthropic' :
+                  settings.openrouterApiKey ? 'openrouter' :
+                  'gemini';
+                updateSettings({ aiProvider: targetCloud });
+              }}
               className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md transition-all cursor-pointer ${
                 !isLocalMode
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-semibold'
@@ -382,7 +465,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                     type="button"
                     onClick={() => updateSettings({ aiProvider: 'lmstudio' })}
                     className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
-                      currentLocalEngine === 'lmstudio'
+                      settings.aiProvider === 'lmstudio'
                         ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -394,7 +477,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                     type="button"
                     onClick={() => updateSettings({ aiProvider: 'ollama' })}
                     className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
-                      currentLocalEngine === 'ollama'
+                      settings.aiProvider === 'ollama'
                         ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                     }`}
@@ -420,12 +503,29 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
               </div>
             </div>
           ) : (
-            <div className="space-y-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[11px]">
-              <div className="flex items-center justify-between px-0.5">
+            <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[11px]">
+              <div className="flex items-center justify-between">
                 <span className="text-slate-500 dark:text-slate-400">Provider:</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300 uppercase text-[10px]">
-                  {cloudProviderName}
-                </span>
+                <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-900/60 p-0.5 rounded-lg text-[10px] font-medium">
+                  {(['gemini', 'openrouter', 'openai', 'anthropic'] as const).map((p) => {
+                    const label = p === 'gemini' ? 'Gemini' : p === 'openrouter' ? 'OpenRouter' : p === 'openai' ? 'OpenAI' : 'Claude';
+                    const isCurrent = settings.aiProvider === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => updateSettings({ aiProvider: p })}
+                        className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex items-center justify-between px-0.5">
                 <span className="text-slate-500 dark:text-slate-400">Model:</span>
@@ -433,6 +533,18 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                   {activeCloudModel}
                 </span>
               </div>
+
+              {onOpenSettings && (
+                <div className="pt-0.5 flex justify-end">
+                  <button
+                    onClick={onOpenSettings}
+                    className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <SettingsIcon className="w-3 h-3" />
+                    <span>Configure API Keys in Settings</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -567,9 +679,30 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
 
         {/* Error Callout */}
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div className="flex-1 break-words">{error}</div>
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+              <div className="flex-1 break-words">{error}</div>
+            </div>
+            <div className="pt-1.5 border-t border-rose-200/60 dark:border-rose-800/60 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+              <span>
+                {error.includes('1234')
+                  ? 'Server LM Studio (port 1234) tidak aktif.'
+                  : error.includes('11434')
+                  ? 'Ollama (port 11434) tidak terhubung.'
+                  : error.includes('401')
+                  ? 'Autentikasi gagal / API key salah.'
+                  : 'Periksa konfigurasi AI di Pengaturan.'}
+              </span>
+              {onOpenSettings && (
+                <button
+                  onClick={onOpenSettings}
+                  className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-medium cursor-pointer transition-colors shrink-0 ml-2 shadow-2xs"
+                >
+                  Buka Settings
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -604,9 +737,9 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                 <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
                   Summary
                 </span>
-                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  {output.summary}
-                </p>
+                <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                  <MarkdownViewer content={output.summary} />
+                </div>
               </div>
             )}
 
@@ -684,14 +817,15 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
                     <span>{copied ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <div className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap font-mono p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 max-h-60 overflow-y-auto leading-relaxed">
-                  {output.markdown_content}
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800 max-h-80 overflow-y-auto leading-relaxed">
+                  <MarkdownViewer content={output.markdown_content} />
                 </div>
               </div>
             )}
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };
