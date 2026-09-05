@@ -91,8 +91,8 @@ impl LocalAiClient {
             }
             if self.base_url.contains("openrouter.ai") {
                 req = req
-                    .header("HTTP-Referer", "https://lifeinbox.app")
-                    .header("X-Title", "Life Inbox");
+                    .header("HTTP-Referer", "https://velco.app")
+                    .header("X-Title", "Velco");
             }
 
             if let Ok(resp) = req.send().await {
@@ -143,8 +143,8 @@ impl LocalAiClient {
             }
             if self.base_url.contains("openrouter.ai") {
                 req = req
-                    .header("HTTP-Referer", "https://lifeinbox.app")
-                    .header("X-Title", "Life Inbox");
+                    .header("HTTP-Referer", "https://velco.app")
+                    .header("X-Title", "Velco");
             }
 
             if let Ok(resp) = req.send().await {
@@ -202,8 +202,8 @@ impl LocalAiClient {
         // 1. OpenRouter (special rich metadata parsing)
         if provider_id == "openrouter" || self.base_url.contains("openrouter.ai") {
             let mut req = self.client.get("https://openrouter.ai/api/v1/models")
-                .header("HTTP-Referer", "https://lifeinbox.app")
-                .header("X-Title", "Life Inbox");
+                .header("HTTP-Referer", "https://velco.app")
+                .header("X-Title", "Velco");
 
             if let Some(ref key) = self.api_key {
                 if !key.is_empty() {
@@ -536,7 +536,7 @@ impl LocalAiClient {
             if let Some(content) = val
                 .get("content")
                 .and_then(|c| c.as_array())
-                .and_then(|arr| arr.get(0))
+                .and_then(|arr| arr.first())
                 .and_then(|item| item.get("text"))
                 .and_then(|t| t.as_str())
             {
@@ -574,8 +574,8 @@ impl LocalAiClient {
             }
             if self.base_url.contains("openrouter.ai") {
                 req = req
-                    .header("HTTP-Referer", "https://lifeinbox.app")
-                    .header("X-Title", "Life Inbox");
+                    .header("HTTP-Referer", "https://velco.app")
+                    .header("X-Title", "Velco");
             }
 
             if let Ok(resp) = req.send().await {
@@ -739,8 +739,8 @@ impl LocalAiClient {
             }
             if self.base_url.contains("openrouter.ai") {
                 req = req
-                    .header("HTTP-Referer", "https://lifeinbox.app")
-                    .header("X-Title", "Life Inbox");
+                    .header("HTTP-Referer", "https://velco.app")
+                    .header("X-Title", "Velco");
             }
 
             if let Ok(resp) = req.send().await {
@@ -800,8 +800,8 @@ impl LocalAiClient {
             }
             if self.base_url.contains("openrouter.ai") {
                 ping_req = ping_req
-                    .header("HTTP-Referer", "https://lifeinbox.app")
-                    .header("X-Title", "Life Inbox");
+                    .header("HTTP-Referer", "https://velco.app")
+                    .header("X-Title", "Velco");
             }
 
             let ping_resp = ping_req

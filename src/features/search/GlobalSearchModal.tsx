@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, FileText, CheckSquare, Link2, FileIcon, Star, ArrowRight } from 'lucide-react';
+import { Search, X, FileText, CheckSquare, Link2, FileIcon, Star, ArrowRight, Loader2 } from 'lucide-react';
 import { Item, ItemType } from '../../types/item';
 import { db } from '../../services/database';
 
@@ -20,17 +20,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-      search('');
-    } else {
-      setQuery('');
-      setResults([]);
-    }
-  }, [isOpen]);
-
-  const search = async (q: string) => {
+  const search = React.useCallback(async (q: string) => {
     setIsLoading(true);
     try {
       const items = await db.search(q);
@@ -40,7 +30,17 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+      search('');
+    } else {
+      setQuery('');
+      setResults([]);
+    }
+  }, [isOpen, search]);
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -65,7 +65,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[70vh] z-10">
         {/* Search input header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          {isLoading ? (
+            <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />
+          ) : (
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          )}
           <input
             ref={inputRef}
             type="text"

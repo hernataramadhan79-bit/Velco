@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { TheFoundry } from '../workstation/TheFoundry';
 import { useItemStore } from '../../stores/itemStore';
 import { useTagStore } from '../../stores/tagStore';
+import { useContextStore } from '../../stores/contextStore';
 import { InboxView } from '../../features/inbox/InboxView';
 import { TasksView } from '../../features/tasks/TasksView';
 import { NotesView } from '../../features/notes/NotesView';
@@ -19,13 +21,26 @@ export const AppLayout: React.FC = () => {
   const itemStore = useItemStore();
   const tagStore = useTagStore();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isFoundryOpen, setIsFoundryOpen] = useState(false);
 
-  // Global Keyboard Shortcuts (Ctrl+K for search, Escape, etc.)
+  const stagedCount = useContextStore((state) => state.stagedItems.length);
+
+  // Automatically open The Foundry when items are staged into the Context Cart
+  useEffect(() => {
+    if (stagedCount > 0) {
+      setIsFoundryOpen(true);
+    }
+  }, [stagedCount]);
+
+  // Global Keyboard Shortcuts (Ctrl+K for search, Ctrl+J for Foundry, etc.)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsSearchOpen((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsFoundryOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -33,15 +48,12 @@ export const AppLayout: React.FC = () => {
   }, []);
 
   const handleEmptyTrash = async () => {
-    const trashItems = itemStore.items.filter((i) => i.deletedAt != null);
-    for (const item of trashItems) {
-      await itemStore.permanentDeleteItem(item.id);
-    }
+    await itemStore.emptyTrash();
   };
 
   return (
     <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans">
-      {/* Sidebar */}
+      {/* Pane 1: Sidebar */}
       <Sidebar
         currentView={itemStore.currentView}
         onSelectView={(v) => itemStore.setCurrentView(v)}
@@ -55,11 +67,13 @@ export const AppLayout: React.FC = () => {
         onOpenSearch={() => setIsSearchOpen(true)}
       />
 
-      {/* Main Content Area */}
+      {/* Pane 2: Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white dark:bg-slate-900/50">
         <Header
           currentView={itemStore.currentView}
           onNewCaptureClick={() => itemStore.setCurrentView('inbox')}
+          isFoundryOpen={isFoundryOpen}
+          onToggleFoundry={() => setIsFoundryOpen((prev) => !prev)}
         />
 
         {/* Scrollable View Content */}
@@ -156,6 +170,20 @@ export const AppLayout: React.FC = () => {
           {itemStore.currentView === 'settings' && <SettingsView />}
         </main>
       </div>
+
+      {/* Pane 3: The Foundry (Context Workstation) */}
+      {isFoundryOpen && (
+        <aside className="w-88 xl:w-96 shrink-0 h-full overflow-hidden transition-all duration-200 shadow-xl z-20">
+          <TheFoundry
+            onClose={() => setIsFoundryOpen(false)}
+            onArtifactsApplied={() => {
+              itemStore.refreshItems();
+              itemStore.refreshCounts();
+              itemStore.notify('Recipe artifacts committed to SQLite!', 'success');
+            }}
+          />
+        </aside>
+      )}
 
       {/* Item Detail Inspector Modal */}
       <ItemDetailModal

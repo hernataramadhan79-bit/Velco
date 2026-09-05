@@ -1,7 +1,7 @@
 import React from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Trash2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 interface TrashViewProps {
   items: Item[];

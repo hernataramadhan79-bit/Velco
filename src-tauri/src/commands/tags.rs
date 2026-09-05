@@ -78,3 +78,12 @@ pub fn remove_tag(db: State<'_, Database>, item_id: String, tag_id: String) -> R
     .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn delete_tag(db: State<'_, Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM item_tags WHERE tag_id = ?1", params![id]).ok();
+    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

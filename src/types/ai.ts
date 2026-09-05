@@ -1,40 +1,35 @@
-export type AICapability =
-  | 'text_generation'
-  | 'summarization'
-  | 'classification'
-  | 'tag_suggestion'
-  | 'vision'
-  | 'embeddings'
-  | 'ocr'
-  | 'speech_to_text';
+// ============================================================================
+// Velco AI Type Definitions
+// ============================================================================
 
-export type AIProviderType = 'ollama' | 'lmstudio' | 'openai_compatible' | 'none';
+/** Structured task extracted from AI recipe processing. */
+export interface ExtractedTaskPayload {
+  title: string;
+  priority: 'low' | 'medium' | 'high';
+  due_date?: string | null;
+}
 
+/** Structured output contract for all AI recipe operations. */
+export interface RecipeOutput {
+  summary: string | null;
+  tags: string[];
+  extracted_tasks: ExtractedTaskPayload[];
+  markdown_content: string | null;
+}
+
+/** LLM provider configuration — matches Rust LlmProviderConfig enum. */
+export type LlmProviderConfig =
+  | { type: 'Ollama'; config: { base_url: string; model: string } }
+  | { type: 'OpenAiCompatible'; config: { base_url: string; api_key: string; model: string } };
+
+/** AI model info returned from provider listing. */
 export interface AIModelInfo {
   id: string;
   name: string;
-  capabilities?: AICapability[];
-  isLocal?: boolean;
   isFree?: boolean;
   contextLength?: number;
   description?: string;
 }
 
-export interface AIChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: string;
-  isLocal?: boolean;
-}
-
-export interface AISummarizeOptions {
-  maxLength?: number;
-  format?: 'bullet_points' | 'concise' | 'executive';
-}
-
-export interface AIClassificationResult {
-  category: string;
-  confidence: number;
-  suggestedTags: string[];
-}
+/** Recipe types available in the Context Foundry. */
+export type RecipeType = 'synthesize' | 'extract_tasks' | 'triage' | 'custom';

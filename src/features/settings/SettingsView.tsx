@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSettings } from '../../stores/settingsStore';
-import { aiRouter, CloudAIProvider } from '../../services/ai';
+import { aiService } from '../../services/ai';
 import { db } from '../../services/database';
 import { AIProviderType } from '../../types/settings';
 import { AIModelInfo } from '../../types/ai';
@@ -54,56 +54,77 @@ export const SettingsView: React.FC = () => {
   const [modelSearch, setModelSearch] = useState('');
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
 
+  const getProviderModel = useCallback((): string => {
+    switch (settings.aiProvider) {
+      case 'ollama': return settings.ollamaModel || 'qwen2.5:latest';
+      case 'lmstudio': return settings.lmstudioModel || 'qwen2.5-coder-7b-instruct';
+      case 'openai': return settings.openaiModel || 'gpt-4o-mini';
+      case 'gemini': return settings.geminiModel || 'gemini-1.5-flash';
+      case 'anthropic': return settings.anthropicModel || 'claude-3-5-haiku-20241022';
+      case 'openrouter': return settings.openrouterModel || 'openai/gpt-4o-mini';
+      case 'custom': return settings.customModel || '';
+      default: return '';
+    }
+  }, [settings.aiProvider, settings.ollamaModel, settings.lmstudioModel, settings.openaiModel, settings.geminiModel, settings.anthropicModel, settings.openrouterModel, settings.customModel]);
+
+  const getProviderBaseUrl = useCallback((): string => {
+    switch (settings.aiProvider) {
+      case 'ollama': return settings.ollamaUrl || 'http://localhost:11434';
+      case 'lmstudio': return settings.lmstudioUrl || 'http://localhost:1234/v1';
+      case 'openai': return 'https://api.openai.com/v1';
+      case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta/openai';
+      case 'anthropic': return 'https://api.anthropic.com/v1';
+      case 'openrouter': return 'https://openrouter.ai/api/v1';
+      case 'custom': return settings.customApiUrl || '';
+      default: return '';
+    }
+  }, [settings.aiProvider, settings.ollamaUrl, settings.lmstudioUrl, settings.customApiUrl]);
+
+  const getProviderApiKey = useCallback((): string | undefined => {
+    switch (settings.aiProvider) {
+      case 'openai': return settings.openaiApiKey || undefined;
+      case 'gemini': return settings.geminiApiKey || undefined;
+      case 'anthropic': return settings.anthropicApiKey || undefined;
+      case 'openrouter': return settings.openrouterApiKey || undefined;
+      case 'custom': return settings.customApiKey || undefined;
+      default: return undefined;
+    }
+  }, [settings.aiProvider, settings.openaiApiKey, settings.geminiApiKey, settings.anthropicApiKey, settings.openrouterApiKey, settings.customApiKey]);
+
   // Fetch real-time available models from active provider
-  const fetchLiveModels = async () => {
+  const fetchLiveModels = useCallback(async () => {
     setIsLoadingModels(true);
     try {
-      const models = await aiRouter.getDetailedModels(settings);
-      setDetailedModels(models);
+      const baseUrl = getProviderBaseUrl();
+      const apiKey = getProviderApiKey();
+      const result = await aiService.testConnection(baseUrl, apiKey, settings.aiProvider, getProviderModel());
+      if (result.models && result.models.length > 0) {
+        setDetailedModels(result.models.map(m => ({ id: m, name: m })));
+      }
     } catch (err) {
       console.warn('Failed to fetch live models:', err);
     } finally {
       setIsLoadingModels(false);
     }
-  };
+  }, [getProviderBaseUrl, getProviderApiKey, settings.aiProvider, getProviderModel]);
 
   // Test active AI connection
   const testAiConnection = async () => {
     setIsTestingAi(true);
     setTestResult(null);
     try {
-      const active = aiRouter.getActiveInfo(settings);
-      if (!active) {
-        setTestResult({
-          success: false,
-          message: 'No active AI provider selected.',
-        });
+      const baseUrl = getProviderBaseUrl();
+      const apiKey = getProviderApiKey();
+
+      if (!baseUrl && !['ollama', 'lmstudio'].includes(settings.aiProvider)) {
+        setTestResult({ success: false, message: 'No AI provider base URL configured.' });
         return;
       }
 
-      if (active.provider instanceof CloudAIProvider) {
-        const res = await active.provider.testConnection();
-        setTestResult(res);
-        // Refresh models on successful connection test
-        if (res.success) {
-          fetchLiveModels();
-        }
-      } else {
-        const isOnline = await active.provider.isAvailable();
-        if (isOnline) {
-          const models = await active.provider.getModels();
-          setTestResult({
-            success: true,
-            message: `${active.name} is running and reachable (${models.length} models detected).`,
-            models,
-          });
-          fetchLiveModels();
-        } else {
-          setTestResult({
-            success: false,
-            message: `Cannot reach ${active.name} at ${active.endpoint}. Ensure the local server is running.`,
-          });
-        }
+      const result = await aiService.testConnection(baseUrl, apiKey, settings.aiProvider, getProviderModel());
+      setTestResult(result);
+      if (result.success) {
+        fetchLiveModels();
       }
     } catch (err: any) {
       setTestResult({
@@ -117,23 +138,15 @@ export const SettingsView: React.FC = () => {
 
   // Automatically fetch live models when switching to OpenRouter or enabling AI
   useEffect(() => {
-    setTestResult(null);
-    setDetailedModels([]);
-    setModelSearch('');
-
     if (settings.aiEnabled) {
       if (settings.aiProvider === 'openrouter') {
         setModelFilter('free');
-        fetchLiveModels();
-      } else if (settings.aiProvider === 'gemini' || settings.aiProvider === 'openai') {
+      } else {
         setModelFilter('all');
-        fetchLiveModels();
-      } else if (settings.aiProvider === 'lmstudio' || settings.aiProvider === 'ollama') {
-        setModelFilter('all');
-        fetchLiveModels();
       }
+      fetchLiveModels();
     }
-  }, [settings.aiProvider, settings.aiEnabled]);
+  }, [settings.aiProvider, settings.aiEnabled, fetchLiveModels]);
 
   const handleExportBackup = async () => {
     try {
@@ -142,7 +155,7 @@ export const SettingsView: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `lifeinbox_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `velco_backup_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
       setBackupMessage('Backup exported successfully.');
@@ -208,7 +221,7 @@ export const SettingsView: React.FC = () => {
           <span>Local Storage Hierarchy</span>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Life Inbox stores all database records and binary attachments inside a dedicated folder
+          Velco stores all database records and binary attachments inside a dedicated folder
           on your machine.
         </p>
 
@@ -1071,7 +1084,7 @@ export const SettingsView: React.FC = () => {
           <span>Local Backup & Portability</span>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Export your entire Life Inbox library (notes, tasks, links, tags, and metadata) as an
+          Export your entire Velco library (notes, tasks, links, tags, and metadata) as an
           offline JSON backup archive. No cloud account required.
         </p>
 

@@ -23,11 +23,13 @@ pub fn run() {
             commands::items::trash_item,
             commands::items::restore_item,
             commands::items::delete_item_permanent,
+            commands::items::empty_trash,
             commands::tasks::toggle_task_complete,
             commands::tags::get_tags,
             commands::tags::create_tag,
             commands::tags::assign_tag,
             commands::tags::remove_tag,
+            commands::tags::delete_tag,
             commands::search::search_items,
             commands::backup::export_backup,
             commands::backup::import_backup,
@@ -37,7 +39,9 @@ pub fn run() {
             commands::ai::list_ai_models_detailed,
             commands::ai::generate_ai_completion,
             commands::ai::test_ai_connection,
+            commands::ai::execute_context_recipe,
+            commands::ai::apply_recipe_artifacts,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Life Inbox application");
+        .expect("error while running Velco application");
 }

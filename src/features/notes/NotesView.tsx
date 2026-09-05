@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Item, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { FileText, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 interface NotesViewProps {
   notes: Item[];

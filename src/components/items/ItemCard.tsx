@@ -8,12 +8,13 @@ import {
   Star,
   Trash2,
   ExternalLink,
-  Calendar,
   Sparkles,
   Paperclip,
+  Layers,
 } from 'lucide-react';
 import { Item } from '../../types/item';
 import { Badge } from '../common/Badge';
+import { useContextStore, estimateTokens } from '../../stores/contextStore';
 
 interface ItemCardProps {
   item: Item;
@@ -70,10 +71,28 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     day: 'numeric',
   });
 
+  const isStaged = useContextStore((state) => state.isStaged(item.id));
+  const toggleStage = useContextStore((state) => state.toggleStage);
+
+  const handleToggleStage = (e: React.MouseEvent | React.ChangeEvent) => {
+    e.stopPropagation();
+    toggleStage({
+      id: item.id,
+      type: (item.type as any) || 'note',
+      title: item.title,
+      plainText: item.content || item.title,
+      estimatedTokens: estimateTokens(`${item.title}\n\n${item.content || ''}`),
+    });
+  };
+
   return (
     <div
       onClick={() => onSelect(item)}
-      className="group relative bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border border-slate-200/90 dark:border-slate-800 rounded-xl p-4 transition-all duration-150 shadow-2xs hover:shadow-xs cursor-pointer select-none"
+      className={`group relative rounded-xl p-4 transition-all duration-150 cursor-pointer select-none border ${
+        isStaged
+          ? 'bg-indigo-50/40 dark:bg-indigo-950/25 border-indigo-500/80 ring-2 ring-indigo-500/20 shadow-xs'
+          : 'bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs'
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2.5 flex-1 min-w-0">
@@ -201,9 +220,33 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           </div>
         </div>
 
-        {/* Right column: Date & Quick Actions */}
+        {/* Right column: Date, Context Cart Staging, & Quick Actions */}
         <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-          <div className="text-[11px] text-slate-400 font-mono">{formattedDate}</div>
+          <div className="flex items-center gap-2">
+            {!isTrashView && (
+              <label
+                onClick={(e) => e.stopPropagation()}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium cursor-pointer transition-all ${
+                  isStaged
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 ring-1 ring-indigo-500/30'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 opacity-0 group-hover:opacity-100'
+                }`}
+                title={isStaged ? 'Staged in Context Cart (Click to remove)' : 'Stage into Context Cart'}
+              >
+                <input
+                  type="checkbox"
+                  checked={isStaged}
+                  onChange={handleToggleStage}
+                  className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                />
+                <span className="text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1">
+                  <Layers className="w-2.5 h-2.5" />
+                  {isStaged ? 'Staged' : 'Stage'}
+                </span>
+              </label>
+            )}
+            <div className="text-[11px] text-slate-400 font-mono">{formattedDate}</div>
+          </div>
 
           {/* Action buttons (revealed on hover) */}
           <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity mt-2">

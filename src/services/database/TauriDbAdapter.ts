@@ -220,6 +220,10 @@ export class TauriDbAdapter implements DatabaseAdapter {
     await tauriInvoke('delete_item_permanent', { id });
   }
 
+  async emptyTrash(): Promise<void> {
+    await tauriInvoke('empty_trash');
+  }
+
   async toggleTask(itemId: string, completed: boolean): Promise<void> {
     await tauriInvoke('toggle_task_complete', { itemId, completed });
   }
@@ -248,7 +252,7 @@ export class TauriDbAdapter implements DatabaseAdapter {
   }
 
   async deleteTag(id: string): Promise<void> {
-    // Tag deletion if needed
+    await tauriInvoke('delete_tag', { id });
   }
 
   async search(query: string): Promise<Item[]> {

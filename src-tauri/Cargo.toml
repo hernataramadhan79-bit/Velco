@@ -1,12 +1,12 @@
 [package]
-name = "life-inbox"
+name = "velco"
 version = "0.1.0"
-description = "Life Inbox — Local-First Personal Information Inbox"
-authors = ["Life Inbox Authors"]
+description = "Velco — The Local-First Context-Bound AI Workstation"
+authors = ["Velco Contributors"]
 edition = "2021"
 
 [lib]
-name = "life_inbox_lib"
+name = "velco_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

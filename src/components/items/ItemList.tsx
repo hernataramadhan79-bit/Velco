@@ -1,7 +1,7 @@
 import React from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from './ItemCard';
-import { Inbox, SearchX } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 
 interface ItemListProps {
   items: Item[];

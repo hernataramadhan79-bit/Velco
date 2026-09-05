@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Item, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Upload, Paperclip, FileIcon } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 interface FilesViewProps {
   files: Item[];
@@ -19,6 +19,24 @@ export const FilesView: React.FC<FilesViewProps> = ({
   onTrash,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
 
   const handleFiles = (fileList: FileList) => {
     Array.from(fileList).forEach((file) => {
@@ -58,16 +76,23 @@ export const FilesView: React.FC<FilesViewProps> = ({
       />
       <div
         onClick={() => inputRef.current?.click()}
-        className="p-8 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-blue-500/80 bg-white/40 dark:bg-slate-900/40 text-center cursor-pointer transition-all duration-150 group"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`p-8 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all duration-150 group ${
+          isDragging
+            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30'
+            : 'border-slate-300 dark:border-slate-800 hover:border-blue-500/80 bg-white/40 dark:bg-slate-900/40'
+        }`}
       >
         <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-blue-500 mx-auto mb-2 transition-colors">
           <Upload className="w-5 h-5" />
         </div>
         <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          Click or drop files to import into Life Inbox
+          Click or drop files to import into Velco
         </div>
         <div className="text-[11px] text-slate-400 mt-1">
-          PDF, TXT, MD, Images, Audio, Documents (stored locally in LifeInbox/attachments)
+          PDF, TXT, MD, Images, Audio, Documents (stored locally in Velco/attachments)
         </div>
       </div>
 

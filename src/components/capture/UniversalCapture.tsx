@@ -1,12 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Send,
   Link,
   FileText,
   CheckSquare,
   Paperclip,
-  Image as ImageIcon,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { CreateItemInput, ItemType, PriorityLevel } from '../../types/item';

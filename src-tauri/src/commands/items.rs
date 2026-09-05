@@ -335,15 +335,19 @@ pub fn get_items(
         sql.push_str("deleted_at IS NULL AND archived = 0");
     }
 
+    let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
     if let Some(ref t) = filter_type {
-        sql.push_str(&format!(" AND type = '{}'", t.replace('\'', "''")));
+        sql.push_str(" AND type = ?");
+        query_params.push(Box::new(t.clone()));
     }
 
     sql.push_str(" ORDER BY created_at DESC");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
     let rows = stmt
-        .query_map([], |row| {
+        .query_map(param_refs.as_slice(), |row| {
             let id: String = row.get(0)?;
             let favorite: i64 = row.get(6)?;
             let archived: i64 = row.get(7)?;
@@ -722,4 +726,18 @@ pub fn delete_item_permanent(db: State<'_, Database>, id: String) -> Result<(), 
     conn.execute("DELETE FROM items WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn empty_trash(db: State<'_, Database>) -> Result<usize, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM items_fts WHERE item_id IN (SELECT id FROM items WHERE deleted_at IS NOT NULL)",
+        [],
+    )
+    .ok();
+    let count = conn
+        .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
+        .map_err(|e| e.to_string())?;
+    Ok(count)
 }

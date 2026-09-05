@@ -1,7 +1,7 @@
 @echo off
-title Life Inbox Runner
+title Velco Runner
 echo ==============================================
-echo   Starting Life Inbox Desktop Application
+echo   Starting Velco Desktop Application
 echo ==============================================
 npm run tauri dev
 pause

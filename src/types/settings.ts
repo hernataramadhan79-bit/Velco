@@ -49,7 +49,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  storageDir: 'LifeInbox',
+  storageDir: 'Velco',
   theme: 'system',
   aiEnabled: false,
   aiProvider: 'lmstudio',

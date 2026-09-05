@@ -1,16 +1,25 @@
 import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
-import { Sun, Moon, Laptop, Plus } from 'lucide-react';
+import { useContextStore } from '../../stores/contextStore';
+import { Sun, Moon, Laptop, Plus, Zap } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 
 interface HeaderProps {
   currentView: NavigationView;
   onNewCaptureClick?: () => void;
+  isFoundryOpen?: boolean;
+  onToggleFoundry?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onNewCaptureClick }) => {
+export const Header: React.FC<HeaderProps> = ({
+  currentView,
+  onNewCaptureClick,
+  isFoundryOpen = false,
+  onToggleFoundry,
+}) => {
   const { settings, updateSettings } = useSettings();
+  const stagedCount = useContextStore((state) => state.stagedItems.length);
 
   const viewTitles: Record<NavigationView, string> = {
     inbox: 'Inbox',
@@ -56,6 +65,27 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNewCaptureClick }
           )}
         </button>
 
+        {/* The Foundry / Context Cart Workstation Toggle Button */}
+        {onToggleFoundry && (
+          <button
+            onClick={onToggleFoundry}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+              isFoundryOpen
+                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 shadow-2xs'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:text-slate-800 dark:hover:text-slate-200 shadow-2xs'
+            }`}
+            title="Toggle The Foundry (Ctrl+J)"
+          >
+            <Zap className={`w-3.5 h-3.5 ${isFoundryOpen ? 'fill-indigo-600 dark:fill-indigo-400' : ''}`} />
+            <span>The Foundry</span>
+            {stagedCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                {stagedCount}
+              </span>
+            )}
+          </button>
+        )}
+
         {onNewCaptureClick && currentView !== 'inbox' && (
           <button
             onClick={onNewCaptureClick}
@@ -69,3 +99,4 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNewCaptureClick }
     </header>
   );
 };
+

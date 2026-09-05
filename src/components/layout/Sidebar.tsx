@@ -5,13 +5,10 @@ import {
   FileText,
   FileIcon,
   Link2,
-  Tag as TagIcon,
   Archive,
   Trash2,
   Settings,
-  Sparkles,
   Search,
-  Plus,
 } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
@@ -69,10 +66,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <div className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight leading-none">
-                Life Inbox
+                Velco
               </div>
               <div className="text-[11px] text-slate-400 font-medium leading-tight mt-0.5">
-                Local-First Workspace
+                Context Workstation
               </div>
             </div>
           </div>

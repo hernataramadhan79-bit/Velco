@@ -22,34 +22,15 @@ pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<ItemRe
         )
         .map_err(|e| e.to_string())?;
 
-    let rows = stmt
-        .query_map(params![fts_query], |row| {
-            let favorite: i64 = row.get(6)?;
-            let archived: i64 = row.get(7)?;
-            Ok(ItemRecord {
-                id: row.get(0)?,
-                r#type: row.get(1)?,
-                title: row.get(2)?,
-                content: row.get(3)?,
-                source: row.get(4)?,
-                status: row.get(5)?,
-                favorite: favorite != 0,
-                archived: archived != 0,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
-                deleted_at: row.get(10)?,
-                tags: vec![],
-                task: None,
-                link: None,
-                attachments: vec![],
-                ai_metadata: None,
-            })
-        })
+    let id_rows = stmt
+        .query_map(params![fts_query], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?;
 
     let mut results = Vec::new();
-    for item_res in rows {
-        results.push(item_res.map_err(|e| e.to_string())?);
+    for id in id_rows.flatten() {
+        if let Ok(item) = crate::commands::items::fetch_item_by_id(&conn, &id) {
+            results.push(item);
+        }
     }
     Ok(results)
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Item, CreateItemInput, PriorityLevel } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Plus, CheckSquare, Filter } from 'lucide-react';
+import { Plus, CheckSquare } from 'lucide-react';
 
 interface TasksViewProps {
   tasks: Item[];

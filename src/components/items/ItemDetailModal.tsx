@@ -4,28 +4,21 @@ import { Modal } from '../common/Modal';
 import { ItemTagsEditor } from './ItemTagsEditor';
 import { Badge } from '../common/Badge';
 import {
-  FileText,
-  CheckSquare,
-  Link2,
-  Calendar,
   ExternalLink,
   Sparkles,
   MessageSquare,
   Tag as TagIcon,
   ListTodo,
   Bot,
-  Copy,
   Trash2,
   Paperclip,
-  Check,
   Star,
   Archive,
-  RefreshCw,
   Loader2,
   ArrowLeft,
 } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
-import { aiRouter, OllamaProvider, LMStudioProvider } from '../../services/ai';
+import { aiService } from '../../services/ai';
 
 interface ItemDetailModalProps {
   item: Item | null;
@@ -37,7 +30,17 @@ interface ItemDetailModalProps {
   onCreateTag: (name: string) => Promise<Tag>;
 }
 
-export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
+interface ItemDetailContentProps {
+  item: Item;
+  isOpen: boolean;
+  onClose: () => void;
+  onUpdate: (id: string, updates: Partial<Item>) => Promise<any>;
+  onTrash: (id: string) => void;
+  allTags: Tag[];
+  onCreateTag: (name: string) => Promise<Tag>;
+}
+
+const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   item,
   isOpen,
   onClose,
@@ -46,8 +49,6 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   allTags,
   onCreateTag,
 }) => {
-  if (!item) return null;
-
   const { settings, updateSettings } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -61,15 +62,63 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   >([]);
   const [chatInput, setChatInput] = useState('');
 
-  const getActiveAI = () => {
-    return aiRouter.getActiveInfo(settings);
+  const getAiConfig = () => {
+    let baseUrl: string | undefined;
+    let apiKey: string | undefined;
+    let model = 'llama3';
+
+    switch (settings.aiProvider) {
+      case 'ollama':
+        baseUrl = settings.ollamaUrl || 'http://localhost:11434';
+        model = settings.ollamaModel || 'llama3';
+        break;
+      case 'lmstudio':
+        baseUrl = settings.lmstudioUrl || 'http://localhost:1234/v1';
+        model = settings.lmstudioModel || 'local-model';
+        break;
+      case 'openai':
+        baseUrl = 'https://api.openai.com/v1';
+        apiKey = settings.openaiApiKey;
+        model = settings.openaiModel || 'gpt-4o-mini';
+        break;
+      case 'gemini':
+        baseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
+        apiKey = settings.geminiApiKey;
+        model = settings.geminiModel || 'gemini-1.5-flash';
+        break;
+      case 'anthropic':
+        baseUrl = 'https://api.anthropic.com/v1';
+        apiKey = settings.anthropicApiKey;
+        model = settings.anthropicModel || 'claude-3-5-haiku-20241022';
+        break;
+      case 'openrouter':
+        baseUrl = 'https://openrouter.ai/api/v1';
+        apiKey = settings.openrouterApiKey;
+        model = settings.openrouterModel || 'meta-llama/llama-3.3-70b-instruct:free';
+        break;
+      case 'custom':
+        baseUrl = settings.customApiUrl;
+        apiKey = settings.customApiKey;
+        model = settings.customModel || 'default';
+        break;
+      default:
+        break;
+    }
+
+    return {
+      name: settings.aiProvider,
+      baseUrl,
+      apiKey,
+      model,
+      isLocal: ['ollama', 'lmstudio'].includes(settings.aiProvider),
+    };
   };
 
   // AI Actions implementation
   const runAiAction = async (
     action: 'summarize' | 'classify' | 'tags' | 'explain' | 'extract_tasks'
   ) => {
-    if (!settings.aiEnabled) {
+    if (!settings.aiEnabled || settings.aiProvider === 'none') {
       setAiError('AI is currently disabled in settings.');
       return;
     }
@@ -79,90 +128,108 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       return;
     }
 
-    const active = getActiveAI();
-    if (!active) {
-      setAiError('No active AI provider configured. Please check Settings.');
-      return;
-    }
+    const active = getAiConfig();
 
     setIsAiLoading(true);
     setActiveAiAction(action);
     setAiError(null);
 
     try {
-      const isOnline = await active.provider.isAvailable();
+      const isOnline = await aiService.checkStatus(active.baseUrl, active.apiKey);
       if (!isOnline) {
         throw new Error(
           active.isLocal
-            ? `AI provider (${active.name}) is unreachable at ${active.endpoint}. Make sure your local server is running.`
+            ? `AI provider (${active.name}) is unreachable at ${active.baseUrl || 'local endpoint'}. Make sure your local server is running.`
             : `Cloud AI provider (${active.name}) is not connected. Please verify your API key in Settings.`
         );
       }
 
       if (action === 'summarize') {
-        const summary = await active.provider.summarize(textToProcess, active.model);
+        const summary = await aiService.generateCompletion(
+          `Please provide a concise, well-structured summary of the following content:\n\n${textToProcess}`,
+          active.model,
+          active.baseUrl,
+          active.apiKey
+        );
         await onUpdate(item.id, {
           aiMetadata: {
             id: crypto.randomUUID(),
             itemId: item.id,
             provider: active.name,
             model: active.model,
-            summary,
+            summary: summary.trim(),
             processedAt: new Date().toISOString(),
           },
         });
         setActiveTab('ai');
       } else if (action === 'classify') {
-        const res = await active.provider.classify(textToProcess, active.model);
+        const raw = await aiService.generateCompletion(
+          `Analyze the following content and categorize it. Return ONLY valid JSON with keys "category" (e.g. Work, Personal, Reference, Ideas), "confidence" (number 0.0 to 1.0), and "suggestedTags" (array of strings):\n\n${textToProcess}`,
+          active.model,
+          active.baseUrl,
+          active.apiKey
+        );
+        let parsed = { category: 'General', confidence: 0.8, suggestedTags: [] as string[] };
+        try {
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+        } catch { /* use fallback */ }
         await onUpdate(item.id, {
           aiMetadata: {
             id: crypto.randomUUID(),
             itemId: item.id,
             provider: active.name,
             model: active.model,
-            classification: res.category,
-            confidence: res.confidence,
-            suggestedTags: res.suggestedTags,
+            classification: parsed.category,
+            confidence: parsed.confidence,
+            suggestedTags: parsed.suggestedTags,
             processedAt: new Date().toISOString(),
           },
         });
         setActiveTab('ai');
       } else if (action === 'tags') {
-        const suggested = await active.provider.suggestTags(
-          textToProcess,
-          allTags.map((t) => t.name),
-          active.model
+        const raw = await aiService.generateCompletion(
+          `Suggest 3 to 5 concise tags for the following content. Existing tags are: ${allTags.map((t) => t.name).join(', ')}. Return ONLY a comma-separated list of tags, nothing else:\n\n${textToProcess}`,
+          active.model,
+          active.baseUrl,
+          active.apiKey
         );
+        const suggested = raw
+          .split(',')
+          .map((s) => s.trim().replace(/^#/, ''))
+          .filter((s) => s.length > 0 && s.length < 30);
+        let currentTags = [...item.tags];
         for (const tagName of suggested) {
           const created = await onCreateTag(tagName);
-          if (!item.tags.some((t) => t.id === created.id)) {
-            await onUpdate(item.id, { tags: [...item.tags, created] });
+          if (!currentTags.some((t) => t.id === created.id)) {
+            currentTags.push(created);
           }
         }
+        await onUpdate(item.id, { tags: currentTags });
       } else if (action === 'explain') {
-        const answer = await active.provider.askContext(
-          textToProcess,
-          [],
-          'Explain what this item is about and its main takeaways in clear terms.',
-          active.model
+        const answer = await aiService.generateCompletion(
+          `Explain what this item is about and its main takeaways in clear terms:\n\n${textToProcess}`,
+          active.model,
+          active.baseUrl,
+          active.apiKey
         );
         setChatMessages((prev) => [
           ...prev,
           { role: 'user', content: 'Explain this item', time: new Date().toLocaleTimeString() },
-          { role: 'assistant', content: answer, time: new Date().toLocaleTimeString() },
+          { role: 'assistant', content: answer.trim(), time: new Date().toLocaleTimeString() },
         ]);
         setActiveTab('ai');
       } else if (action === 'extract_tasks') {
-        const answer = await active.provider.askContext(
-          textToProcess,
-          [],
-          'Extract actionable next steps or tasks from this content as a checklist.',
-          active.model
+        const answer = await aiService.generateCompletion(
+          `Extract actionable next steps or tasks from this content as a checklist:\n\n${textToProcess}`,
+          active.model,
+          active.baseUrl,
+          active.apiKey
         );
         setChatMessages((prev) => [
           ...prev,
           { role: 'user', content: 'Extract tasks from this item', time: new Date().toLocaleTimeString() },
-          { role: 'assistant', content: answer, time: new Date().toLocaleTimeString() },
+          { role: 'assistant', content: answer.trim(), time: new Date().toLocaleTimeString() },
         ]);
         setActiveTab('ai');
       }
@@ -175,7 +242,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   };
 
   const handleSendChat = async () => {
-    if (!settings.aiEnabled) {
+    if (!settings.aiEnabled || settings.aiProvider === 'none') {
       setAiError('AI is currently disabled in settings.');
       return;
     }
@@ -191,29 +258,30 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     setActiveAiAction('chat');
     setAiError(null);
     try {
-      const active = getActiveAI();
-      if (!active) {
-        throw new Error('No AI provider configured. Please check Settings.');
-      }
-      const isOnline = await active.provider.isAvailable();
+      const active = getAiConfig();
+      const isOnline = await aiService.checkStatus(active.baseUrl, active.apiKey);
       if (!isOnline) {
         throw new Error(
           active.isLocal
-            ? `AI provider (${active.name}) is unreachable at ${active.endpoint}.`
+            ? `AI provider (${active.name}) is unreachable at ${active.baseUrl || 'local endpoint'}.`
             : `Cloud AI provider (${active.name}) is not connected. Please verify your API key in Settings.`
         );
       }
 
-      const answer = await active.provider.askContext(
-        `${item.title}\n\n${item.content}`,
-        chatMessages as any,
-        userMsg,
-        active.model
+      const prompt = `Context:\n${item.title}\n\n${item.content}\n\n${chatMessages
+        .map((m) => `${m.role}: ${m.content}`)
+        .join('\n')}\nuser: ${userMsg}\nassistant:`;
+
+      const answer = await aiService.generateCompletion(
+        prompt,
+        active.model,
+        active.baseUrl,
+        active.apiKey
       );
 
       setChatMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: answer, time: new Date().toLocaleTimeString() },
+        { role: 'assistant', content: answer.trim(), time: new Date().toLocaleTimeString() },
       ]);
     } catch (err: any) {
       setAiError(err.message || 'Chat request failed');
@@ -813,5 +881,30 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
         )}
       </div>
     </Modal>
+  );
+};
+
+export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
+  item,
+  isOpen,
+  onClose,
+  onUpdate,
+  onTrash,
+  allTags,
+  onCreateTag,
+}) => {
+  if (!isOpen || !item) return null;
+
+  return (
+    <ItemDetailContent
+      key={item.id}
+      item={item}
+      isOpen={isOpen}
+      onClose={onClose}
+      onUpdate={onUpdate}
+      onTrash={onTrash}
+      allTags={allTags}
+      onCreateTag={onCreateTag}
+    />
   );
 };

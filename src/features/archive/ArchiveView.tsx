@@ -1,7 +1,6 @@
 import React from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Archive } from 'lucide-react';
 
 interface ArchiveViewProps {
   items: Item[];

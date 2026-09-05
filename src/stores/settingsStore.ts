@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
 import { AppSettings, DEFAULT_SETTINGS } from '../types/settings';
-import { aiRouter } from '../services/ai';
 
-const SETTINGS_KEY = 'lifeinbox_settings_v1';
+import { useState, useEffect } from 'react';
+
+const SETTINGS_KEY = 'velco_settings_v1';
+const LEGACY_SETTINGS_KEY = 'lifeinbox_settings_v1';
 
 export function loadSettings(): AppSettings {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -38,7 +39,6 @@ export function saveSettings(settings: AppSettings) {
   try {
     currentSettings = settings;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    aiRouter.updateSettings(settings);
     applyTheme(settings.theme);
     notifyListeners();
   } catch (err) {

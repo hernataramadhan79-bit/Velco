@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/app-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Life Inbox — Local-First Personal Information Inbox</title>
-    <meta name="description" content="A local-first cross-platform personal inbox. Capture first, organize later. 100% private and offline." />
+    <title>Velco — Local-First Context-Bound AI Workstation</title>
+    <meta name="description" content="Velco is a local-first context-bound AI workstation. Capture first, bring your own AI. 100% private and offline." />
     <meta name="color-scheme" content="light dark" />
     <script>
       (function () {
         try {
-          const raw = localStorage.getItem('lifeinbox_settings_v1');
+          const raw = localStorage.getItem('velco_settings_v1') || localStorage.getItem('lifeinbox_settings_v1');
           const theme = raw ? JSON.parse(raw).theme : 'system';
           const isDark =
             theme === 'dark' ||

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Item, CreateItemInput, ItemType, ItemCounts } from '../types/item';
+import { Item, CreateItemInput, ItemCounts } from '../types/item';
 import { db } from '../services/database';
 
 export type NavigationView =
@@ -178,6 +178,18 @@ export function useItemStore() {
     }
   };
 
+  const emptyTrash = async () => {
+    try {
+      await db.emptyTrash();
+      notify('Trash emptied successfully', 'info');
+      await refreshItems();
+      await refreshCounts();
+      setSelectedItemId(null);
+    } catch (err: any) {
+      notify(`Failed to empty trash: ${err.message}`, 'error');
+    }
+  };
+
   const selectedItem = items.find((i) => i.id === selectedItemId) || null;
 
   return {
@@ -200,6 +212,7 @@ export function useItemStore() {
     trashItem,
     restoreItem,
     permanentDeleteItem,
+    emptyTrash,
     refreshItems,
     refreshCounts,
     notification,

@@ -13,7 +13,7 @@ impl StorageManager {
             Some(r) => r,
             None => {
                 let doc_dir = dirs::document_dir().unwrap_or_else(|| PathBuf::from("."));
-                doc_dir.join("LifeInbox")
+                doc_dir.join("Velco")
             }
         };
 
@@ -51,7 +51,7 @@ impl StorageManager {
     }
 
     pub fn db_path(&self) -> PathBuf {
-        self.database_dir().join("lifeinbox.db")
+        self.database_dir().join("velco.db")
     }
 
     pub fn ensure_directories(&self) -> std::io::Result<()> {

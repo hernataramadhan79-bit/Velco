@@ -1,33 +1,36 @@
 # Velco
 
-> **Local-First Personal Information Inbox**  
-> Capture first, organize later. 100% private, offline-first, and empowered by local & cloud AI.
+> **The Local-First Context-Bound AI Workstation**  
+> Bring everything in. Bring your own AI.
 
-Velco (formerly Life Inbox) is a desktop personal information organizer built with high-performance desktop technologies. It combines local SQLite storage with instant search, intelligent tag management, full JSON/Markdown backup export, and an AI layer supporting both offline LLMs (LM Studio, Ollama) and cloud providers (OpenRouter with 400+ dynamic models & free tier filter, Google Gemini, OpenAI, Anthropic Claude).
+Velco is a high-performance desktop context workstation built with Tauri v2, Rust, React, TypeScript, and SQLite. It provides offline-first capture, multi-item context staging, structured LLM recipe orchestration directly in Rust, and relational entity write-back to SQLite.
 
 ---
 
 ## ✨ Features
 
-- 📥 **Universal Capture**: Quickly capture notes, thoughts, tasks, code snippets, and ideas without context switching.
-- ⚡ **Local-First Architecture**: Powered by SQLite directly on your device. Zero internet required for core operations.
-- 🏷️ **Tag Management & Realtime Counts**: Custom colors, quick filtering, and live counter synchronization across sidebar tags.
-- 🤖 **Flexible AI Layer**:
-  - **Local Offline Engines**: LM Studio & Ollama (runs 100% private with zero data egress).
-  - **Cloud AI Platforms**: OpenRouter (with real-time model catalog & free model detection), Google Gemini, OpenAI ChatGPT, Anthropic Claude.
-  - **Smart Summarization & Auto-Tagging**: Generate concise summaries and suggest relevant tags.
-- 💾 **Data Ownership & Backup**: Complete one-click export and import in JSON or Markdown format.
-- 🎨 **Adaptive Theme**: Dark and light modes with custom modern styling and high-contrast typography.
-- 🔒 **Privacy by Default**: Your API keys and notes are stored strictly on your local machine.
+- 📥 **Offline-First Instant Capture**: Capture notes, tasks, links, files, and attachments with zero AI blocking.
+- ⚡ **Context Cart**: Multi-select notes, tasks, and bookmarks into an active context staging cart with real-time token budgeting (~4 chars/token heuristic).
+- 🛠️ **The Foundry (Workstation Deck)**: Dispatch structured AI recipes across your staged context:
+  - ⚡ **Synthesize & Cross-Examine**: Unify multiple notes and files into a cohesive briefing.
+  - 📋 **Extract Actionable Tasks**: Mine context for deliverables, deadlines, and priorities.
+  - 🏷️ **Triage & Auto-Tag**: Discover taxonomy and organize workspace items.
+  - ✍️ **Custom Prompt**: Execute arbitrary user instructions against staged context.
+- 💾 **Structured Entity Write-Back**: AI outputs write back directly into SQLite tables (`items`, `tasks`, `tags`, `item_tags`, `items_fts`) via native Rust commands.
+- 🤖 **Bring Your Own AI (BYOK & Local)**:
+  - **Local Offline Engines**: Ollama & LM Studio (100% private, zero data egress).
+  - **Cloud AI via Rust**: OpenRouter (with 400+ models), Google Gemini, OpenAI, Anthropic Claude, or any custom OpenAI-compatible endpoint.
+- 🔍 **Instant Full-Text Search (FTS5)**: Fast tokenized search across all items and attachments.
+- 🔒 **Privacy by Default**: Your SQLite database (`velco.db`) and files (`Velco/`) remain 100% on your local machine.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 19, TypeScript, Tailwind CSS v4, Lucide Icons
-- **Backend & Native Core**: Tauri v2, Rust
-- **Database**: SQLite (via Rusqlite with local file storage)
-- **Tooling**: Vite, Oxlint
+- **Frontend**: React 19, TypeScript, Tailwind CSS, Lucide Icons, Zustand
+- **Backend & Native Core**: Tauri v2, Rust (reqwest, rusqlite)
+- **Database**: SQLite (via Rusqlite with FTS5 virtual tables)
+- **Tooling**: Vite, Cargo
 
 ---
 
@@ -51,7 +54,7 @@ npm run tauri dev
 ### Production Build
 
 ```bash
-# Build standalone Windows executable (life-inbox.exe / velco.exe)
+# Build standalone Windows executable (velco.exe)
 npm run build:exe
 ```
 

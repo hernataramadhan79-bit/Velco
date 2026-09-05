@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for Life Inbox",
+  "description": "Default permissions for Velco",
   "windows": ["main"],
   "permissions": [
     "core:default"

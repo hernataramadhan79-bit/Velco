@@ -16,6 +16,7 @@ export interface DatabaseAdapter {
   trashItem(id: string): Promise<void>;
   restoreItem(id: string): Promise<void>;
   permanentDeleteItem(id: string): Promise<void>;
+  emptyTrash(): Promise<void>;
   toggleTask(itemId: string, completed: boolean): Promise<void>;
   getTags(): Promise<Tag[]>;
   createTag(name: string, color?: string): Promise<Tag>;

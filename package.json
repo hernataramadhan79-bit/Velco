@@ -1,5 +1,6 @@
 {
-  "name": "lifeinbox",
+  "name": "velco",
+  "productName": "Velco",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,7 +19,8 @@
     "lucide-react": "^1.41.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
