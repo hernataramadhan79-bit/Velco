@@ -2,7 +2,7 @@ import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
-import { Sun, Moon, Laptop, Plus, Zap } from 'lucide-react';
+import { Sun, Moon, Laptop, Plus, Zap, PanelLeft } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 
 interface HeaderProps {
@@ -10,6 +10,8 @@ interface HeaderProps {
   onNewCaptureClick?: () => void;
   isFoundryOpen?: boolean;
   onToggleFoundry?: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNewCaptureClick,
   isFoundryOpen = false,
   onToggleFoundry,
+  isSidebarOpen = true,
+  onToggleSidebar,
 }) => {
   const { settings, updateSettings } = useSettings();
   const stagedCount = useContextStore((state) => state.stagedItems.length);
@@ -30,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
     tags: 'Tags & Taxonomy',
     archive: 'Archive',
     trash: 'Trash',
-    settings: 'Settings & Storage',
+    settings: 'Settings',
   };
 
   const cycleTheme = () => {
@@ -42,6 +46,15 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-6 flex items-center justify-between shrink-0 select-none">
       <div className="flex items-center gap-3">
+        {!isSidebarOpen && onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+            title="Open sidebar (Ctrl+B)"
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
+        )}
         <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
           {viewTitles[currentView]}
         </h1>

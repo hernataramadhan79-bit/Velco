@@ -1,8 +1,10 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use base64::Engine;
 
 use crate::database::Database;
+use crate::filesystem::StorageManager;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AttachmentSubRecord {
@@ -740,4 +742,125 @@ pub fn empty_trash(db: State<'_, Database>) -> Result<usize, String> {
         .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
         .map_err(|e| e.to_string())?;
     Ok(count)
+}
+
+#[tauri::command]
+pub fn import_files_from_paths(
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    paths: Vec<String>,
+) -> Result<Vec<ItemRecord>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut imported_items = Vec::new();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    for path_str in paths {
+        let path = std::path::Path::new(&path_str);
+        if !path.exists() || !path.is_file() {
+            continue;
+        }
+
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unnamed_file")
+            .to_string();
+
+        let file_bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("Failed to read file {}: {}", path_str, e);
+                continue;
+            }
+        };
+        let file_size = file_bytes.len() as i64;
+
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        let (mime_type, item_type) = match extension.as_str() {
+            "png" => ("image/png", "image"),
+            "jpg" | "jpeg" => ("image/jpeg", "image"),
+            "gif" => ("image/gif", "image"),
+            "webp" => ("image/webp", "image"),
+            "svg" => ("image/svg+xml", "image"),
+            "bmp" => ("image/bmp", "image"),
+            "pdf" => ("application/pdf", "file"),
+            "txt" | "log" => ("text/plain", "file"),
+            "md" | "markdown" => ("text/markdown", "file"),
+            "json" => ("application/json", "file"),
+            "csv" => ("text/csv", "file"),
+            "zip" | "tar" | "gz" | "7z" | "rar" => ("application/zip", "file"),
+            "mp3" | "wav" | "ogg" | "m4a" | "flac" => ("audio/mpeg", "file"),
+            "mp4" | "mkv" | "mov" | "webm" | "avi" => ("video/mp4", "file"),
+            "doc" | "docx" => ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "file"),
+            "xls" | "xlsx" => ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "file"),
+            "ppt" | "pptx" => ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "file"),
+            _ => ("application/octet-stream", "file"),
+        };
+
+        // Save copy to Velco attachments directory
+        let (saved_path, checksum, _) = storage
+            .save_attachment(&file_name, &file_bytes)
+            .map_err(|e| format!("Failed to save attachment {}: {}", file_name, e))?;
+
+        // Small images (<= 3MB) get data URL for fast instant UI display
+        let data_url = if item_type == "image" && file_size <= 3 * 1024 * 1024 {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&file_bytes);
+            Some(format!("data:{};base64,{}", mime_type, b64))
+        } else {
+            None
+        };
+
+        // Content summary & preview
+        let mut content = format!(
+            "File: {}\nSize: {:.1} KB\nType: {}\nPath: {}",
+            file_name,
+            file_size as f64 / 1024.0,
+            mime_type,
+            path_str
+        );
+
+        if (matches!(extension.as_str(), "txt" | "md" | "json" | "csv" | "log" | "rs" | "ts" | "js" | "html" | "css"))
+            && file_size <= 1024 * 1024
+        {
+            if let Ok(text) = String::from_utf8(file_bytes.clone()) {
+                content.push_str("\n\n--- Content Preview ---\n");
+                content.push_str(&text.chars().take(3000).collect::<String>());
+            }
+        }
+
+        let item_id = uuid::Uuid::new_v4().to_string();
+        let att_id = uuid::Uuid::new_v4().to_string();
+        let relative_file_path = format!(
+            "attachments/{}",
+            saved_path.file_name().and_then(|n| n.to_str()).unwrap_or(&file_name)
+        );
+
+        // Insert into items table
+        conn.execute(
+            "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, 'drag_drop', 'inbox', 0, 0, ?5, ?6, NULL)",
+            params![item_id, item_type, file_name, content, now, now],
+        ).map_err(|e| e.to_string())?;
+
+        // Insert into FTS5
+        conn.execute(
+            "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
+            params![item_id, file_name, content],
+        ).ok();
+
+        // Insert into attachments table
+        conn.execute(
+            "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![att_id, item_id, file_name, relative_file_path, mime_type, file_size, checksum, now, data_url],
+        ).map_err(|e| e.to_string())?;
+
+        let created_record = fetch_item_by_id(&conn, &item_id)?;
+        imported_items.push(created_record);
+    }
+
+    Ok(imported_items)
 }

@@ -9,6 +9,7 @@ interface FilesViewProps {
   onSelect: (item: Item) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
+  isDraggingFiles?: boolean;
 }
 
 export const FilesView: React.FC<FilesViewProps> = ({
@@ -17,9 +18,11 @@ export const FilesView: React.FC<FilesViewProps> = ({
   onSelect,
   onToggleFavorite,
   onTrash,
+  isDraggingFiles = false,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const activeDragging = isDragging || isDraggingFiles;
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -80,16 +83,20 @@ export const FilesView: React.FC<FilesViewProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`p-8 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all duration-150 group ${
-          isDragging
-            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30'
+          activeDragging
+            ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 ring-4 ring-blue-500/20 scale-[1.01]'
             : 'border-slate-300 dark:border-slate-800 hover:border-blue-500/80 bg-white/40 dark:bg-slate-900/40'
         }`}
       >
-        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-blue-500 mx-auto mb-2 transition-colors">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2 transition-all ${
+          activeDragging
+            ? 'bg-blue-500 text-white scale-110 animate-bounce'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-blue-500'
+        }`}>
           <Upload className="w-5 h-5" />
         </div>
         <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          Click or drop files to import into Velco
+          {activeDragging ? 'Release files to import into Velco' : 'Click or drop files to import into Velco'}
         </div>
         <div className="text-[11px] text-slate-400 mt-1">
           PDF, TXT, MD, Images, Audio, Documents (stored locally in Velco/attachments)

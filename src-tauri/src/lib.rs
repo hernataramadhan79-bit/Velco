@@ -24,6 +24,7 @@ pub fn run() {
             commands::items::restore_item,
             commands::items::delete_item_permanent,
             commands::items::empty_trash,
+            commands::items::import_files_from_paths,
             commands::tasks::toggle_task_complete,
             commands::tags::get_tags,
             commands::tags::create_tag,

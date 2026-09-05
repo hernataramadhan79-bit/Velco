@@ -24,4 +24,5 @@ export interface DatabaseAdapter {
   search(query: string): Promise<Item[]>;
   exportBackup(): Promise<string>;
   importBackup(jsonString: string): Promise<number>;
+  importFilesFromPaths(paths: string[]): Promise<Item[]>;
 }

@@ -190,6 +190,19 @@ export function useItemStore() {
     }
   };
 
+  const importFilesFromPaths = async (paths: string[]): Promise<Item[]> => {
+    try {
+      const imported = await db.importFilesFromPaths(paths);
+      notify(`Imported ${imported.length} file(s) into Velco`, 'success');
+      await refreshItems();
+      await refreshCounts();
+      return imported;
+    } catch (err: any) {
+      notify(`Failed to import files: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
   const selectedItem = items.find((i) => i.id === selectedItemId) || null;
 
   return {
@@ -213,6 +226,7 @@ export function useItemStore() {
     restoreItem,
     permanentDeleteItem,
     emptyTrash,
+    importFilesFromPaths,
     refreshItems,
     refreshCounts,
     notification,

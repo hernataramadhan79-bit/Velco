@@ -9,6 +9,7 @@ import {
   Trash2,
   Settings,
   Search,
+  PanelLeftClose,
 } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
@@ -29,6 +30,7 @@ interface SidebarProps {
   selectedTagId: string | null;
   onSelectTag: (tagId: string | null) => void;
   onOpenSearch: () => void;
+  onToggleSidebar?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedTagId,
   onSelectTag,
   onOpenSearch,
+  onToggleSidebar,
 }) => {
   const navItems: { id: NavigationView; label: string; icon: any; count?: number }[] = [
     { id: 'inbox', label: 'Inbox', icon: Inbox, count: itemCounts.inbox },
@@ -73,6 +76,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
           </div>
+
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Hide sidebar (Ctrl+B)"
+            >
+              <PanelLeftClose className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Quick Search Shortcut Button */}

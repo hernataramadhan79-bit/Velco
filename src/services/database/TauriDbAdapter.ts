@@ -267,4 +267,9 @@ export class TauriDbAdapter implements DatabaseAdapter {
   async importBackup(jsonString: string): Promise<number> {
     return tauriInvoke<number>('import_backup', { jsonData: jsonString });
   }
+
+  async importFilesFromPaths(paths: string[]): Promise<Item[]> {
+    const rawItems: any[] = await tauriInvoke('import_files_from_paths', { paths });
+    return rawItems.map((r) => this.mapItemRecord(r));
+  }
 }
