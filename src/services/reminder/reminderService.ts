@@ -117,6 +117,15 @@ class ReminderService {
         continue;
       }
 
+      // Check overdue distance: if older than 24h, mark notified to avoid flooding on fresh startup
+      const diffMs = now.getTime() - due.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours > 24) {
+        this.notifiedRecords[task.id] = dueDateStr;
+        this.saveNotifiedRecords();
+        continue;
+      }
+
       // Check if task is due or overdue
       const isOverdue = isTaskOverdue(dueDateStr, false);
       const isDueToday = isTaskDueToday(dueDateStr, false);
@@ -151,10 +160,10 @@ class ReminderService {
     this.saveNotifiedRecords();
 
     const priorityLabel = task.task?.priority ? `[${task.task.priority.toUpperCase()}] ` : '';
-    const title = `Task Reminder: ${priorityLabel}${task.title}`;
+    const title = `Pengingat Tugas: ${priorityLabel}${task.title}`;
     const body = task.content
       ? task.content.slice(0, 100)
-      : `Batas waktu tugas telah tiba di Velco.`;
+      : `Waktu pengerjaan tugas di Velco telah tiba.`;
 
     // 1. Native Windows Notification via Tauri Plugin
     try {
@@ -190,6 +199,21 @@ class ReminderService {
     if (this.notifiedRecords[taskId]) {
       delete this.notifiedRecords[taskId];
       this.saveNotifiedRecords();
+    }
+  }
+
+  /**
+   * Manually test native desktop notification
+   */
+  async testNotification(title = 'Velco Task Reminder', body = 'Notifikasi pengingat desktop berfungsi normal.') {
+    await this.ensurePermission();
+    try {
+      sendNotification({ title, body });
+      if (this.onInAppNotifyFn) {
+        this.onInAppNotifyFn(`🔔 ${title}`);
+      }
+    } catch (err) {
+      console.warn('Test notification error:', err);
     }
   }
 }
