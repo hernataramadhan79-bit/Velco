@@ -10,6 +10,9 @@ import {
   Settings,
   Search,
   PanelLeftClose,
+  Tag as TagIcon,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
@@ -53,6 +56,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'trash', label: 'Trash', icon: Trash2, count: itemCounts.trash },
   ];
 
+  const selectedTag = tags.find((t) => t.id === selectedTagId);
+
   return (
     <aside className="w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between shrink-0 h-full select-none">
       {/* Brand Header */}
@@ -87,9 +92,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
         </div>
+      </div>
 
+      {/* Scrollable Center Area: Search, Nav, and Tags */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-4">
         {/* Quick Search Shortcut Button */}
-        <div className="p-3">
+        <div>
           <button
             onClick={onOpenSearch}
             className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer"
@@ -105,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Navigation items */}
-        <nav className="px-2 space-y-0.5">
+        <nav className="space-y-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -148,24 +156,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* Tags Section */}
-        {tags.length > 0 && (
-          <div className="mt-6 px-3">
-            <div className="flex items-center justify-between px-1 mb-1.5 text-[11px] font-bold text-slate-400 tracking-wider uppercase">
-              <span>Tags</span>
+        {/* DEDICATED TAGS SECTION */}
+        <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800/80">
+          {/* Section Header */}
+          <div className="flex items-center justify-between px-1 mb-2">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <TagIcon className="w-2.5 h-2.5" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+                Tags
+              </span>
+              {tags.length > 0 && (
+                <span className="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded-full bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                  {tags.length}
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                onSelectTag(null);
+                onSelectView('tags');
+              }}
+              className={`text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-0.5 ${
+                currentView === 'tags' && selectedTagId === null
+                  ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+              title="Manage tags"
+            >
+              <span>Manage</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Active Tag Filter Status Pill */}
+          {selectedTag && (
+            <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-between text-xs text-blue-700 dark:text-blue-300 animate-in fade-in duration-100">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: selectedTag.color }} />
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-500">Filter:</span>
+                <span className="font-semibold truncate">#{selectedTag.name}</span>
+              </div>
               <button
-                onClick={() => {
-                  onSelectTag(null);
-                  onSelectView('tags');
-                }}
-                className="hover:text-blue-600 dark:hover:text-blue-400"
-                title="Manage tags"
+                onClick={() => onSelectTag(null)}
+                className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-200 p-0.5 rounded cursor-pointer transition-colors"
+                title="Clear tag filter"
               >
-                View all
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="space-y-0.5 max-h-40 overflow-y-auto">
-              {tags.slice(0, 8).map((tag) => {
+          )}
+
+          {/* Tags List */}
+          {tags.length > 0 ? (
+            <div className="space-y-0.5 max-h-48 overflow-y-auto pr-0.5">
+              {tags.map((tag) => {
                 const isSelected = selectedTagId === tag.id;
                 return (
                   <button
@@ -174,23 +221,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onSelectView('tags');
                       onSelectTag(isSelected ? null : tag.id);
                     }}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                    className={`w-full group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white font-medium'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900'
+                        ? 'bg-blue-600 text-white font-semibold shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    <span className="truncate">{tag.name}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0 shadow-2xs transition-transform group-hover:scale-125"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span
+                        className={`text-[11px] font-mono ${
+                          isSelected ? 'text-blue-200' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                      >
+                        #
+                      </span>
+                      <span className="truncate">{tag.name}</span>
+                    </div>
+
+                    {isSelected && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTag(null);
+                        }}
+                        className="p-0.5 rounded hover:bg-white/20 text-white transition-colors cursor-pointer"
+                        title="Clear filter"
+                      >
+                        <X className="w-3 h-3" />
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="px-3 py-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1.5 bg-slate-100/40 dark:bg-slate-900/30">
+              <div className="w-6 h-6 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-slate-400 flex items-center justify-center mx-auto shadow-2xs">
+                <TagIcon className="w-3 h-3 text-slate-400" />
+              </div>
+              <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                No tags created yet
+              </div>
+              <button
+                onClick={() => {
+                  onSelectTag(null);
+                  onSelectView('tags');
+                }}
+                className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                + Create Tag
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bottom Footer Section */}
