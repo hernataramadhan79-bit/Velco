@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#2563eb"/>
+  <!-- Inbox tray icon -->
+  <path d="M120 180 L220 180 L235 240 L277 240 L292 180 L392 180 L360 360 L152 360 Z" fill="#ffffff" opacity="0.95"/>
+  <!-- Folder flap & lines -->
+  <rect x="180" y="140" width="152" height="40" rx="8" fill="#93c5fd"/>
+  <circle cx="256" cy="300" r="16" fill="#2563eb"/>
+</svg>
