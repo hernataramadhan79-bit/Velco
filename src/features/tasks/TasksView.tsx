@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Item, CreateItemInput, PriorityLevel } from '../../types/item';
+import React, { useState, useMemo } from 'react';
+import { Item, CreateItemInput, PriorityLevel, parseTaskBatchSource, TaskBatchSource } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Plus, CheckSquare } from 'lucide-react';
+import { TaskBatchSection } from '../../components/tasks/TaskBatchSection';
+import { Plus, CheckSquare, Bell, CheckCircle2 } from 'lucide-react';
 import { DueDatePicker } from '../../components/tasks/DueDatePicker';
 import { isTaskDueToday, isTaskOverdue } from '../../utils/dateUtils';
+import { reminderService } from '../../services/reminder/reminderService';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface TasksViewProps {
   tasks: Item[];
@@ -28,6 +31,29 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [priority, setPriority] = useState<PriorityLevel>('medium');
   const [dueDate, setDueDate] = useState('');
   const [filter, setFilter] = useState<TaskFilter>('pending');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
+
+  const handleQuickTestNotification = async () => {
+    setIsTesting(true);
+    setTestFeedback(null);
+    try {
+      const res = await reminderService.testNotification(
+        'Velco Task Reminder',
+        'System notification & audio reminder chime active!'
+      );
+      if (res.granted) {
+        setTestFeedback('Sent (OS & Audio)');
+      } else {
+        setTestFeedback('Sent (In-App & Audio)');
+      }
+    } catch {
+      setTestFeedback('Test Failed');
+    } finally {
+      setIsTesting(false);
+      setTimeout(() => setTestFeedback(null), 4000);
+    }
+  };
 
   const handleQuickAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +86,43 @@ export const TasksView: React.FC<TasksViewProps> = ({
     if (filter === 'completed') return isCompleted;
     return true;
   });
+
+  // Group filtered tasks into multi-task AI batches and clean standalone tasks
+  const { batchGroups, standaloneTasks } = useMemo(() => {
+    const rawBatchMap = new Map<string, { meta: TaskBatchSource; tasks: Item[] }>();
+    const standalone: Item[] = [];
+
+    for (const task of filteredTasks) {
+      const parsed = parseTaskBatchSource(task.source);
+      if (parsed && parsed.batchId) {
+        const existing = rawBatchMap.get(parsed.batchId);
+        if (existing) {
+          existing.tasks.push(task);
+        } else {
+          rawBatchMap.set(parsed.batchId, { meta: parsed, tasks: [task] });
+        }
+      } else {
+        standalone.push(task);
+      }
+    }
+
+    // Only promote to a Batch Section if the batch has >= 2 tasks
+    // If only 1 task was generated or exists, keep it in standalone to avoid visual noise/clutter!
+    const batches: { meta: TaskBatchSource; tasks: Item[] }[] = [];
+
+    rawBatchMap.forEach((group) => {
+      if (group.tasks.length >= 2) {
+        batches.push(group);
+      } else {
+        standalone.push(...group.tasks);
+      }
+    });
+
+    return {
+      batchGroups: batches,
+      standaloneTasks: standalone,
+    };
+  }, [filteredTasks]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -195,31 +258,92 @@ export const TasksView: React.FC<TasksViewProps> = ({
             All ({tasks.length})
           </button>
         </div>
+
+        {/* Diagnostic Test Button */}
+        <button
+          type="button"
+          onClick={handleQuickTestNotification}
+          disabled={isTesting}
+          className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-indigo-50 dark:bg-slate-900/80 dark:hover:bg-indigo-950/60 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+          title="Uji coba banner notifikasi Windows, nada bel, dan notifikasi in-app"
+        >
+          {testFeedback ? (
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Bell className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+          )}
+          <span>{isTesting ? 'Menguji...' : testFeedback || 'Tes Notifikasi & Audio'}</span>
+        </button>
       </div>
 
-      {/* Tasks List */}
-      <div className="space-y-2.5">
+      {/* Tasks List (Grouped by Batches + Standalone) */}
+      <div className="space-y-4">
         {filteredTasks.length === 0 ? (
-          <div className="text-center py-16 text-xs text-slate-400">
-            {filter === 'overdue'
-              ? 'Great job! No overdue tasks.'
-              : filter === 'due_today'
-              ? 'No tasks due today.'
-              : filter === 'pending'
-              ? 'No pending tasks. You are all caught up!'
-              : 'No tasks found in this view.'}
-          </div>
+          <EmptyState
+            icon={filter === 'overdue' || filter === 'pending' ? CheckCircle2 : CheckSquare}
+            title={
+              filter === 'overdue'
+                ? 'Great job! No overdue tasks'
+                : filter === 'due_today'
+                ? 'No tasks due today'
+                : filter === 'pending'
+                ? 'You are all caught up!'
+                : filter === 'completed'
+                ? 'No completed tasks yet'
+                : 'No tasks found'
+            }
+            description={
+              filter === 'overdue'
+                ? 'Everything is on schedule. Keep up the great pace!'
+                : filter === 'due_today'
+                ? 'You have no deadlines scheduled for today. Plan ahead or take a break.'
+                : filter === 'pending'
+                ? 'All pending tasks have been completed. Add a new task above anytime.'
+                : filter === 'completed'
+                ? 'Check off tasks as you finish them to build momentum.'
+                : 'Add a new task using the quick capture bar above to get started.'
+            }
+            badge={filter === 'overdue' || filter === 'pending' ? '🎉' : '📋'}
+          />
         ) : (
-          filteredTasks.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              onSelect={onSelect}
-              onToggleTask={onToggleTask}
-              onToggleFavorite={onToggleFavorite}
-              onTrash={onTrash}
-            />
-          ))
+          <>
+            {/* Render AI Structured Batches */}
+            {batchGroups.map((group) => (
+              <TaskBatchSection
+                key={group.meta.batchId}
+                meta={group.meta}
+                tasks={group.tasks}
+                onSelect={onSelect}
+                onToggleTask={onToggleTask}
+                onToggleFavorite={onToggleFavorite}
+                onTrash={onTrash}
+              />
+            ))}
+
+            {/* Render Standalone / Direct Tasks */}
+            {standaloneTasks.length > 0 && (
+              <div className="space-y-2.5">
+                {batchGroups.length > 0 && (
+                  <div className="flex items-center gap-2 pt-2 px-1">
+                    <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Individual Tasks ({standaloneTasks.length})
+                    </span>
+                    <div className="flex-1 h-px bg-slate-200/70 dark:bg-slate-800" />
+                  </div>
+                )}
+                {standaloneTasks.map((item) => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    onSelect={onSelect}
+                    onToggleTask={onToggleTask}
+                    onToggleFavorite={onToggleFavorite}
+                    onTrash={onTrash}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

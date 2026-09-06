@@ -1,12 +1,15 @@
 import React from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
+import { Archive } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface ArchiveViewProps {
   items: Item[];
   onSelect: (item: Item) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
+  onToggleArchive?: (itemId: string) => void;
 }
 
 export const ArchiveView: React.FC<ArchiveViewProps> = ({
@@ -14,6 +17,7 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
   onSelect,
   onToggleFavorite,
   onTrash,
+  onToggleArchive,
 }) => {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -24,9 +28,12 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
 
         <div className="space-y-2.5">
           {items.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              No archived items.
-            </div>
+            <EmptyState
+              icon={Archive}
+              title="No archived items"
+              description="Keep your active workspace tidy. Archived items stay fully searchable and can be restored anytime."
+              badge="📦"
+            />
           ) : (
             items.map((item) => (
               <ItemCard
@@ -35,6 +42,7 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
                 onSelect={onSelect}
                 onToggleFavorite={onToggleFavorite}
                 onTrash={onTrash}
+                onToggleArchive={onToggleArchive}
               />
             ))
           )}

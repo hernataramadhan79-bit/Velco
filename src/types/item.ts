@@ -100,3 +100,38 @@ export interface ItemCounts {
   trash: number;
 }
 
+export interface TaskBatchSource {
+  origin: 'ai_extract' | 'ai_chat' | 'direct';
+  batchId?: string;
+  batchTitle?: string;
+  sourceItemId?: string;
+  generatedAt?: string;
+}
+
+/**
+ * Parses the item.source string.
+ * Supports structured JSON string: '{"origin":"ai_extract","batchId":"...","batchTitle":"..."}'
+ * or legacy strings like 'direct', 'landing_ai_chat', etc.
+ */
+export function parseTaskBatchSource(source?: string | null): TaskBatchSource | null {
+  if (!source) return null;
+  if (source.startsWith('{') && source.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(source);
+      if (parsed && typeof parsed === 'object' && parsed.origin) {
+        return parsed as TaskBatchSource;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Formats a TaskBatchSource into a JSON string to store in item.source.
+ */
+export function formatTaskBatchSource(meta: TaskBatchSource): string {
+  return JSON.stringify(meta);
+}
+

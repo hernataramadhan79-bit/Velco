@@ -34,10 +34,11 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
     let payload: FullBackupPayload =
         serde_json::from_str(&json_data).map_err(|e| format!("Invalid backup JSON: {}", e))?;
 
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
 
     for tag in payload.tags {
-        conn.execute(
+        tx.execute(
             "INSERT OR IGNORE INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
             params![tag.id, tag.name, tag.color, tag.created_at],
         )
@@ -46,7 +47,7 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
 
     let count = payload.items.len();
     for item in payload.items {
-        conn.execute(
+        tx.execute(
             r#"
             INSERT OR REPLACE INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
@@ -69,7 +70,7 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
         // Restore task
         if let Some(task) = item.task {
             let task_id = uuid::Uuid::new_v4().to_string();
-            conn.execute(
+            tx.execute(
                 "INSERT OR REPLACE INTO tasks (id, item_id, due_date, priority, completed, completed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     task_id,
@@ -85,7 +86,7 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
         // Restore link
         if let Some(link) = item.link {
             let link_id = uuid::Uuid::new_v4().to_string();
-            conn.execute(
+            tx.execute(
                 "INSERT OR REPLACE INTO links (id, item_id, url, domain, page_title, preview_image) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     link_id,
@@ -100,7 +101,7 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
 
         // Restore attachments
         for att in item.attachments {
-            conn.execute(
+            tx.execute(
                 "INSERT OR REPLACE INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     att.id,
@@ -118,11 +119,11 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
 
         // Restore item tags
         for tag in item.tags {
-            conn.execute(
+            tx.execute(
                 "INSERT OR IGNORE INTO tags (id, name, color, created_at) VALUES (?1, ?2, ?3, ?4)",
                 params![tag.id, tag.name, tag.color, item.created_at],
             ).ok();
-            conn.execute(
+            tx.execute(
                 "INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)",
                 params![item.id, tag.id],
             ).ok();
@@ -131,7 +132,7 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
         // Restore AI metadata
         if let Some(ai) = item.ai_metadata {
             let suggested_json = ai.suggested_tags.map(|v| serde_json::to_string(&v).unwrap_or_default());
-            conn.execute(
+            tx.execute(
                 "INSERT OR REPLACE INTO ai_metadata (id, item_id, provider, model, summary, classification, confidence, suggested_tags, processed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     ai.id,
@@ -148,14 +149,16 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
         }
 
         // Restore FTS5 index
-        conn.execute("DELETE FROM items_fts WHERE item_id = ?1", params![item.id]).ok();
+        tx.execute("DELETE FROM items_fts WHERE item_id = ?1", params![item.id]).ok();
         if item.deleted_at.is_none() {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
                 params![item.id, item.title, item.content],
             ).ok();
         }
     }
+
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(count)
 }

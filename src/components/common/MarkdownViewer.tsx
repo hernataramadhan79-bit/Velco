@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check, ExternalLink, CheckSquare, Square } from 'lucide-react';
+import { openExternalUrl } from '../../utils/urlUtils';
 
 interface MarkdownViewerProps {
   content: string;
@@ -510,7 +511,11 @@ function formatInline(text: string, depth = 0): React.ReactNode {
           href={linkUrl}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openExternalUrl(linkUrl);
+          }}
           className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-medium cursor-pointer"
         >
           <span>{formatInline(linkLabel, depth + 1)}</span>
@@ -527,7 +532,11 @@ function formatInline(text: string, depth = 0): React.ReactNode {
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openExternalUrl(url);
+          }}
           className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
         >
           {url}

@@ -5,6 +5,7 @@ import {
 } from '@tauri-apps/plugin-notification';
 import { Item } from '../../types/item';
 import { isTaskOverdue, isTaskDueToday, parseDueDate, hasSpecificTime } from '../../utils/dateUtils';
+import { playReminderChime } from '../../utils/audioUtils';
 
 const STORAGE_KEY = 'velco_notified_reminders_v1';
 
@@ -12,7 +13,7 @@ class ReminderService {
   private timer: any = null;
   private permissionGranted = false;
   private notifiedRecords: Record<string, string> = {}; // { [itemId]: dueDate }
-  private getItemsFn: (() => Item[]) | null = null;
+  private getItemsFn: (() => Promise<Item[]> | Item[]) | null = null;
   private onInAppNotifyFn: ((msg: string) => void) | null = null;
 
   constructor() {
@@ -39,7 +40,25 @@ class ReminderService {
   }
 
   /**
-   * Request native desktop notification permission from the OS
+   * Check if notification permission is currently granted
+   */
+  async checkPermissionStatus(): Promise<boolean> {
+    try {
+      const granted = await isPermissionGranted();
+      this.permissionGranted = granted;
+      return granted;
+    } catch {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const granted = Notification.permission === 'granted';
+        this.permissionGranted = granted;
+        return granted;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Request native desktop notification permission from the OS (best triggered from user gesture)
    */
   async ensurePermission(): Promise<boolean> {
     try {
@@ -51,16 +70,20 @@ class ReminderService {
       this.permissionGranted = granted;
       return granted;
     } catch (err) {
-      console.warn('Notification permission check failed (running in browser mode?):', err);
+      console.warn('Notification permission check failed:', err);
       // Fallback to browser Notification if available
       if (typeof window !== 'undefined' && 'Notification' in window) {
         if (Notification.permission === 'granted') {
           this.permissionGranted = true;
           return true;
         }
-        const res = await Notification.requestPermission();
-        this.permissionGranted = res === 'granted';
-        return this.permissionGranted;
+        try {
+          const res = await Notification.requestPermission();
+          this.permissionGranted = res === 'granted';
+          return this.permissionGranted;
+        } catch {
+          return false;
+        }
       }
       return false;
     }
@@ -69,12 +92,12 @@ class ReminderService {
   /**
    * Start periodic background checking (every 30 seconds)
    */
-  start(getItems: () => Item[], onInAppNotify?: (msg: string) => void) {
+  start(getItems: () => Promise<Item[]> | Item[], onInAppNotify?: (msg: string) => void) {
     this.getItemsFn = getItems;
     if (onInAppNotify) this.onInAppNotifyFn = onInAppNotify;
 
-    // Ask permission once on start
-    this.ensurePermission();
+    // Check permission status
+    this.checkPermissionStatus().catch(() => {});
 
     // Clear any existing timer
     if (this.timer) {
@@ -98,7 +121,7 @@ class ReminderService {
    */
   async checkTasks() {
     if (!this.getItemsFn) return;
-    const items = this.getItemsFn();
+    const items = await this.getItemsFn();
     const now = new Date();
 
     const pendingTasks = items.filter(
@@ -152,20 +175,23 @@ class ReminderService {
   }
 
   /**
-   * Trigger native OS notification and in-app feedback
+   * Trigger native OS notification and in-app feedback + audio chime
    */
   private async triggerNotification(task: Item, dueDateStr: string) {
-    // Record as notified first to prevent race conditions
+    // Record as notified first to prevent duplicate alerts
     this.notifiedRecords[task.id] = dueDateStr;
     this.saveNotifiedRecords();
 
     const priorityLabel = task.task?.priority ? `[${task.task.priority.toUpperCase()}] ` : '';
-    const title = `Pengingat Tugas: ${priorityLabel}${task.title}`;
+    const title = `Task Reminder: ${priorityLabel}${task.title}`;
     const body = task.content
       ? task.content.slice(0, 100)
-      : `Waktu pengerjaan tugas di Velco telah tiba.`;
+      : `Due time has arrived for your task in Velco.`;
 
-    // 1. Native Windows Notification via Tauri Plugin
+    // 1. Play audible notification chime
+    playReminderChime();
+
+    // 2. Native Windows Notification via Tauri Plugin / Web API
     try {
       if (!this.permissionGranted) {
         await this.ensurePermission();
@@ -175,7 +201,7 @@ class ReminderService {
         title,
         body,
       });
-    } catch (err) {
+    } catch {
       // Browser fallback if Tauri notification fails
       try {
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -186,7 +212,7 @@ class ReminderService {
       }
     }
 
-    // 2. In-App Notification Toast
+    // 3. In-App Notification Toast
     if (this.onInAppNotifyFn) {
       this.onInAppNotifyFn(`🔔 ${title}`);
     }
@@ -203,18 +229,45 @@ class ReminderService {
   }
 
   /**
-   * Manually test native desktop notification
+   * Clear all notification history (useful when testing)
    */
-  async testNotification(title = 'Velco Task Reminder', body = 'Notifikasi pengingat desktop berfungsi normal.') {
-    await this.ensurePermission();
+  clearAllRecords() {
+    this.notifiedRecords = {};
+    this.saveNotifiedRecords();
+  }
+
+  /**
+   * Manually test native desktop notification & audio chime (triggered by user click)
+   */
+  async testNotification(
+    title = 'Velco Task Reminder',
+    body = 'Desktop reminder notifications & audio chime are working normally.'
+  ): Promise<{ granted: boolean }> {
+    // 1. Play sound immediately
+    playReminderChime();
+
+    // 2. Request / Ensure permission via user gesture
+    const granted = await this.ensurePermission();
+
+    // 3. Send desktop notification
     try {
       sendNotification({ title, body });
-      if (this.onInAppNotifyFn) {
-        this.onInAppNotifyFn(`🔔 ${title}`);
+    } catch {
+      try {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, { body });
+        }
+      } catch (err) {
+        console.warn('Test notification error:', err);
       }
-    } catch (err) {
-      console.warn('Test notification error:', err);
     }
+
+    // 4. Trigger in-app notification feedback
+    if (this.onInAppNotifyFn) {
+      this.onInAppNotifyFn(`🔔 ${title}`);
+    }
+
+    return { granted };
   }
 }
 

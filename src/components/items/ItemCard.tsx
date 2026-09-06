@@ -15,6 +15,7 @@ import {
   Clock,
   AlertCircle,
   Check,
+  Archive,
 } from 'lucide-react';
 import { Item } from '../../types/item';
 import { Badge } from '../common/Badge';
@@ -26,6 +27,7 @@ interface ItemCardProps {
   onSelect: (item: Item) => void;
   onToggleTask?: (itemId: string, completed: boolean) => void;
   onToggleFavorite?: (itemId: string) => void;
+  onToggleArchive?: (itemId: string) => void;
   onTrash?: (itemId: string) => void;
   onRestore?: (itemId: string) => void;
   onPermanentDelete?: (itemId: string) => void;
@@ -37,6 +39,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onSelect,
   onToggleTask,
   onToggleFavorite,
+  onToggleArchive,
   onTrash,
   onRestore,
   onPermanentDelete,
@@ -93,7 +96,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   return (
     <div
       onClick={() => onSelect(item)}
-      className={`group relative rounded-xl p-4 transition-all duration-150 cursor-pointer select-none border ${
+      className={`group relative rounded-xl p-4 transition-all duration-150 cursor-pointer select-none border w-full min-w-0 overflow-hidden ${
         isStaged
           ? 'bg-indigo-50/40 dark:bg-indigo-950/25 border-indigo-500/80 ring-2 ring-indigo-500/20 shadow-xs'
           : 'bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs'
@@ -304,6 +307,22 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                         item.favorite ? 'fill-amber-400 text-amber-500' : ''
                       }`}
                     />
+                  </button>
+                )}
+                {onToggleArchive && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleArchive(item.id);
+                    }}
+                    className={`p-1 rounded transition-colors ${
+                      item.archived
+                        ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700'
+                        : 'text-slate-400 hover:text-blue-500'
+                    }`}
+                    title={item.archived ? 'Unarchive' : 'Archive'}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
                   </button>
                 )}
                 {onTrash && (

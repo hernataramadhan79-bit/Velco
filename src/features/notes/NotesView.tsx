@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Item, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Plus } from 'lucide-react';
+import { Plus, FileText } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface NotesViewProps {
   notes: Item[];
@@ -93,9 +94,21 @@ export const NotesView: React.FC<NotesViewProps> = ({
         </div>
         <div className="space-y-2.5">
           {notes.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              No notes saved yet.
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No notes written yet"
+              description="Capture your ideas, meeting specs, markdown docs, or technical insights locally."
+              action={
+                !isCreating
+                  ? {
+                      label: 'Write a Note',
+                      onClick: () => setIsCreating(true),
+                      icon: Plus,
+                    }
+                  : undefined
+              }
+              badge="📝"
+            />
           ) : (
             notes.map((item) => (
               <ItemCard

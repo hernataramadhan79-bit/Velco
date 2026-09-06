@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Item, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Link2, Plus } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface LinksViewProps {
   links: Item[];
@@ -78,9 +79,12 @@ export const LinksView: React.FC<LinksViewProps> = ({
         </div>
         <div className="space-y-2.5">
           {links.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              No links saved yet.
-            </div>
+            <EmptyState
+              icon={Link2}
+              title="No saved links yet"
+              description="Paste and bookmark URLs to docs, articles, design files, or research repositories."
+              badge="🔗"
+            />
           ) : (
             links.map((item) => (
               <ItemCard

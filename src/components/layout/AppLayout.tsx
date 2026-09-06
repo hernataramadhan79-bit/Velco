@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Upload } from 'lucide-react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
+import { Upload, Bell, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -7,20 +7,46 @@ import { TheFoundry } from '../workstation/TheFoundry';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { useTagStore } from '../../stores/tagStore';
 import { useContextStore } from '../../stores/contextStore';
-import { InboxView } from '../../features/inbox/InboxView';
-import { TasksView } from '../../features/tasks/TasksView';
-import { NotesView } from '../../features/notes/NotesView';
-import { FilesView } from '../../features/files/FilesView';
-import { LinksView } from '../../features/links/LinksView';
-import { TagsView } from '../../features/tags/TagsView';
-import { ArchiveView } from '../../features/archive/ArchiveView';
-import { TrashView } from '../../features/trash/TrashView';
-import { SettingsView } from '../../features/settings/SettingsView';
 import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
+import { ViewSkeleton } from '../common/ViewSkeleton';
 import { reminderService } from '../../services/reminder/reminderService';
 import { isTaskOverdue } from '../../utils/dateUtils';
+import { db } from '../../services/database';
 
+// ── Lazy-loaded view components ────────────────────────────
+const InboxView = lazy(() =>
+  import('../../features/inbox/InboxView').then((m) => ({ default: m.InboxView }))
+);
+const TasksView = lazy(() =>
+  import('../../features/tasks/TasksView').then((m) => ({ default: m.TasksView }))
+);
+const NotesView = lazy(() =>
+  import('../../features/notes/NotesView').then((m) => ({ default: m.NotesView }))
+);
+const FilesView = lazy(() =>
+  import('../../features/files/FilesView').then((m) => ({ default: m.FilesView }))
+);
+const LinksView = lazy(() =>
+  import('../../features/links/LinksView').then((m) => ({ default: m.LinksView }))
+);
+const TagsView = lazy(() =>
+  import('../../features/tags/TagsView').then((m) => ({ default: m.TagsView }))
+);
+const ArchiveView = lazy(() =>
+  import('../../features/archive/ArchiveView').then((m) => ({ default: m.ArchiveView }))
+);
+const TrashView = lazy(() =>
+  import('../../features/trash/TrashView').then((m) => ({ default: m.TrashView }))
+);
+const SettingsView = lazy(() =>
+  import('../../features/settings/SettingsView').then((m) => ({ default: m.SettingsView }))
+);
+const TheBridgeView = lazy(() =>
+  import('../../features/bridge/TheBridgeView').then((m) => ({ default: m.TheBridgeView }))
+);
+
+// ── Drag Drop Indicator ────────────────────────────────────
 interface DragDropIndicatorProps {
   isDragging: boolean;
 }
@@ -45,46 +71,143 @@ const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => 
   );
 };
 
+// ── Notification Toast ─────────────────────────────────────
+const NotificationToast: React.FC = React.memo(() => {
+  const notification = useItemStore((s) => s.notification);
+  const dismissNotification = useItemStore((s) => s.dismissNotification);
+
+  if (!notification) return null;
+
+  const isReminder = notification.type === 'reminder';
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 border select-none max-w-sm ${
+        isReminder
+          ? 'bg-slate-900/95 dark:bg-slate-900/95 text-white border-indigo-500/40 shadow-indigo-500/10 backdrop-blur-md ring-2 ring-indigo-500/20'
+          : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-800 dark:border-slate-200'
+      }`}
+    >
+      {isReminder ? (
+        <>
+          <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 animate-pulse">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div className="min-w-0 pr-1 flex-1">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-indigo-400 font-mono">
+              Task Reminder
+            </div>
+            <div className="text-xs font-semibold text-slate-100 truncate">
+              {notification.message}
+            </div>
+          </div>
+        </>
+      ) : (
+        <span className="text-xs font-semibold flex-1">{notification.message}</span>
+      )}
+
+      {/* Dismiss button */}
+      <button
+        onClick={dismissNotification}
+        className="p-1 rounded-lg opacity-60 hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+        aria-label="Dismiss notification"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+});
+NotificationToast.displayName = 'NotificationToast';
+
+// ══════════════════════════════════════════════════════════
+// AppLayout — Main Application Shell
+// ══════════════════════════════════════════════════════════
 export const AppLayout: React.FC = () => {
-  const itemStore = useItemStore();
+  // ── Zustand selectors (granular subscriptions) ───────────
+  const currentView = useItemStore((s) => s.currentView);
+  const items = useItemStore((s) => s.items);
+  const selectedItemId = useItemStore((s) => s.selectedItemId);
+  const itemCounts = useItemStore((s) => s.itemCounts);
+
+  // Zustand actions (stable references — never cause re-renders)
+  const setCurrentView = useItemStore((s) => s.setCurrentView);
+  const setSelectedItemId = useItemStore((s) => s.setSelectedItemId);
+  const setActiveTagId = useItemStore((s) => s.setActiveTagId);
+  const captureItem = useItemStore((s) => s.captureItem);
+  const updateItem = useItemStore((s) => s.updateItem);
+  const toggleTask = useItemStore((s) => s.toggleTask);
+  const toggleFavorite = useItemStore((s) => s.toggleFavorite);
+  const toggleArchive = useItemStore((s) => s.toggleArchive);
+  const trashItem = useItemStore((s) => s.trashItem);
+  const restoreItem = useItemStore((s) => s.restoreItem);
+  const permanentDeleteItem = useItemStore((s) => s.permanentDeleteItem);
+  const emptyTrash = useItemStore((s) => s.emptyTrash);
+  const importFilesFromPaths = useItemStore((s) => s.importFilesFromPaths);
+  const refreshItems = useItemStore((s) => s.refreshItems);
+  const refreshCounts = useItemStore((s) => s.refreshCounts);
+  const notify = useItemStore((s) => s.notify);
+
+  // Computed
+  const selectedItem = items.find((i) => i.id === selectedItemId) || null;
+
+  // Tag store
   const tagStore = useTagStore();
+
+  // Local UI state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isFoundryOpen, setIsFoundryOpen] = useState(false);
   const [isFoundryExpanded, setIsFoundryExpanded] = useState(false);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [overdueCount, setOverdueCount] = useState(0);
   const previousViewRef = useRef<NavigationView>('inbox');
 
-  const itemStoreRef = useRef(itemStore);
-  useEffect(() => {
-    itemStoreRef.current = itemStore;
-  }, [itemStore]);
-
-  const navigateToView = (view: NavigationView) => {
-    if (itemStore.currentView !== 'settings') {
-      previousViewRef.current = itemStore.currentView;
+  const navigateToView = useCallback((view: NavigationView) => {
+    const current = useItemStore.getState().currentView;
+    if (current !== 'settings') {
+      previousViewRef.current = current;
     }
-    itemStore.setCurrentView(view);
-  };
+    setCurrentView(view);
+  }, [setCurrentView]);
 
   const stagedCount = useContextStore((state) => state.stagedItems.length);
 
-  const overdueCount = itemStore.items.filter(
-    (item) => item.type === 'task' && !item.task?.completed && isTaskOverdue(item.task?.dueDate)
-  ).length;
+  // ── Initial data load ────────────────────────────────────
+  useEffect(() => {
+    refreshItems();
+    refreshCounts();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Background Reminder Service: checks tasks every 30s and sends OS banner + in-app notification
+  // ── Keep overdue count accurate ──────────────────────────
+  useEffect(() => {
+    let isMounted = true;
+    db.getItems({ type: 'task' })
+      .then((tasks) => {
+        if (!isMounted) return;
+        const count = tasks.filter(
+          (t) => !t.task?.completed && isTaskOverdue(t.task?.dueDate)
+        ).length;
+        setOverdueCount(count);
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [itemCounts.tasks, items]);
+
+  // ── Background Reminder Service ──────────────────────────
   useEffect(() => {
     reminderService.start(
-      () => itemStoreRef.current.items,
-      (msg) => itemStoreRef.current.notify(msg, 'info')
+      () => db.getItems({ type: 'task' }),
+      (msg) => useItemStore.getState().notify(msg, 'reminder')
     );
     return () => {
       reminderService.stop();
     };
   }, []);
 
-  // Native Tauri Drag-and-Drop listener
+  // ── Native Tauri Drag-and-Drop listener ──────────────────
   useEffect(() => {
     const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
     if (!isTauri) return;
@@ -101,7 +224,7 @@ export const AppLayout: React.FC = () => {
             setIsGlobalDragging(false);
             const paths = event.payload.paths;
             if (paths && paths.length > 0) {
-              itemStoreRef.current.importFilesFromPaths(paths);
+              useItemStore.getState().importFilesFromPaths(paths);
             }
           }
         })
@@ -120,14 +243,16 @@ export const AppLayout: React.FC = () => {
     };
   }, []);
 
-  // Automatically open The Foundry when items are staged into the Context Cart
-  useEffect(() => {
-    if (stagedCount > 0) {
+  // ── Auto-open The Foundry when items are staged ──────────
+  const [prevStagedCount, setPrevStagedCount] = useState(stagedCount);
+  if (stagedCount !== prevStagedCount) {
+    setPrevStagedCount(stagedCount);
+    if (stagedCount > prevStagedCount && stagedCount > 0) {
       setIsFoundryOpen(true);
     }
-  }, [stagedCount]);
+  }
 
-  // Global Keyboard Shortcuts (Ctrl+K: Search, Ctrl+J: Foundry, Ctrl+B: Toggle Sidebar)
+  // ── Global Keyboard Shortcuts ────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -146,53 +271,47 @@ export const AppLayout: React.FC = () => {
   }, []);
 
   const handleEmptyTrash = async () => {
-    await itemStore.emptyTrash();
+    await emptyTrash();
   };
 
-  // When viewing Settings, render dedicated full-screen view (hide default sidebar and header)
-  if (itemStore.currentView === 'settings') {
+  // ── Settings View (full-screen) ──────────────────────────
+  if (currentView === 'settings') {
     return (
       <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans">
-        <SettingsView
-          onBack={() => {
-            itemStore.setCurrentView(previousViewRef.current);
-          }}
-        />
+        <Suspense fallback={<ViewSkeleton />}>
+          <SettingsView
+            onBack={() => {
+              setCurrentView(previousViewRef.current);
+            }}
+          />
+        </Suspense>
 
-        {/* Global Search Modal */}
         <GlobalSearchModal
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
           onSelectItem={(item) => {
-            itemStore.setSelectedItemId(item.id);
-            itemStore.setCurrentView(previousViewRef.current);
+            setSelectedItemId(item.id);
+            setCurrentView(previousViewRef.current);
           }}
         />
 
-        {/* Item Detail Inspector Modal */}
         <ItemDetailModal
-          item={itemStore.selectedItem}
-          isOpen={itemStore.selectedItemId !== null}
-          onClose={() => itemStore.setSelectedItemId(null)}
-          onUpdate={itemStore.updateItem}
-          onTrash={itemStore.trashItem}
+          item={selectedItem}
+          isOpen={selectedItemId !== null}
+          onClose={() => setSelectedItemId(null)}
+          onUpdate={updateItem}
+          onTrash={trashItem}
           allTags={tagStore.tags}
           onCreateTag={tagStore.addTag}
         />
 
-        {/* Global Notification Toast */}
-        {itemStore.notification && (
-          <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-            <span>{itemStore.notification.message}</span>
-          </div>
-        )}
-
-        {/* Global Drag & Drop Indicator (Compact Floating Dock) */}
+        <NotificationToast />
         <DragDropIndicator isDragging={isGlobalDragging} />
       </div>
     );
   }
 
+  // ── Main Layout ──────────────────────────────────────────
   return (
     <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans">
       {/* Pane 1: Collapsible Sidebar */}
@@ -202,15 +321,15 @@ export const AppLayout: React.FC = () => {
         }`}
       >
         <Sidebar
-          currentView={itemStore.currentView}
+          currentView={currentView}
           onSelectView={navigateToView}
-          itemCounts={itemStore.itemCounts}
+          itemCounts={itemCounts}
           overdueCount={overdueCount}
           tags={tagStore.tags}
           selectedTagId={tagStore.selectedTagId}
           onSelectTag={(tagId) => {
             tagStore.setSelectedTagId(tagId);
-            itemStore.setActiveTagId(tagId);
+            setActiveTagId(tagId);
           }}
           onOpenSearch={() => setIsSearchOpen(true)}
           onToggleSidebar={() => setIsSidebarOpen(false)}
@@ -220,7 +339,7 @@ export const AppLayout: React.FC = () => {
       {/* Pane 2: Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white dark:bg-slate-900/50">
         <Header
-          currentView={itemStore.currentView}
+          currentView={currentView}
           onNewCaptureClick={() => navigateToView('inbox')}
           isFoundryOpen={isFoundryOpen}
           onToggleFoundry={() => setIsFoundryOpen((prev) => !prev)}
@@ -229,96 +348,119 @@ export const AppLayout: React.FC = () => {
         />
 
         {/* Scrollable View Content */}
-        <main className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
-          {itemStore.currentView === 'inbox' && (
-            <InboxView
-              items={itemStore.items}
-              onCapture={itemStore.captureItem}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleTask={itemStore.toggleTask}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+        <main
+          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${
+            currentView === 'bridge'
+              ? 'p-0 flex flex-col'
+              : 'px-8 py-6'
+          }`}
+        >
+          <Suspense fallback={<ViewSkeleton />}>
+            <div className="view-enter" key={currentView}>
+              {currentView === 'inbox' && (
+                <InboxView
+                  items={items}
+                  onCapture={captureItem}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleTask={toggleTask}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                  onOpenSettings={() => navigateToView('settings')}
+                  onArtifactCreated={(msg) => {
+                    refreshItems();
+                    refreshCounts();
+                    notify(msg, 'success');
+                  }}
+                />
+              )}
 
-          {itemStore.currentView === 'tasks' && (
-            <TasksView
-              tasks={itemStore.items}
-              onCapture={itemStore.captureItem}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleTask={itemStore.toggleTask}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+              {currentView === 'tasks' && (
+                <TasksView
+                  tasks={items}
+                  onCapture={captureItem}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleTask={toggleTask}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                />
+              )}
 
-          {itemStore.currentView === 'notes' && (
-            <NotesView
-              notes={itemStore.items}
-              onCapture={itemStore.captureItem}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+              {currentView === 'notes' && (
+                <NotesView
+                  notes={items}
+                  onCapture={captureItem}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                />
+              )}
 
-          {itemStore.currentView === 'files' && (
-            <FilesView
-              files={itemStore.items}
-              onCapture={itemStore.captureItem}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-              isDraggingFiles={isGlobalDragging}
-            />
-          )}
+              {currentView === 'files' && (
+                <FilesView
+                  files={items}
+                  onCapture={captureItem}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                  isDraggingFiles={isGlobalDragging}
+                />
+              )}
 
-          {itemStore.currentView === 'links' && (
-            <LinksView
-              links={itemStore.items}
-              onCapture={itemStore.captureItem}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+              {currentView === 'links' && (
+                <LinksView
+                  links={items}
+                  onCapture={captureItem}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                />
+              )}
 
-          {itemStore.currentView === 'tags' && (
-            <TagsView
-              tags={tagStore.tags}
-              items={itemStore.items}
-              selectedTagId={tagStore.selectedTagId}
-              onSelectTag={(tagId) => {
-                tagStore.setSelectedTagId(tagId);
-                itemStore.setActiveTagId(tagId);
-              }}
-              onAddTag={tagStore.addTag}
-              onRemoveTag={tagStore.removeTag}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleTask={itemStore.toggleTask}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+              {currentView === 'tags' && (
+                <TagsView
+                  tags={tagStore.tags}
+                  items={items}
+                  selectedTagId={tagStore.selectedTagId}
+                  onSelectTag={(tagId) => {
+                    tagStore.setSelectedTagId(tagId);
+                    setActiveTagId(tagId);
+                  }}
+                  onAddTag={tagStore.addTag}
+                  onRemoveTag={tagStore.removeTag}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleTask={toggleTask}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                />
+              )}
 
-          {itemStore.currentView === 'archive' && (
-            <ArchiveView
-              items={itemStore.items}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onToggleFavorite={itemStore.toggleFavorite}
-              onTrash={itemStore.trashItem}
-            />
-          )}
+              {currentView === 'archive' && (
+                <ArchiveView
+                  items={items}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onTrash={trashItem}
+                  onToggleArchive={toggleArchive}
+                />
+              )}
 
-          {itemStore.currentView === 'trash' && (
-            <TrashView
-              items={itemStore.items}
-              onSelect={(item) => itemStore.setSelectedItemId(item.id)}
-              onRestore={itemStore.restoreItem}
-              onPermanentDelete={itemStore.permanentDeleteItem}
-              onEmptyTrash={handleEmptyTrash}
-            />
-          )}
+              {currentView === 'trash' && (
+                <TrashView
+                  items={items}
+                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onRestore={restoreItem}
+                  onPermanentDelete={permanentDeleteItem}
+                  onEmptyTrash={handleEmptyTrash}
+                />
+              )}
+
+              {currentView === 'bridge' && (
+                <TheBridgeView
+                  onNotify={(msg, type) => notify(msg, type)}
+                />
+              )}
+            </div>
+          </Suspense>
         </main>
       </div>
 
@@ -334,14 +476,14 @@ export const AppLayout: React.FC = () => {
             isExpanded={isFoundryExpanded}
             onToggleExpand={() => setIsFoundryExpanded((prev) => !prev)}
             onArtifactsApplied={() => {
-              itemStore.refreshItems();
-              itemStore.refreshCounts();
-              itemStore.notify('Recipe artifacts committed to SQLite!', 'success');
+              refreshItems();
+              refreshCounts();
+              notify('Recipe artifacts committed to SQLite!', 'success');
             }}
             onArtifactCreated={(msg) => {
-              itemStore.refreshItems();
-              itemStore.refreshCounts();
-              itemStore.notify(msg, 'success');
+              refreshItems();
+              refreshCounts();
+              notify(msg, 'success');
             }}
             onOpenSettings={() => navigateToView('settings')}
           />
@@ -350,11 +492,13 @@ export const AppLayout: React.FC = () => {
 
       {/* Item Detail Inspector Modal */}
       <ItemDetailModal
-        item={itemStore.selectedItem}
-        isOpen={itemStore.selectedItemId !== null}
-        onClose={() => itemStore.setSelectedItemId(null)}
-        onUpdate={itemStore.updateItem}
-        onTrash={itemStore.trashItem}
+        item={selectedItem}
+        isOpen={selectedItemId !== null}
+        onClose={() => setSelectedItemId(null)}
+        onUpdate={updateItem}
+        onTrash={trashItem}
+        onRestore={restoreItem}
+        onPermanentDelete={permanentDeleteItem}
         allTags={tagStore.tags}
         onCreateTag={tagStore.addTag}
       />
@@ -363,17 +507,13 @@ export const AppLayout: React.FC = () => {
       <GlobalSearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
-        onSelectItem={(item) => itemStore.setSelectedItemId(item.id)}
+        onSelectItem={(item) => setSelectedItemId(item.id)}
       />
 
-      {/* Global Notification Toast */}
-      {itemStore.notification && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <span>{itemStore.notification.message}</span>
-        </div>
-      )}
+      {/* Global Notification Toast (Dismissible) */}
+      <NotificationToast />
 
-      {/* Global Drag & Drop Indicator (Compact Floating Dock) */}
+      {/* Global Drag & Drop Indicator */}
       <DragDropIndicator isDragging={isGlobalDragging} />
     </div>
   );

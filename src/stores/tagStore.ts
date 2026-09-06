@@ -5,7 +5,7 @@ import { db } from '../services/database';
 export function useTagStore() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const refreshTags = useCallback(async () => {
     setLoading(true);
@@ -20,7 +20,16 @@ export function useTagStore() {
   }, []);
 
   useEffect(() => {
-    refreshTags();
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (active) {
+        await refreshTags();
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [refreshTags]);
 
   const addTag = async (name: string, color?: string): Promise<Tag> => {

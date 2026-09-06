@@ -72,8 +72,6 @@ export function useSettings() {
   const [settings, setSettingsState] = useState<AppSettings>(currentSettings);
 
   useEffect(() => {
-    setSettingsState(currentSettings);
-
     const handleChange = () => {
       setSettingsState(currentSettings);
     };

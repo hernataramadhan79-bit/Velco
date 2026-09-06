@@ -2,6 +2,30 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
 
+const getBaseUrl = (settings: any): string => {
+  switch (settings.aiProvider) {
+    case 'ollama': return settings.ollamaUrl || 'http://localhost:11434';
+    case 'lmstudio': return settings.lmstudioUrl || 'http://localhost:1234/v1';
+    case 'openai': return 'https://api.openai.com/v1';
+    case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta/openai';
+    case 'anthropic': return 'https://api.anthropic.com/v1';
+    case 'openrouter': return 'https://openrouter.ai/api/v1';
+    case 'custom': return settings.customApiUrl || '';
+    default: return '';
+  }
+};
+
+const getApiKey = (settings: any): string | undefined => {
+  switch (settings.aiProvider) {
+    case 'openai': return settings.openaiApiKey || undefined;
+    case 'gemini': return settings.geminiApiKey || undefined;
+    case 'anthropic': return settings.anthropicApiKey || undefined;
+    case 'openrouter': return settings.openrouterApiKey || undefined;
+    case 'custom': return settings.customApiKey || undefined;
+    default: return undefined;
+  }
+};
+
 export const AIPrivacyBadge: React.FC = () => {
   const { settings, updateSettings } = useSettings();
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
@@ -11,34 +35,8 @@ export const AIPrivacyBadge: React.FC = () => {
   const isLocal = ['ollama', 'lmstudio'].includes(settings.aiProvider);
   const providerLabel = settings.aiProvider === 'none' ? 'None' : settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
 
-  const getBaseUrl = (): string => {
-    switch (settings.aiProvider) {
-      case 'ollama': return settings.ollamaUrl || 'http://localhost:11434';
-      case 'lmstudio': return settings.lmstudioUrl || 'http://localhost:1234/v1';
-      case 'openai': return 'https://api.openai.com/v1';
-      case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta/openai';
-      case 'anthropic': return 'https://api.anthropic.com/v1';
-      case 'openrouter': return 'https://openrouter.ai/api/v1';
-      case 'custom': return settings.customApiUrl || '';
-      default: return '';
-    }
-  };
-
-  const getApiKey = (): string | undefined => {
-    switch (settings.aiProvider) {
-      case 'openai': return settings.openaiApiKey || undefined;
-      case 'gemini': return settings.geminiApiKey || undefined;
-      case 'anthropic': return settings.anthropicApiKey || undefined;
-      case 'openrouter': return settings.openrouterApiKey || undefined;
-      case 'custom': return settings.customApiKey || undefined;
-      default: return undefined;
-    }
-  };
-
   const checkConnection = useCallback(async () => {
     if (!settings.aiEnabled || settings.aiProvider === 'none') {
-      setIsOnline(false);
-      setIsChecking(false);
       return;
     }
 
@@ -47,7 +45,7 @@ export const AIPrivacyBadge: React.FC = () => {
     setIsChecking(true);
 
     try {
-      const available = await aiService.checkStatus(getBaseUrl(), getApiKey());
+      const available = await aiService.checkStatus(getBaseUrl(settings), getApiKey(settings));
       setIsOnline(available);
     } catch {
       setIsOnline(false);
@@ -55,16 +53,16 @@ export const AIPrivacyBadge: React.FC = () => {
       setIsChecking(false);
       inFlightRef.current = false;
     }
-  }, [settings.aiEnabled, settings.aiProvider]);
+  }, [settings]);
 
   useEffect(() => {
     if (!settings.aiEnabled || settings.aiProvider === 'none') {
-      setIsOnline(false);
-      setIsChecking(false);
       return;
     }
 
-    checkConnection();
+    const timer = setTimeout(() => {
+      checkConnection();
+    }, 0);
 
     if (isLocal) {
       const interval = setInterval(() => {
@@ -78,11 +76,16 @@ export const AIPrivacyBadge: React.FC = () => {
       document.addEventListener('visibilitychange', handleFocus);
 
       return () => {
+        clearTimeout(timer);
         clearInterval(interval);
         window.removeEventListener('focus', handleFocus);
         document.removeEventListener('visibilitychange', handleFocus);
       };
     }
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [checkConnection, settings.aiEnabled, isLocal, settings.aiProvider]);
 
   const handleToggle = () => {

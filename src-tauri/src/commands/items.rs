@@ -478,7 +478,11 @@ pub fn get_items(
 }
 
 #[tauri::command]
-pub fn create_item(db: State<'_, Database>, payload: CreateItemPayload) -> Result<ItemRecord, String> {
+pub fn create_item(
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    payload: CreateItemPayload,
+) -> Result<ItemRecord, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let id = payload.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let now = chrono::Utc::now().to_rfc3339();
@@ -516,18 +520,37 @@ pub fn create_item(db: State<'_, Database>, payload: CreateItemPayload) -> Resul
         for att in attachments {
             let att_id = if att.id.is_empty() { uuid::Uuid::new_v4().to_string() } else { att.id.clone() };
             let created_at = if att.created_at.is_empty() { now.clone() } else { att.created_at.clone() };
+
+            let mut file_path = att.file_path.clone();
+            let mut checksum = att.checksum.clone();
+            let mut file_size = att.file_size;
+
+            // If data_url contains base64 data, decode and save to attachments folder on disk
+            if let Some(ref data_url) = att.data_url {
+                if let Some(comma_pos) = data_url.find(',') {
+                    let b64_str = &data_url[comma_pos + 1..];
+                    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64_str) {
+                        if let Ok((target_path, computed_hash, written_size)) = storage.save_attachment(&att.file_name, &bytes) {
+                            file_path = target_path.to_string_lossy().to_string();
+                            checksum = computed_hash;
+                            file_size = written_size as i64;
+                        }
+                    }
+                }
+            }
+
             conn.execute(
                 "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![att_id, id, att.file_name, att.file_path, att.mime_type, att.file_size, att.checksum, created_at, att.data_url],
+                params![att_id, id, att.file_name, file_path, att.mime_type, file_size, checksum, created_at, att.data_url],
             ).map_err(|e| e.to_string())?;
 
             saved_attachments.push(AttachmentSubRecord {
                 id: att_id,
                 file_name: att.file_name.clone(),
-                file_path: att.file_path.clone(),
+                file_path,
                 mime_type: att.mime_type.clone(),
-                file_size: att.file_size,
-                checksum: att.checksum.clone(),
+                file_size,
+                checksum,
                 created_at,
                 data_url: att.data_url.clone(),
             });
@@ -724,6 +747,19 @@ pub fn restore_item(db: State<'_, Database>, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn delete_item_permanent(db: State<'_, Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Delete attachment files on disk if they exist
+    if let Ok(mut stmt) = conn.prepare("SELECT file_path FROM attachments WHERE item_id = ?1") {
+        if let Ok(rows) = stmt.query_map(params![id], |row| row.get::<_, String>(0)) {
+            for path in rows.flatten() {
+                let p = std::path::Path::new(&path);
+                if p.is_file() {
+                    let _ = std::fs::remove_file(p);
+                }
+            }
+        }
+    }
+
     conn.execute("DELETE FROM items_fts WHERE item_id = ?1", params![id]).ok();
     conn.execute("DELETE FROM items WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
@@ -733,6 +769,19 @@ pub fn delete_item_permanent(db: State<'_, Database>, id: String) -> Result<(), 
 #[tauri::command]
 pub fn empty_trash(db: State<'_, Database>) -> Result<usize, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Delete attachment files on disk for all deleted items
+    if let Ok(mut stmt) = conn.prepare("SELECT a.file_path FROM attachments a JOIN items i ON a.item_id = i.id WHERE i.deleted_at IS NOT NULL") {
+        if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
+            for path in rows.flatten() {
+                let p = std::path::Path::new(&path);
+                if p.is_file() {
+                    let _ = std::fs::remove_file(p);
+                }
+            }
+        }
+    }
+
     conn.execute(
         "DELETE FROM items_fts WHERE item_id IN (SELECT id FROM items WHERE deleted_at IS NOT NULL)",
         [],

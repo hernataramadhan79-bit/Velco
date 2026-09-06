@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Tag, Item } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Tag as TagIcon, Plus, Trash2 } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface TagsViewProps {
   tags: Tag[];
@@ -156,9 +157,12 @@ export const TagsView: React.FC<TagsViewProps> = ({
 
         <div className="space-y-2.5">
           {filteredItems.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              No items matching this tag.
-            </div>
+            <EmptyState
+              icon={TagIcon}
+              title={selectedTag ? `No items tagged "${selectedTag.name}"` : 'No tagged items'}
+              description="Assign tags to tasks, notes, links, or files from their detail inspector or quick capture to organize your knowledge."
+              badge="🏷️"
+            />
           ) : (
             filteredItems.map((item) => (
               <ItemCard

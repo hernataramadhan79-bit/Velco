@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { create } from 'zustand';
 import { Item, CreateItemInput, ItemCounts } from '../types/item';
 import { db } from '../services/database';
 
@@ -11,42 +11,117 @@ export type NavigationView =
   | 'tags'
   | 'trash'
   | 'archive'
-  | 'settings';
+  | 'settings'
+  | 'bridge';
 
-export function useItemStore() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [itemCounts, setItemCounts] = useState<ItemCounts>({
-    inbox: 0,
-    tasks: 0,
-    notes: 0,
-    files: 0,
-    links: 0,
-    archive: 0,
-    trash: 0,
-  });
-  const [loading, setLoading] = useState<boolean>(true);
-  const [currentView, setCurrentView] = useState<NavigationView>('inbox');
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeTagId, setActiveTagId] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{ message: string; type?: 'info' | 'error' | 'success' } | null>(null);
+export type NotificationType = 'info' | 'error' | 'success' | 'reminder';
 
-  const notify = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 4000);
-  };
+interface Notification {
+  message: string;
+  type: NotificationType;
+}
 
-  const refreshCounts = useCallback(async () => {
+interface ItemState {
+  // ── State ──────────────────────────────────────────────
+  items: Item[];
+  itemCounts: ItemCounts;
+  loading: boolean;
+  currentView: NavigationView;
+  selectedItemId: string | null;
+  searchQuery: string;
+  activeTagId: string | null;
+  notification: Notification | null;
+
+  // ── Actions ────────────────────────────────────────────
+  setCurrentView: (view: NavigationView) => void;
+  setSelectedItemId: (id: string | null) => void;
+  setSearchQuery: (query: string) => void;
+  setActiveTagId: (tagId: string | null) => void;
+
+  notify: (message: string, type?: NotificationType) => void;
+  dismissNotification: () => void;
+
+  refreshItems: () => Promise<void>;
+  refreshCounts: () => Promise<void>;
+
+  captureItem: (input: CreateItemInput) => Promise<Item>;
+  updateItem: (id: string, updates: Partial<Item>) => Promise<Item>;
+  toggleFavorite: (id: string) => Promise<void>;
+  toggleArchive: (id: string) => Promise<void>;
+  toggleTask: (itemId: string, completed: boolean) => Promise<void>;
+  trashItem: (id: string) => Promise<void>;
+  restoreItem: (id: string) => Promise<void>;
+  permanentDeleteItem: (id: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
+  importFilesFromPaths: (paths: string[]) => Promise<Item[]>;
+}
+
+let notificationTimer: ReturnType<typeof setTimeout> | null = null;
+
+export const useItemStore = create<ItemState>()((set, get) => ({
+  // ── Initial State ────────────────────────────────────────
+  items: [],
+  itemCounts: { inbox: 0, tasks: 0, notes: 0, files: 0, links: 0, archive: 0, trash: 0 },
+  loading: true,
+  currentView: 'inbox',
+  selectedItemId: null,
+  searchQuery: '',
+  activeTagId: null,
+  notification: null,
+
+  // ── Navigation Actions ───────────────────────────────────
+  setCurrentView: (view) => {
+    set({ currentView: view });
+    get().refreshItems();
+    get().refreshCounts();
+  },
+
+  setSelectedItemId: (id) => {
+    set({ selectedItemId: id });
+  },
+
+  setSearchQuery: (query) => {
+    set({ searchQuery: query });
+    get().refreshItems();
+  },
+
+  setActiveTagId: (tagId) => {
+    set({ activeTagId: tagId });
+    get().refreshItems();
+  },
+
+  // ── Notification Actions ─────────────────────────────────
+  notify: (message, type = 'info') => {
+    if (notificationTimer) clearTimeout(notificationTimer);
+    set({ notification: { message, type } });
+    notificationTimer = setTimeout(() => {
+      set({ notification: null });
+      notificationTimer = null;
+    }, 4000);
+  },
+
+  dismissNotification: () => {
+    if (notificationTimer) {
+      clearTimeout(notificationTimer);
+      notificationTimer = null;
+    }
+    set({ notification: null });
+  },
+
+  // ── Data Refresh ─────────────────────────────────────────
+  refreshCounts: async () => {
     try {
       const counts = await db.getItemCounts();
-      setItemCounts(counts);
+      set({ itemCounts: counts });
     } catch (err) {
       console.error('Failed to refresh counts:', err);
     }
-  }, []);
+  },
 
-  const refreshItems = useCallback(async () => {
-    setLoading(true);
+  refreshItems: async () => {
+    set({ loading: true });
+    const { currentView, searchQuery, activeTagId } = get();
+
     try {
       let fetched: Item[] = [];
 
@@ -68,62 +143,76 @@ export function useItemStore() {
       } else if (currentView === 'tags' && activeTagId) {
         fetched = await db.getItems({ tagId: activeTagId });
       } else {
-        // 'inbox' view shows all non-archived, non-deleted items
         fetched = await db.getItems();
       }
 
-      setItems(fetched);
+      set({ items: fetched });
     } catch (err: any) {
       console.error('Failed to load items:', err);
-      notify(`Could not load items: ${err.message}`, 'error');
+      get().notify(`Could not load items: ${err.message}`, 'error');
     } finally {
-      setLoading(false);
+      set({ loading: false });
     }
-  }, [currentView, searchQuery, activeTagId]);
+  },
 
-  useEffect(() => {
-    refreshItems();
-    refreshCounts();
-  }, [refreshItems, refreshCounts]);
-
-  const captureItem = async (input: CreateItemInput): Promise<Item> => {
+  // ── CRUD Actions ─────────────────────────────────────────
+  captureItem: async (input) => {
     try {
       const created = await db.createItem(input);
-      notify(`Saved "${created.title.slice(0, 30)}${created.title.length > 30 ? '...' : ''}"`, 'success');
-      await refreshItems();
-      await refreshCounts();
+      get().notify(
+        `Saved "${created.title.slice(0, 30)}${created.title.length > 30 ? '...' : ''}"`,
+        'success'
+      );
+      await get().refreshItems();
+      await get().refreshCounts();
       return created;
     } catch (err: any) {
-      notify(`Failed to save: ${err.message}`, 'error');
+      get().notify(`Failed to save: ${err.message}`, 'error');
       throw err;
     }
-  };
+  },
 
-  const updateItem = async (id: string, updates: Partial<Item>): Promise<Item> => {
+  updateItem: async (id, updates) => {
     try {
       const updated = await db.updateItem(id, updates);
-      setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
-      if (updates.archived !== undefined || updates.deletedAt !== undefined || updates.status !== undefined) {
-        await refreshCounts();
+      set((state) => ({
+        items: state.items.map((item) => (item.id === id ? updated : item)),
+      }));
+      if (
+        updates.archived !== undefined ||
+        updates.deletedAt !== undefined ||
+        updates.status !== undefined
+      ) {
+        await get().refreshCounts();
       }
       return updated;
     } catch (err: any) {
-      notify(`Update failed: ${err.message}`, 'error');
+      get().notify(`Update failed: ${err.message}`, 'error');
       throw err;
     }
-  };
+  },
 
-  const toggleFavorite = async (id: string) => {
-    const item = items.find((i) => i.id === id);
+  toggleFavorite: async (id) => {
+    const item = get().items.find((i) => i.id === id);
     if (!item) return;
-    await updateItem(id, { favorite: !item.favorite });
-  };
+    await get().updateItem(id, { favorite: !item.favorite });
+  },
 
-  const toggleTask = async (itemId: string, completed: boolean) => {
+  toggleArchive: async (id) => {
+    const item = get().items.find((i) => i.id === id);
+    if (!item) return;
+    const newArchived = !item.archived;
+    await get().updateItem(id, { archived: newArchived });
+    get().notify(newArchived ? 'Item archived' : 'Item unarchived', 'info');
+    await get().refreshItems();
+    await get().refreshCounts();
+  },
+
+  toggleTask: async (itemId, completed) => {
     try {
       await db.toggleTask(itemId, completed);
-      setItems((prev) =>
-        prev.map((i) => {
+      set((state) => ({
+        items: state.items.map((i) => {
           if (i.id === itemId && i.task) {
             return {
               ...i,
@@ -135,101 +224,71 @@ export function useItemStore() {
             };
           }
           return i;
-        })
-      );
-      await refreshCounts();
+        }),
+      }));
+      await get().refreshCounts();
     } catch (err: any) {
-      notify(`Failed to toggle task: ${err.message}`, 'error');
+      get().notify(`Failed to toggle task: ${err.message}`, 'error');
     }
-  };
+  },
 
-  const trashItem = async (id: string) => {
+  trashItem: async (id) => {
     try {
       await db.trashItem(id);
-      notify('Moved item to Trash', 'info');
-      await refreshItems();
-      await refreshCounts();
-      if (selectedItemId === id) setSelectedItemId(null);
+      get().notify('Moved item to Trash', 'info');
+      await get().refreshItems();
+      await get().refreshCounts();
+      if (get().selectedItemId === id) set({ selectedItemId: null });
     } catch (err: any) {
-      notify(`Failed to trash item: ${err.message}`, 'error');
+      get().notify(`Failed to trash item: ${err.message}`, 'error');
     }
-  };
+  },
 
-  const restoreItem = async (id: string) => {
+  restoreItem: async (id) => {
     try {
       await db.restoreItem(id);
-      notify('Restored item to Inbox', 'success');
-      await refreshItems();
-      await refreshCounts();
+      get().notify('Restored item to Inbox', 'success');
+      await get().refreshItems();
+      await get().refreshCounts();
     } catch (err: any) {
-      notify(`Failed to restore item: ${err.message}`, 'error');
+      get().notify(`Failed to restore item: ${err.message}`, 'error');
     }
-  };
+  },
 
-  const permanentDeleteItem = async (id: string) => {
+  permanentDeleteItem: async (id) => {
     try {
       await db.permanentDeleteItem(id);
-      notify('Item permanently deleted', 'info');
-      await refreshItems();
-      await refreshCounts();
-      if (selectedItemId === id) setSelectedItemId(null);
+      get().notify('Item permanently deleted', 'info');
+      await get().refreshItems();
+      await get().refreshCounts();
+      if (get().selectedItemId === id) set({ selectedItemId: null });
     } catch (err: any) {
-      notify(`Failed to delete item: ${err.message}`, 'error');
+      get().notify(`Failed to delete item: ${err.message}`, 'error');
     }
-  };
+  },
 
-  const emptyTrash = async () => {
+  emptyTrash: async () => {
     try {
       await db.emptyTrash();
-      notify('Trash emptied successfully', 'info');
-      await refreshItems();
-      await refreshCounts();
-      setSelectedItemId(null);
+      get().notify('Trash emptied successfully', 'info');
+      await get().refreshItems();
+      await get().refreshCounts();
+      set({ selectedItemId: null });
     } catch (err: any) {
-      notify(`Failed to empty trash: ${err.message}`, 'error');
+      get().notify(`Failed to empty trash: ${err.message}`, 'error');
     }
-  };
+  },
 
-  const importFilesFromPaths = async (paths: string[]): Promise<Item[]> => {
+  importFilesFromPaths: async (paths) => {
     try {
       const imported = await db.importFilesFromPaths(paths);
-      notify(`Imported ${imported.length} file(s) into Velco`, 'success');
-      await refreshItems();
-      await refreshCounts();
+      get().notify(`Imported ${imported.length} file(s) into Velco`, 'success');
+      await get().refreshItems();
+      await get().refreshCounts();
       return imported;
     } catch (err: any) {
-      notify(`Failed to import files: ${err.message}`, 'error');
+      get().notify(`Failed to import files: ${err.message}`, 'error');
       throw err;
     }
-  };
-
-  const selectedItem = items.find((i) => i.id === selectedItemId) || null;
-
-  return {
-    items,
-    itemCounts,
-    loading,
-    currentView,
-    setCurrentView,
-    selectedItemId,
-    setSelectedItemId,
-    selectedItem,
-    searchQuery,
-    setSearchQuery,
-    activeTagId,
-    setActiveTagId,
-    captureItem,
-    updateItem,
-    toggleFavorite,
-    toggleTask,
-    trashItem,
-    restoreItem,
-    permanentDeleteItem,
-    emptyTrash,
-    importFilesFromPaths,
-    refreshItems,
-    refreshCounts,
-    notification,
-    notify,
-  };
-}
+  },
+}));

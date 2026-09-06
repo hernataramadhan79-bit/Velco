@@ -42,6 +42,11 @@ export function parseDueDate(dueDateStr: string): Date {
     return new Date(year, month - 1, day, 23, 59, 59, 999);
   }
 
+  // If contains timezone offset or Z suffix (ISO UTC/Offset), use standard Date parser
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(dueDateStr)) {
+    return new Date(dueDateStr);
+  }
+
   // 'YYYY-MM-DDTHH:mm' or 'YYYY-MM-DD HH:mm'
   const match = dueDateStr.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
   if (match) {
@@ -128,27 +133,27 @@ export function formatTaskDueDate(
 
   if (completed) {
     status = 'completed';
-    if (diffDays === 0) label = timeStr ? `Selesai (Hari ini ${timeStr})` : 'Selesai (Hari ini)';
-    else if (diffDays === -1) label = 'Selesai (Kemarin)';
-    else if (diffDays === 1) label = 'Selesai (Besok)';
+    if (diffDays === 0) label = timeStr ? `Completed (Today ${timeStr})` : 'Completed (Today)';
+    else if (diffDays === -1) label = 'Completed (Yesterday)';
+    else if (diffDays === 1) label = 'Completed (Tomorrow)';
     else label = due.toLocaleDateString([], { month: 'short', day: 'numeric' });
   } else if (isTaskOverdue(dueDate, completed)) {
     status = 'overdue';
     if (diffDays === 0 && hasTime) {
-      label = `Terlewat (${timeStr})`;
+      label = `Overdue (${timeStr})`;
     } else if (diffDays === -1) {
-      label = hasTime ? `Terlewat (Kemarin ${timeStr})` : 'Terlewat (Kemarin)';
+      label = hasTime ? `Overdue (Yesterday ${timeStr})` : 'Overdue (Yesterday)';
     } else if (diffDays < -1) {
-      label = `Terlewat (${Math.abs(diffDays)}h lalu)`;
+      label = `Overdue (${Math.abs(diffDays)}d ago)`;
     } else {
-      label = 'Terlewat';
+      label = 'Overdue';
     }
   } else if (diffDays === 0) {
     status = 'today';
-    label = hasTime ? `Hari ini, ${timeStr}` : 'Hari ini';
+    label = hasTime ? `Today, ${timeStr}` : 'Today';
   } else if (diffDays === 1) {
     status = 'upcoming';
-    label = hasTime ? `Besok, ${timeStr}` : 'Besok';
+    label = hasTime ? `Tomorrow, ${timeStr}` : 'Tomorrow';
   } else if (diffDays > 1 && diffDays <= 6) {
     const dayName = due.toLocaleDateString([], { weekday: 'short' });
     label = hasTime ? `${dayName}, ${timeStr}` : dayName;
@@ -158,23 +163,23 @@ export function formatTaskDueDate(
     label = hasTime ? `${formatted}, ${timeStr}` : formatted;
   }
 
-  // Relative description (e.g. "dalam 3 jam", "besok pagi")
+  // Relative description (e.g. "in 3 hours", "tomorrow morning")
   let relativeStr = '';
   const diffMs = due.getTime() - now.getTime();
   if (diffMs > 0) {
     const diffHours = Math.round(diffMs / (1000 * 60 * 60));
     if (diffHours < 1) {
       const diffMins = Math.max(1, Math.round(diffMs / (1000 * 60)));
-      relativeStr = `dalam ${diffMins} menit`;
+      relativeStr = `in ${diffMins} min`;
     } else if (diffHours < 24) {
-      relativeStr = `dalam ${diffHours} jam`;
+      relativeStr = `in ${diffHours} hours`;
     } else {
       const d = Math.round(diffHours / 24);
-      relativeStr = `dalam ${d} hari`;
+      relativeStr = `in ${d} days`;
     }
   } else {
     const pastHours = Math.round(Math.abs(diffMs) / (1000 * 60 * 60));
-    relativeStr = pastHours < 1 ? 'baru saja lewat' : `${pastHours} jam yang lalu`;
+    relativeStr = pastHours < 1 ? 'just now' : `${pastHours} hours ago`;
   }
 
   return {
@@ -199,37 +204,37 @@ export function getSmartPresets(): SmartPreset[] {
 
   const presets: SmartPreset[] = [];
 
-  // 1. Hari Ini - Later today / Tonight
+  // 1. Today - Later today / Tonight
   if (currentHour < 16) {
-    const todaySore = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0);
+    const todayEvening = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 17, 0);
     presets.push({
-      id: 'today_sore',
-      label: 'Sore Ini',
-      sublabel: 'Hari Ini',
+      id: 'today_evening',
+      label: 'This Evening',
+      sublabel: 'Today',
       timeLabel: '17:00',
       iconType: 'today',
-      value: formatToInputDatetime(todaySore),
+      value: formatToInputDatetime(todayEvening),
     });
   }
 
   if (currentHour < 20) {
-    const todayMalam = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
+    const todayTonight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
     presets.push({
-      id: 'today_malam',
-      label: 'Malam Ini',
-      sublabel: 'Hari Ini',
+      id: 'today_tonight',
+      label: 'Tonight',
+      sublabel: 'Today',
       timeLabel: '20:00',
       iconType: 'tonight',
-      value: formatToInputDatetime(todayMalam),
+      value: formatToInputDatetime(todayTonight),
     });
   }
 
-  // 2. Besok Pagi & Siang
+  // 2. Tomorrow Morning & Afternoon
   const tomorrowPagi = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
   presets.push({
     id: 'tomorrow_pagi',
-    label: 'Besok Pagi',
-    sublabel: 'Besok',
+    label: 'Tomorrow Morning',
+    sublabel: 'Tomorrow',
     timeLabel: '09:00',
     iconType: 'tomorrow',
     value: formatToInputDatetime(tomorrowPagi),
@@ -238,32 +243,32 @@ export function getSmartPresets(): SmartPreset[] {
   const tomorrowSiang = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 13, 0);
   presets.push({
     id: 'tomorrow_siang',
-    label: 'Besok Siang',
-    sublabel: 'Besok',
+    label: 'Tomorrow Afternoon',
+    sublabel: 'Tomorrow',
     timeLabel: '13:00',
     iconType: 'afternoon',
     value: formatToInputDatetime(tomorrowSiang),
   });
 
-  // 3. Akhir Pekan (Sabtu 10:00)
+  // 3. Weekend (Saturday 10:00)
   const daysUntilSaturday = (6 - now.getDay() + 7) % 7 || 7;
   const weekend = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSaturday, 10, 0);
   presets.push({
     id: 'weekend',
-    label: 'Akhir Pekan',
-    sublabel: 'Sabtu',
+    label: 'Weekend',
+    sublabel: 'Saturday',
     timeLabel: '10:00',
     iconType: 'weekend',
     value: formatToInputDatetime(weekend),
   });
 
-  // 4. Senin Depan (09:00)
+  // 4. Next Monday (09:00)
   const daysUntilMonday = (1 + 7 - now.getDay()) % 7 || 7;
   const nextMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMonday, 9, 0);
   presets.push({
     id: 'next_week',
-    label: 'Senin Depan',
-    sublabel: 'Awal Pekan',
+    label: 'Next Monday',
+    sublabel: 'Next Week',
     timeLabel: '09:00',
     iconType: 'next_week',
     value: formatToInputDatetime(nextMonday),

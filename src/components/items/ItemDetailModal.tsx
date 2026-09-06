@@ -16,11 +16,24 @@ import {
   Archive,
   Loader2,
   ArrowLeft,
+  RotateCcw,
 } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
 import { MarkdownViewer } from '../common/MarkdownViewer';
 import { DueDatePicker } from '../tasks/DueDatePicker';
+import { openExternalUrl } from '../../utils/urlUtils';
+import { db } from '../../services/database';
+import { useItemStore } from '../../stores/itemStore';
+import { formatTaskBatchSource } from '../../types/item';
+import {
+  extractStructuredTasks,
+  recommendCategorizedTags,
+  StructuredTaskItem,
+  TagRecommendation,
+} from '../../services/ai/taskExtractor';
+import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
+import { TagRecommendationBar } from './TagRecommendationBar';
 
 interface ItemDetailModalProps {
   item: Item | null;
@@ -28,6 +41,8 @@ interface ItemDetailModalProps {
   onClose: () => void;
   onUpdate: (id: string, updates: Partial<Item>) => Promise<any>;
   onTrash: (id: string) => void;
+  onRestore?: (id: string) => void;
+  onPermanentDelete?: (id: string) => void;
   allTags: Tag[];
   onCreateTag: (name: string) => Promise<Tag>;
 }
@@ -38,6 +53,8 @@ interface ItemDetailContentProps {
   onClose: () => void;
   onUpdate: (id: string, updates: Partial<Item>) => Promise<any>;
   onTrash: (id: string) => void;
+  onRestore?: (id: string) => void;
+  onPermanentDelete?: (id: string) => void;
   allTags: Tag[];
   onCreateTag: (name: string) => Promise<Tag>;
 }
@@ -48,6 +65,8 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   onClose,
   onUpdate,
   onTrash,
+  onRestore,
+  onPermanentDelete,
   allTags,
   onCreateTag,
 }) => {
@@ -63,6 +82,61 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     { role: 'user' | 'assistant'; content: string; time: string }[]
   >([]);
   const [chatInput, setChatInput] = useState('');
+
+  // Structured AI Actions State
+  const [extractedTasks, setExtractedTasks] = useState<StructuredTaskItem[]>([]);
+  const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
+  const [tagRecommendations, setTagRecommendations] = useState<TagRecommendation[]>([]);
+  const [isTagRecOpen, setIsTagRecOpen] = useState(false);
+  const notify = useItemStore((s) => s.notify);
+
+  const handleConfirmExtractedTasks = async (tasksToCreate: StructuredTaskItem[]) => {
+    const batchId = crypto.randomUUID();
+    const batchMeta = formatTaskBatchSource({
+      origin: 'ai_extract',
+      batchId,
+      batchTitle: item.title || 'Extracted Tasks',
+      sourceItemId: item.id,
+      generatedAt: new Date().toISOString(),
+    });
+
+    for (const task of tasksToCreate) {
+      await db.createItem({
+        type: 'task',
+        title: task.title,
+        content: task.description || '',
+        source: batchMeta,
+        task: {
+          priority: task.priority,
+          dueDate: task.dueDate || null,
+          completed: false,
+        },
+      });
+    }
+
+    await useItemStore.getState().refreshItems();
+    await useItemStore.getState().refreshCounts();
+    notify(`Created ${tasksToCreate.length} tasks from this item!`, 'success');
+  };
+
+  const handleApplyRecommendedTags = async (chosen: TagRecommendation[]) => {
+    let currentTags = [...item.tags];
+    for (const rec of chosen) {
+      let tagObj: Tag | undefined;
+      if (rec.existingTagId) {
+        tagObj = allTags.find((t) => t.id === rec.existingTagId);
+      }
+      if (!tagObj) {
+        tagObj = await onCreateTag(rec.name);
+      }
+      if (tagObj && !currentTags.some((t) => t.id === tagObj!.id)) {
+        currentTags.push(tagObj);
+      }
+    }
+    await onUpdate(item.id, { tags: currentTags });
+    setIsTagRecOpen(false);
+    notify(`Attached ${chosen.length} tags to item!`, 'success');
+  };
 
   const getAiConfig = () => {
     let baseUrl: string | undefined;
@@ -190,24 +264,15 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         });
         setActiveTab('ai');
       } else if (action === 'tags') {
-        const raw = await aiService.generateCompletion(
-          `Suggest 3 to 5 concise tags for the following content. Existing tags are: ${allTags.map((t) => t.name).join(', ')}. Return ONLY a comma-separated list of tags, nothing else:\n\n${textToProcess}`,
+        const recommendations = await recommendCategorizedTags(
+          textToProcess,
+          allTags,
           active.model,
           active.baseUrl,
           active.apiKey
         );
-        const suggested = raw
-          .split(',')
-          .map((s) => s.trim().replace(/^#/, ''))
-          .filter((s) => s.length > 0 && s.length < 30);
-        let currentTags = [...item.tags];
-        for (const tagName of suggested) {
-          const created = await onCreateTag(tagName);
-          if (!currentTags.some((t) => t.id === created.id)) {
-            currentTags.push(created);
-          }
-        }
-        await onUpdate(item.id, { tags: currentTags });
+        setTagRecommendations(recommendations);
+        setIsTagRecOpen(true);
       } else if (action === 'explain') {
         const answer = await aiService.generateCompletion(
           `Explain what this item is about and its main takeaways in clear terms:\n\n${textToProcess}`,
@@ -222,18 +287,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         ]);
         setActiveTab('ai');
       } else if (action === 'extract_tasks') {
-        const answer = await aiService.generateCompletion(
-          `Extract actionable next steps or tasks from this content as a checklist:\n\n${textToProcess}`,
+        const structuredTasks = await extractStructuredTasks(
+          textToProcess,
           active.model,
           active.baseUrl,
           active.apiKey
         );
-        setChatMessages((prev) => [
-          ...prev,
-          { role: 'user', content: 'Extract tasks from this item', time: new Date().toLocaleTimeString() },
-          { role: 'assistant', content: answer.trim(), time: new Date().toLocaleTimeString() },
-        ]);
-        setActiveTab('ai');
+        setExtractedTasks(structuredTasks);
+        setIsExtractionModalOpen(true);
       }
     } catch (err: any) {
       setAiError(err.message || 'AI operation failed');
@@ -302,7 +363,8 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl">
+    <>
+      <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl">
       <div className="space-y-4">
         {/* Top Navigation & Actions Bar */}
         <div className="flex items-center justify-between pb-3 -mt-1 border-b border-slate-200 dark:border-slate-800">
@@ -319,38 +381,74 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           </button>
 
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => onUpdate(item.id, { favorite: !item.favorite })}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                item.favorite
-                  ? 'border-amber-300 bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:border-amber-700'
-                  : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500'
-              }`}
-              title="Favorite"
-            >
-              <Star className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onUpdate(item.id, { archived: !item.archived })}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                item.archived
-                  ? 'border-blue-300 bg-blue-50 text-blue-600 dark:bg-blue-950/40'
-                  : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-blue-500'
-              }`}
-              title="Archive"
-            >
-              <Archive className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                onTrash(item.id);
-                onClose();
-              }}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-              title="Trash"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {item.deletedAt ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onRestore) onRestore(item.id);
+                    onClose();
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Restore to Inbox"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restore</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Delete this item permanently? This action cannot be undone.')) {
+                      if (onPermanentDelete) onPermanentDelete(item.id);
+                      onClose();
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Delete Permanently"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Permanently</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onUpdate(item.id, { favorite: !item.favorite })}
+                  className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                    item.favorite
+                      ? 'border-amber-300 bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:border-amber-700'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500'
+                  }`}
+                  title="Favorite"
+                >
+                  <Star className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdate(item.id, { archived: !item.archived })}
+                  className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                    item.archived
+                      ? 'border-blue-300 bg-blue-50 text-blue-600 dark:bg-blue-950/40'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-blue-500'
+                  }`}
+                  title="Archive"
+                >
+                  <Archive className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTrash(item.id);
+                    onClose();
+                  }}
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                  title="Trash"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -441,15 +539,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 {item.link.url}
               </div>
             </div>
-            <a
-              href={item.link.url}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => openExternalUrl(item.link!.url)}
               className="ml-3 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer"
             >
               <span>Open</span>
               <ExternalLink className="w-3 h-3" />
-            </a>
+            </button>
           </div>
         )}
 
@@ -516,6 +613,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
               {/* Due Date & Reminder */}
               <DueDatePicker
+                taskId={item.id}
                 value={item.task?.dueDate || ''}
                 onChange={(newDueDate) =>
                   onUpdate(item.id, {
@@ -530,11 +628,33 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           </div>
         )}
 
+        {/* AI Tag Recommendations Bar */}
+        {isTagRecOpen && tagRecommendations.length > 0 && (
+          <TagRecommendationBar
+            recommendations={tagRecommendations}
+            onApply={handleApplyRecommendedTags}
+            onDismiss={() => setIsTagRecOpen(false)}
+          />
+        )}
+
         {/* Tags Editor */}
         <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-            Tags
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+              Tags
+            </label>
+            {settings.aiEnabled && !isTagRecOpen && (
+              <button
+                type="button"
+                onClick={() => runAiAction('tags')}
+                disabled={isAiLoading}
+                className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>AI Suggest Tags</span>
+              </button>
+            )}
+          </div>
           <ItemTagsEditor
             itemTags={item.tags || []}
             allTags={allTags}
@@ -699,13 +819,27 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
-                >
-                  Edit Note
-                </button>
+                <div className="flex items-center gap-2">
+                  {settings.aiEnabled && item.content?.trim() && item.type !== 'task' && (
+                    <button
+                      type="button"
+                      onClick={() => runAiAction('extract_tasks')}
+                      disabled={isAiLoading}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      title="Extract discrete tasks from this note using AI"
+                    >
+                      <ListTodo className="w-3.5 h-3.5" />
+                      <span>Extract Tasks</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    Edit Note
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -960,6 +1094,16 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         )}
       </div>
     </Modal>
+
+    {/* Structured Task Extraction Review Dialog */}
+    <TaskExtractionModal
+      isOpen={isExtractionModalOpen}
+      onClose={() => setIsExtractionModalOpen(false)}
+      tasks={extractedTasks}
+      sourceTitle={item.title}
+      onConfirm={handleConfirmExtractedTasks}
+    />
+  </>
   );
 };
 
@@ -969,6 +1113,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   onClose,
   onUpdate,
   onTrash,
+  onRestore,
+  onPermanentDelete,
   allTags,
   onCreateTag,
 }) => {
@@ -982,6 +1128,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
       onClose={onClose}
       onUpdate={onUpdate}
       onTrash={onTrash}
+      onRestore={onRestore}
+      onPermanentDelete={onPermanentDelete}
       allTags={allTags}
       onCreateTag={onCreateTag}
     />

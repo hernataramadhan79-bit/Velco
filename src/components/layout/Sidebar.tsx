@@ -13,6 +13,7 @@ import {
   Tag as TagIcon,
   ChevronRight,
   X,
+  Users,
 } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
@@ -37,7 +38,7 @@ interface SidebarProps {
   onToggleSidebar?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+export const Sidebar: React.FC<SidebarProps> = React.memo(({
   currentView,
   onSelectView,
   itemCounts,
@@ -48,12 +49,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSearch,
   onToggleSidebar,
 }) => {
-  const navItems: { id: NavigationView; label: string; icon: any; count?: number }[] = [
+  const navItems: { id: NavigationView; label: string; icon: any; count?: number; badge?: string }[] = [
     { id: 'inbox', label: 'Inbox', icon: Inbox, count: itemCounts.inbox },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: itemCounts.tasks },
     { id: 'notes', label: 'Notes', icon: FileText, count: itemCounts.notes },
     { id: 'files', label: 'Files', icon: FileIcon, count: itemCounts.files },
     { id: 'links', label: 'Links', icon: Link2, count: itemCounts.links },
+    { id: 'bridge', label: 'The Bridge', icon: Users, badge: 'Preview' },
     { id: 'archive', label: 'Archive', icon: Archive, count: itemCounts.archive },
     { id: 'trash', label: 'Trash', icon: Trash2, count: itemCounts.trash },
   ];
@@ -149,6 +151,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       title={`${overdueCount} task overdue!`}
                     >
                       {overdueCount}
+                    </span>
+                  )}
+                  {item.badge && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300'
+                      }`}
+                    >
+                      {item.badge}
                     </span>
                   )}
                   {item.count !== undefined && item.count > 0 && (
@@ -311,4 +324,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
     </aside>
   );
-};
+});
+
+Sidebar.displayName = 'Sidebar';

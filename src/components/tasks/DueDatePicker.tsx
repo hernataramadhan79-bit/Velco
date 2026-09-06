@@ -12,23 +12,47 @@ import {
   CalendarDays,
   Rocket,
   AlertCircle,
+  Volume2,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   formatTaskDueDate,
   getSmartPresets,
-  formatToInputDatetime,
   formatDateOnly,
   formatTimeOnly,
   parseDueDate,
   hasSpecificTime,
   SmartPreset,
 } from '../../utils/dateUtils';
+import { reminderService } from '../../services/reminder/reminderService';
 
 interface DueDatePickerProps {
   value: string; // ISO datetime string or YYYY-MM-DD
   onChange: (val: string) => void;
   className?: string;
   align?: 'left' | 'right';
+  taskId?: string;
+}
+
+function getInitialDateState(val: string) {
+  if (val) {
+    const parsed = parseDueDate(val);
+    if (!isNaN(parsed.getTime())) {
+      const hasTime = hasSpecificTime(val);
+      return {
+        date: formatDateOnly(parsed),
+        time: hasTime ? formatTimeOnly(parsed) : '18:00',
+        includeTime: hasTime,
+      };
+    }
+  }
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return {
+    date: formatDateOnly(tomorrow),
+    time: '09:00',
+    includeTime: true,
+  };
 }
 
 export const DueDatePicker: React.FC<DueDatePickerProps> = ({
@@ -36,39 +60,61 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
   onChange,
   className = '',
   align = 'right',
+  taskId,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Form state inside popover
-  const [datePart, setDatePart] = useState('');
-  const [timePart, setTimePart] = useState('09:00');
-  const [includeTime, setIncludeTime] = useState(true);
+  const [prevValue, setPrevValue] = useState(value);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [datePart, setDatePart] = useState(() => getInitialDateState(value).date);
+  const [timePart, setTimePart] = useState(() => getInitialDateState(value).time);
+  const [includeTime, setIncludeTime] = useState(() => getInitialDateState(value).includeTime);
 
-  // Synchronize internal state when popover opens or `value` changes
-  useEffect(() => {
-    if (value) {
-      const parsed = parseDueDate(value);
-      if (!isNaN(parsed.getTime())) {
-        setDatePart(formatDateOnly(parsed));
-        if (hasSpecificTime(value)) {
-          setTimePart(formatTimeOnly(parsed));
-          setIncludeTime(true);
-        } else {
-          setTimePart('18:00');
-          setIncludeTime(false);
-        }
-        return;
+  // Notification test feedback state
+  const [isTestingNotification, setIsTestingNotification] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
+
+  const handleTestNotification = async () => {
+    setIsTestingNotification(true);
+    setTestFeedback(null);
+    try {
+      const res = await reminderService.testNotification(
+        'Velco Task Reminder',
+        'System notification & audio reminder chime active!'
+      );
+      if (res.granted) {
+        setTestFeedback('Sent (OS Permission Active)');
+      } else {
+        setTestFeedback('Sent via In-App (OS Permission Limited)');
       }
+    } catch {
+      setTestFeedback('Failed to trigger reminder');
+    } finally {
+      setIsTestingNotification(false);
+      setTimeout(() => setTestFeedback(null), 4000);
     }
+  };
 
-    // Default when empty: Tomorrow 09:00
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    setDatePart(formatDateOnly(tomorrow));
-    setTimePart('09:00');
-    setIncludeTime(true);
-  }, [value, isOpen]);
+  // Synchronize state when value or open state transitions
+  if (prevValue !== value) {
+    setPrevValue(value);
+    const initial = getInitialDateState(value);
+    setDatePart(initial.date);
+    setTimePart(initial.time);
+    setIncludeTime(initial.includeTime);
+  }
+
+  if (isOpen && !prevIsOpen) {
+    setPrevIsOpen(true);
+    const initial = getInitialDateState(value);
+    setDatePart(initial.date);
+    setTimePart(initial.time);
+    setIncludeTime(initial.includeTime);
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false);
+  }
 
   // Click outside to close popover
   useEffect(() => {
@@ -87,11 +133,14 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
 
   // 1-Click Preset Selection
   const handleSelectPreset = (preset: SmartPreset) => {
+    if (taskId) {
+      reminderService.clearRecord(taskId);
+    }
     onChange(preset.value);
     setIsOpen(false);
   };
 
-  // Quick Date Shortcut buttons (Hari Ini, Besok, Lusa)
+  // Quick Date Shortcut buttons (Today, Tomorrow, In 2 Days)
   const handleSetQuickDate = (daysAhead: number) => {
     const d = new Date();
     d.setDate(d.getDate() + daysAhead);
@@ -117,6 +166,9 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
   // Apply custom schedule
   const handleApplyCustom = () => {
     if (!datePart) return;
+    if (taskId) {
+      reminderService.clearRecord(taskId);
+    }
     let finalValue = datePart;
     if (includeTime && timePart) {
       finalValue = `${datePart}T${timePart}`;
@@ -128,6 +180,9 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
   // Clear date
   const handleClear = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (taskId) {
+      reminderService.clearRecord(taskId);
+    }
     onChange('');
     setIsOpen(false);
   };
@@ -173,7 +228,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
               ? 'bg-amber-50 hover:bg-amber-100/90 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 ring-1 ring-amber-400/20'
               : 'bg-indigo-50/90 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-400/20'
           }`}
-          title={`Jadwal: ${dueInfo.fullDateStr} (${dueInfo.relativeStr || ''}) — Klik untuk mengubah`}
+          title={`Schedule: ${dueInfo.fullDateStr} (${dueInfo.relativeStr || ''}) — Click to edit`}
         >
           {dueInfo.status === 'overdue' ? (
             <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0 animate-pulse" />
@@ -189,7 +244,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
             type="button"
             onClick={handleClear}
             className="ml-0.5 p-0.5 rounded-md hover:bg-black/10 dark:hover:bg-white/10 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors cursor-pointer"
-            title="Hapus batas waktu"
+            title="Clear due date"
           >
             <X className="w-3 h-3" />
           </button>
@@ -199,10 +254,10 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 text-xs font-medium transition-all cursor-pointer select-none shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-500 active:scale-98"
-          title="Atur jadwal dan pengingat notifikasi"
+          title="Set schedule and reminder notifications"
         >
           <Calendar className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-          <span>Jadwal &amp; Pengingat</span>
+          <span>Schedule &amp; Reminder</span>
         </button>
       )}
 
@@ -221,7 +276,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
               </div>
               <div>
                 <div className="font-semibold text-slate-800 dark:text-slate-200 text-xs leading-none">
-                  Atur Pengingat Tugas
+                  Task Reminder Settings
                 </div>
                 <div className="text-[10px] text-slate-400 font-medium leading-none mt-1">
                   Windows Native Push &amp; In-App Toast
@@ -235,9 +290,9 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
                   type="button"
                   onClick={handleClear}
                   className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
-                  title="Hapus batas waktu"
+                  title="Clear due date"
                 >
-                  Hapus
+                  Clear
                 </button>
               )}
               <button
@@ -254,7 +309,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-                Pilihan Cepat (1-Klik)
+                Quick Presets (1-Click)
               </span>
               <span className="text-[10px] text-indigo-500 font-medium">Auto-apply</span>
             </div>
@@ -293,16 +348,16 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
           <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-                Tanggal &amp; Waktu Khusus
+                Custom Date &amp; Time
               </span>
             </div>
 
             {/* Quick Day Chips */}
             <div className="flex items-center gap-1">
               {[
-                { label: 'Hari Ini', days: 0 },
-                { label: 'Besok', days: 1 },
-                { label: 'Lusa', days: 2 },
+                { label: 'Today', days: 0 },
+                { label: 'Tomorrow', days: 1 },
+                { label: 'In 2 Days', days: 2 },
               ].map((chip) => {
                 const testDate = new Date();
                 testDate.setDate(testDate.getDate() + chip.days);
@@ -348,13 +403,13 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
                     className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
                   />
                   <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                    Sertakan Jam Pengingat
+                    Include Reminder Time
                   </span>
                 </label>
 
                 {includeTime && (
                   <span className="text-[10px] font-mono text-indigo-500 font-semibold">
-                    {timePart} WIB
+                    {timePart}
                   </span>
                 )}
               </div>
@@ -364,10 +419,10 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
                   {/* Quick Hour Chips */}
                   <div className="grid grid-cols-4 gap-1">
                     {[
-                      { label: '09:00', sub: 'Pagi' },
-                      { label: '13:00', sub: 'Siang' },
-                      { label: '17:00', sub: 'Sore' },
-                      { label: '20:00', sub: 'Malam' },
+                      { label: '09:00', sub: 'Morning' },
+                      { label: '13:00', sub: 'Afternoon' },
+                      { label: '17:00', sub: 'Evening' },
+                      { label: '20:00', sub: 'Night' },
                     ].map((t) => {
                       const isTimeSelected = timePart === t.label;
                       return (
@@ -405,7 +460,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
                       type="button"
                       onClick={() => handleAdjustMinutes(-15)}
                       className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-medium transition-colors cursor-pointer"
-                      title="Kurang 15 menit"
+                      title="Subtract 15 minutes"
                     >
                       -15m
                     </button>
@@ -413,7 +468,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
                       type="button"
                       onClick={() => handleAdjustMinutes(15)}
                       className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-mono font-medium transition-colors cursor-pointer"
-                      title="Tambah 15 menit"
+                      title="Add 15 minutes"
                     >
                       +15m
                     </button>
@@ -441,14 +496,47 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
             </div>
           )}
 
-          {/* Section 4: Popover Footer Actions */}
+          {/* Section 4: Notification Diagnostics & Test */}
+          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shrink-0">
+                <Volume2 className="w-3.5 h-3.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">
+                  Test Notification &amp; Sound
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {testFeedback ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 inline" /> {testFeedback}
+                    </span>
+                  ) : (
+                    'Test OS banner & chime sound'
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestNotification}
+              disabled={isTestingNotification}
+              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 text-[11px] font-semibold transition-all cursor-pointer shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-700 active:scale-95 shrink-0 flex items-center gap-1"
+            >
+              <Bell className="w-3 h-3" />
+              <span>{isTestingNotification ? 'Testing...' : 'Test Now'}</span>
+            </button>
+          </div>
+
+          {/* Section 5: Popover Footer Actions */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setIsOpen(false)}
               className="px-3 py-1.5 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs font-medium"
             >
-              Batal
+              Cancel
             </button>
             <button
               type="button"
@@ -457,7 +545,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
               className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-semibold transition-all cursor-pointer flex items-center gap-1.5 text-xs shadow-md shadow-blue-500/20 active:scale-98"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Terapkan Jadwal</span>
+              <span>Apply Schedule</span>
             </button>
           </div>
         </div>

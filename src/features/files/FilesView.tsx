@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { Item, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { Upload } from 'lucide-react';
+import { Upload, FileIcon } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface FilesViewProps {
   files: Item[];
@@ -110,9 +111,17 @@ export const FilesView: React.FC<FilesViewProps> = ({
         </div>
         <div className="space-y-2.5">
           {files.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              No files saved yet.
-            </div>
+            <EmptyState
+              icon={FileIcon}
+              title="No files attached yet"
+              description="Drop PDFs, images, code snippets, or documents here or click above to upload. All files are safely stored in your local Velco directory."
+              action={{
+                label: 'Choose Files to Upload',
+                onClick: () => inputRef.current?.click(),
+                icon: Upload,
+              }}
+              badge="📁"
+            />
           ) : (
             files.map((item) => (
               <ItemCard

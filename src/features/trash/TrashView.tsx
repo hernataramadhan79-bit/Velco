@@ -1,7 +1,8 @@
 import React from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
+import { EmptyState } from '../../components/common/EmptyState';
 
 interface TrashViewProps {
   items: Item[];
@@ -47,9 +48,12 @@ export const TrashView: React.FC<TrashViewProps> = ({
 
         <div className="space-y-2.5">
           {items.length === 0 ? (
-            <div className="text-center py-16 text-xs text-slate-400">
-              Trash is empty.
-            </div>
+            <EmptyState
+              icon={Trash2}
+              title="Trash is clean"
+              description="Items deleted from your workstation will appear here before permanent removal."
+              badge="🗑️"
+            />
           ) : (
             items.map((item) => (
               <ItemCard

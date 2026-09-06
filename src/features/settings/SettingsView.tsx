@@ -334,8 +334,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   };
 
   useEffect(() => {
+    let active = true;
     if (settings.aiEnabled && activeSection === 'ai') {
-      fetchLiveModels();
+      const timer = setTimeout(() => {
+        if (active) {
+          fetchLiveModels();
+        }
+      }, 0);
+      return () => {
+        active = false;
+        clearTimeout(timer);
+      };
     }
   }, [settings.aiProvider, settings.aiEnabled, activeSection, fetchLiveModels]);
 
@@ -842,13 +851,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 Get Free Key
                               </a>
                             </div>
-                            <input
-                              type="password"
-                              value={settings.geminiApiKey}
-                              onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
-                              placeholder="AIzaSy..."
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
-                            />
+                            <div className="relative">
+                              <input
+                                type={showApiKey ? 'text' : 'password'}
+                                value={settings.geminiApiKey}
+                                onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
+                                placeholder="AIzaSy..."
+                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                              >
+                                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'].map((m) => (
@@ -876,13 +895,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                               OpenAI API Key
                             </label>
-                            <input
-                              type="password"
-                              value={settings.openaiApiKey}
-                              onChange={(e) => updateSettings({ openaiApiKey: e.target.value })}
-                              placeholder="sk-..."
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
-                            />
+                            <div className="relative">
+                              <input
+                                type={showApiKey ? 'text' : 'password'}
+                                value={settings.openaiApiKey}
+                                onChange={(e) => updateSettings({ openaiApiKey: e.target.value })}
+                                placeholder="sk-..."
+                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                              >
+                                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {['gpt-4o-mini', 'gpt-4o', 'o3-mini'].map((m) => (
@@ -910,13 +939,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
                               Anthropic API Key
                             </label>
-                            <input
-                              type="password"
-                              value={settings.anthropicApiKey}
-                              onChange={(e) => updateSettings({ anthropicApiKey: e.target.value })}
-                              placeholder="sk-ant-api03-..."
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
-                            />
+                            <div className="relative">
+                              <input
+                                type={showApiKey ? 'text' : 'password'}
+                                value={settings.anthropicApiKey}
+                                onChange={(e) => updateSettings({ anthropicApiKey: e.target.value })}
+                                placeholder="sk-ant-api03-..."
+                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowApiKey(!showApiKey)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                              >
+                                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {['claude-3-7-sonnet-20250219', 'claude-3-5-haiku-20241022'].map((m) => (

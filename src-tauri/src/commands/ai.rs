@@ -214,7 +214,11 @@ async fn call_llm(
             api_key,
             model,
         } => {
-            let chat_url = if base_url.ends_with("/v1") || base_url.ends_with("/openai") {
+            let is_anthropic = base_url.contains("anthropic.com");
+
+            let chat_url = if is_anthropic {
+                "https://api.anthropic.com/v1/messages".to_string()
+            } else if base_url.ends_with("/v1") || base_url.ends_with("/openai") {
                 format!("{}/chat/completions", base_url)
             } else if base_url.ends_with("/chat/completions") {
                 base_url.clone()
@@ -222,21 +226,32 @@ async fn call_llm(
                 format!("{}/v1/chat/completions", base_url)
             };
 
-            let payload = serde_json::json!({
-                "model": model,
-                "messages": [
-                    { "role": "system", "content": system_prompt },
-                    { "role": "user", "content": user_prompt }
-                ],
-                "temperature": 0.3,
-                "stream": false
-            });
+            let payload = if is_anthropic {
+                serde_json::json!({
+                    "model": model,
+                    "system": system_prompt,
+                    "messages": [
+                        { "role": "user", "content": user_prompt }
+                    ],
+                    "max_tokens": 4096,
+                    "temperature": 0.3
+                })
+            } else {
+                serde_json::json!({
+                    "model": model,
+                    "messages": [
+                        { "role": "system", "content": system_prompt },
+                        { "role": "user", "content": user_prompt }
+                    ],
+                    "temperature": 0.3,
+                    "stream": false
+                })
+            };
 
             let mut req = client.post(&chat_url).json(&payload);
 
             if !api_key.is_empty() {
-                // Anthropic uses x-api-key header
-                if base_url.contains("anthropic.com") {
+                if is_anthropic {
                     req = req
                         .header("x-api-key", api_key)
                         .header("anthropic-version", "2023-06-01")
@@ -278,7 +293,7 @@ async fn call_llm(
                 .map_err(|e| format!("Failed to parse AI response: {}", e))?;
 
             // Handle Anthropic response format
-            if base_url.contains("anthropic.com") {
+            if is_anthropic {
                 val.get("content")
                     .and_then(|c| c.as_array())
                     .and_then(|arr| arr.first())

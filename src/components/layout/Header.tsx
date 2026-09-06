@@ -14,7 +14,7 @@ interface HeaderProps {
   onToggleSidebar?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export const Header: React.FC<HeaderProps> = React.memo(({
   currentView,
   onNewCaptureClick,
   isFoundryOpen = false,
@@ -35,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
     archive: 'Archive',
     trash: 'Trash',
     settings: 'Settings',
+    bridge: 'The Bridge',
   };
 
   const cycleTheme = () => {
@@ -111,5 +112,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
     </header>
   );
-};
+});
 
+Header.displayName = 'Header';
