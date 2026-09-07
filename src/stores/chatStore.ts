@@ -4,6 +4,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { ChatMessage, ChatChunkEvent, LlmProviderConfig } from '../types/ai';
 import { StagedItem } from './contextStore';
 import { aiService } from '../services/ai';
+import { getSettings } from './settingsStore';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -31,6 +32,12 @@ export const useChatStore = create<ChatState>()(
       sendMessage: async (prompt: string, stagedItems: StagedItem[], providerConfig: LlmProviderConfig) => {
         const trimmed = prompt.trim();
         if (!trimmed || get().isGenerating) return;
+
+        const currentSettings = getSettings();
+        if (!currentSettings.aiEnabled || currentSettings.aiProvider === 'none') {
+          console.warn('AI features are disabled in settings.');
+          return;
+        }
 
         const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const userMsgId = `msg_${Date.now()}`;

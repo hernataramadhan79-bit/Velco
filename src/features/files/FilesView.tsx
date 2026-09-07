@@ -83,10 +83,10 @@ export const FilesView: React.FC<FilesViewProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`p-8 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all duration-150 group ${
+        className={`p-8 rounded-xl border border-dashed text-center cursor-pointer transition-all duration-150 group ${
           activeDragging
-            ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 ring-4 ring-blue-500/20 scale-[1.01]'
-            : 'border-slate-300 dark:border-slate-800 hover:border-blue-500/80 bg-white/40 dark:bg-slate-900/40'
+            ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/30 ring-2 ring-blue-500/20 scale-[1.005]'
+            : 'border-slate-300 dark:border-white/[0.12] hover:border-blue-500/80 dark:hover:border-white/[0.25] bg-white/50 dark:bg-[#141418]/60'
         }`}
       >
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2 transition-all ${
@@ -120,7 +120,7 @@ export const FilesView: React.FC<FilesViewProps> = ({
                 onClick: () => inputRef.current?.click(),
                 icon: Upload,
               }}
-              badge="📁"
+              badgeIcon={FileIcon}
             />
           ) : (
             files.map((item) => (

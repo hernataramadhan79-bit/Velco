@@ -1,5 +1,6 @@
 import { aiService } from './index';
 import { PriorityLevel, Tag } from '../../types/item';
+import { getSettings } from '../../stores/settingsStore';
 
 export interface StructuredTaskItem {
   id: string;
@@ -424,6 +425,11 @@ export async function extractStructuredTasks(
 ): Promise<StructuredTaskItem[]> {
   if (!content || !content.trim()) return [];
 
+  // Offline heuristic fallback when AI is disabled
+  if (!getSettings().aiEnabled) {
+    return smartHeuristicTaskExtraction(content);
+  }
+
   const prompt = `You are an expert task extraction and project planning engine.
 Carefully read the following content and extract discrete, concrete, actionable tasks from it.
 Break complex ideas down into distinct individual steps.
@@ -535,66 +541,68 @@ ${content}`;
 
   const existingMap = new Map(existingTags.map((t) => [t.name.toLowerCase(), t]));
 
-  try {
-    const raw = await aiService.generateCompletion(prompt, model, baseUrl, apiKey);
-    const parsedArray = extractJsonArray<any>(raw);
+  if (getSettings().aiEnabled) {
+    try {
+      const raw = await aiService.generateCompletion(prompt, model, baseUrl, apiKey);
+      const parsedArray = extractJsonArray<any>(raw);
 
-    if (parsedArray && parsedArray.length > 0) {
-      const validRecs: TagRecommendation[] = [];
+      if (parsedArray && parsedArray.length > 0) {
+        const validRecs: TagRecommendation[] = [];
 
-      parsedArray.forEach((item, index) => {
-        if (!item) return;
-        const cleanName = sanitizeTitle(String(item.name || item.tag || '')).replace(/^#/, '');
-        if (!cleanName || cleanName.length < 2) return;
+        parsedArray.forEach((item, index) => {
+          if (!item) return;
+          const cleanName = sanitizeTitle(String(item.name || item.tag || '')).replace(/^#/, '');
+          if (!cleanName || cleanName.length < 2) return;
 
-        const existing = existingMap.get(cleanName.toLowerCase());
+          const existing = existingMap.get(cleanName.toLowerCase());
 
-        validRecs.push({
-          name: existing ? existing.name : cleanName,
-          category: String(item.category || 'Topic').trim(),
-          reason: String(item.reason || 'Relevant to note context').trim(),
-          isExisting: Boolean(existing),
-          existingTagId: existing?.id,
-          color: existing?.color,
-          selected: index < 4,
-        });
-      });
-
-      if (validRecs.length > 0) {
-        return validRecs;
-      }
-    }
-
-    // Parse list bullets from raw text
-    const clean = stripReasoningAndFences(raw);
-    const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
-    const bulletRecs: TagRecommendation[] = [];
-
-    for (const line of lines) {
-      const match = line.match(/^(?:[-*•]|\d+\.)\s+(.+)$/);
-      if (match && match[1]) {
-        const nameMatch = match[1].match(/\*\*([^*]+)\*\*/);
-        const name = sanitizeTitle(nameMatch ? nameMatch[1] : match[1]).replace(/^#/, '').split(/[:-]/)[0].trim();
-        if (name && name.length >= 2 && name.length <= 25) {
-          const existing = existingMap.get(name.toLowerCase());
-          bulletRecs.push({
-            name: existing ? existing.name : name,
-            category: 'Topic',
-            reason: 'Extracted from content highlights',
+          validRecs.push({
+            name: existing ? existing.name : cleanName,
+            category: String(item.category || 'Topic').trim(),
+            reason: String(item.reason || 'Relevant to note context').trim(),
             isExisting: Boolean(existing),
             existingTagId: existing?.id,
             color: existing?.color,
-            selected: bulletRecs.length < 4,
+            selected: index < 4,
           });
+        });
+
+        if (validRecs.length > 0) {
+          return validRecs;
         }
       }
-    }
 
-    if (bulletRecs.length > 0) {
-      return bulletRecs;
+      // Parse list bullets from raw text
+      const clean = stripReasoningAndFences(raw);
+      const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
+      const bulletRecs: TagRecommendation[] = [];
+
+      for (const line of lines) {
+        const match = line.match(/^(?:[-*•]|\d+\.)\s+(.+)$/);
+        if (match && match[1]) {
+          const nameMatch = match[1].match(/\*\*([^*]+)\*\*/);
+          const name = sanitizeTitle(nameMatch ? nameMatch[1] : match[1]).replace(/^#/, '').split(/[:-]/)[0].trim();
+          if (name && name.length >= 2 && name.length <= 25) {
+            const existing = existingMap.get(name.toLowerCase());
+            bulletRecs.push({
+              name: existing ? existing.name : name,
+              category: 'Topic',
+              reason: 'Extracted from content highlights',
+              isExisting: Boolean(existing),
+              existingTagId: existing?.id,
+              color: existing?.color,
+              selected: bulletRecs.length < 4,
+            });
+          }
+        }
+      }
+
+      if (bulletRecs.length > 0) {
+        return bulletRecs;
+      }
+    } catch (err) {
+      console.warn('AI tag recommendation failed, using keyword fallback:', err);
     }
-  } catch (err) {
-    console.warn('AI tag recommendation failed, using keyword fallback:', err);
   }
 
   // Fallback: match words from content with existing user tags

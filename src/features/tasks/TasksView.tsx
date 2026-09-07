@@ -129,7 +129,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
       {/* Quick Task Capture with Balanced Layout */}
       <form
         onSubmit={handleQuickAdd}
-        className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3"
+        className="p-3.5 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] shadow-2xs space-y-3"
       >
         <div className="flex items-center gap-2">
           <CheckSquare className="w-4 h-4 text-slate-400 shrink-0 ml-1.5" />
@@ -138,12 +138,12 @@ export const TasksView: React.FC<TasksViewProps> = ({
             value={taskText}
             onChange={(e) => setTaskText(e.target.value)}
             placeholder="Add a new task..."
-            className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 focus:outline-none"
           />
           <button
             type="submit"
             disabled={!taskText.trim()}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
+            className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-2xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Task</span>
@@ -151,7 +151,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
         </div>
 
         {/* Priority Pills (Left) & Due Date Picker (Right) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-2.5 border-t border-slate-100 dark:border-white/[0.06] text-xs">
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 text-[11px] font-medium mr-1">Priority:</span>
             {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => {
@@ -192,13 +192,13 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
       {/* Task Filters Segmented Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl text-xs border border-slate-200/80 dark:border-slate-800">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-[#141418] p-1 rounded-lg text-xs border border-slate-200 dark:border-white/[0.08]">
           <button
             onClick={() => setFilter('pending')}
-            className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
               filter === 'pending'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-2xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-2xs font-semibold'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             Pending ({pendingCount})
@@ -264,7 +264,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           type="button"
           onClick={handleQuickTestNotification}
           disabled={isTesting}
-          className="px-3 py-1 rounded-xl bg-slate-100 hover:bg-indigo-50 dark:bg-slate-900/80 dark:hover:bg-indigo-950/60 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 text-slate-700 dark:text-slate-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+          className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#141418] dark:hover:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-zinc-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
           title="Uji coba banner notifikasi Windows, nada bel, dan notifikasi in-app"
         >
           {testFeedback ? (
@@ -303,7 +303,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
                 ? 'Check off tasks as you finish them to build momentum.'
                 : 'Add a new task using the quick capture bar above to get started.'
             }
-            badge={filter === 'overdue' || filter === 'pending' ? '🎉' : '📋'}
+            badgeIcon={filter === 'overdue' || filter === 'pending' ? CheckCircle2 : CheckSquare}
           />
         ) : (
           <>

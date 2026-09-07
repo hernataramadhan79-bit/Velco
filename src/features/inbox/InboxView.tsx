@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Sparkles, PenTool } from 'lucide-react';
+import { Bot, PenTool } from 'lucide-react';
 import { UniversalCapture } from '../../components/capture/UniversalCapture';
 import { ItemList } from '../../components/items/ItemList';
 import { LandingHeroAiChat } from '../../components/chat/LandingHeroAiChat';
@@ -30,7 +30,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onOpenSettings,
   onArtifactCreated,
 }) => {
-  const [heroMode, setHeroMode] = useState<'ai' | 'capture'>('ai');
+  const [activeTab, setActiveTab] = useState<'capture' | 'chat'>('capture');
   const [categoryFilter, setCategoryFilter] = useState<InboxCategoryFilter>('all');
 
   // Filter items based on selected category dropdown
@@ -52,41 +52,41 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6 pb-12 min-w-0">
-      {/* Hero Switcher Dock */}
+      {/* Switcher Bar */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs font-semibold">
+          <div className="inline-flex p-0.5 rounded-md bg-[#141418] border border-white/[0.07] text-xs font-mono">
             <button
-              onClick={() => setHeroMode('ai')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                heroMode === 'ai'
-                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              onClick={() => setActiveTab('capture')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
+                activeTab === 'capture'
+                  ? 'bg-white/[0.08] text-zinc-100 font-medium border border-white/[0.08] shadow-xs'
+                  : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Assistant</span>
+              <PenTool className="w-3.5 h-3.5 stroke-[1.5]" />
+              <span>Quick Capture</span>
             </button>
             <button
-              onClick={() => setHeroMode('capture')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                heroMode === 'capture'
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+              onClick={() => setActiveTab('chat')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
+                activeTab === 'chat'
+                  ? 'bg-white/[0.08] text-zinc-100 font-medium border border-white/[0.08] shadow-xs'
+                  : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              <PenTool className="w-3.5 h-3.5" />
-              <span>Quick Capture</span>
+              <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
+              <span>Chat Canvas</span>
             </button>
           </div>
 
-          <span className="text-[11px] font-mono text-slate-400">
-            Landing Workstation
+          <span className="text-[11px] font-mono text-zinc-500">
+            Workstation Stream
           </span>
         </div>
 
-        {/* Hero Card Content */}
-        {heroMode === 'ai' ? (
+        {/* Selected Mode Component */}
+        {activeTab === 'chat' ? (
           <LandingHeroAiChat
             onArtifactCreated={onArtifactCreated}
             onOpenSettings={onOpenSettings}
@@ -99,15 +99,14 @@ export const InboxView: React.FC<InboxViewProps> = ({
       {/* Inbox Feed & Triage Stream */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between px-1">
-          {/* Triage Dropdown Filter */}
           <InboxDropdownFilter
             currentFilter={categoryFilter}
             onSelectFilter={setCategoryFilter}
             items={items}
           />
 
-          <div className="text-xs text-slate-400">
-            Showing <span className="font-semibold text-slate-600 dark:text-slate-300">{filteredItems.length}</span> of {items.length} {items.length === 1 ? 'item' : 'items'}
+          <div className="text-[11px] font-mono text-zinc-500">
+            Showing <span className="text-zinc-300 font-semibold">{filteredItems.length}</span> of {items.length} items
           </div>
         </div>
 

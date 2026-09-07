@@ -12,7 +12,9 @@ export type NavigationView =
   | 'trash'
   | 'archive'
   | 'settings'
-  | 'bridge';
+  | 'bridge'
+  | 'playground'
+  | 'workbench';
 
 export type NotificationType = 'info' | 'error' | 'success' | 'reminder';
 

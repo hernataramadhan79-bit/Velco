@@ -38,7 +38,7 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
         {itemTags.map((tag) => (
           <span
             key={tag.id}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08]"
           >
             <span
               className="w-2 h-2 rounded-full"
@@ -48,7 +48,7 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
             <button
               type="button"
               onClick={() => onRemoveTag(tag.id)}
-              className="text-slate-400 hover:text-red-500 transition-colors"
+              className="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
             >
               <X className="w-3 h-3" />
             </button>
@@ -59,14 +59,14 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:border-slate-400 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-dashed border-slate-300 dark:border-white/[0.1] text-slate-500 hover:text-slate-900 dark:hover:text-zinc-200 hover:border-slate-400 dark:hover:border-white/[0.2] transition-colors cursor-pointer"
           >
             <Plus className="w-3 h-3" />
             <span>Add tag</span>
           </button>
 
           {isOpen && (
-            <div className="absolute top-full left-0 mt-1.5 w-56 p-2 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 space-y-2">
+            <div className="absolute top-full left-0 mt-1.5 w-56 p-2 bg-white dark:bg-[#141418] rounded-lg shadow-xl border border-slate-200 dark:border-white/[0.08] z-50 space-y-2">
               <input
                 type="text"
                 value={newTagName}
@@ -75,7 +75,7 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
                   if (e.key === 'Enter') handleCreate();
                 }}
                 placeholder="New or search tag..."
-                className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-2.5 py-1.5 rounded-md text-xs bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                 autoFocus
               />
 
@@ -88,7 +88,7 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
                       onAddTag(tag.id);
                       setIsOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                    className="w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs text-left hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer"
                   >
                     <span
                       className="w-2 h-2 rounded-full"

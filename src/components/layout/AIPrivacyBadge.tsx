@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ShieldCheck, ShieldAlert, Shield, Globe } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
 
@@ -29,11 +30,13 @@ const getApiKey = (settings: any): string | undefined => {
 export const AIPrivacyBadge: React.FC = () => {
   const { settings, updateSettings } = useSettings();
   const [isOnline, setIsOnline] = useState<boolean | null>(null);
-  const [isChecking, setIsChecking] = useState<boolean>(false);
   const inFlightRef = useRef(false);
 
   const isLocal = ['ollama', 'lmstudio'].includes(settings.aiProvider);
-  const providerLabel = settings.aiProvider === 'none' ? 'None' : settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
+  const providerLabel =
+    settings.aiProvider === 'none'
+      ? 'None'
+      : settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
 
   const checkConnection = useCallback(async () => {
     if (!settings.aiEnabled || settings.aiProvider === 'none') {
@@ -42,7 +45,6 @@ export const AIPrivacyBadge: React.FC = () => {
 
     if (inFlightRef.current) return;
     inFlightRef.current = true;
-    setIsChecking(true);
 
     try {
       const available = await aiService.checkStatus(getBaseUrl(settings), getApiKey(settings));
@@ -50,7 +52,6 @@ export const AIPrivacyBadge: React.FC = () => {
     } catch {
       setIsOnline(false);
     } finally {
-      setIsChecking(false);
       inFlightRef.current = false;
     }
   }, [settings]);
@@ -69,7 +70,7 @@ export const AIPrivacyBadge: React.FC = () => {
         if (!document.hidden) {
           checkConnection();
         }
-      }, 2500);
+      }, 3000);
 
       const handleFocus = () => checkConnection();
       window.addEventListener('focus', handleFocus);
@@ -96,39 +97,27 @@ export const AIPrivacyBadge: React.FC = () => {
     return (
       <button
         onClick={handleToggle}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-zinc-500 dark:hover:text-zinc-400 border border-slate-200 dark:border-white/[0.06] transition-colors cursor-pointer"
         title="AI enhancement is disabled. Click to turn ON."
       >
-        <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
-        <span>AI: Disabled</span>
+        <Shield className="w-3 h-3 text-slate-400 dark:text-zinc-600 stroke-[1.75]" />
+        <span>AI Disabled</span>
       </button>
     );
   }
 
-  // Cloud AI styling
-  if (!isLocal) {
-    if (isChecking && isOnline === null) {
-      return (
-        <button
-          onClick={handleToggle}
-          className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50/70 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 transition-colors cursor-pointer"
-          title={`Validating ${providerLabel} credentials... Click to turn OFF.`}
-        >
-          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
-          <span>Connecting {providerLabel}...</span>
-        </button>
-      );
-    }
-
+  // Local AI telemetry
+  if (isLocal) {
     if (isOnline) {
       return (
         <button
           onClick={handleToggle}
-          className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 hover:bg-blue-100/80 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
-          title={`Cloud AI active (${providerLabel}). Click to turn OFF.`}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-zinc-300 border border-slate-200 dark:border-white/[0.07] transition-all cursor-pointer group"
+          title={`100% on-device private inference via ${providerLabel}. No user notes or embeddings are transmitted to external servers. Click to toggle.`}
         >
-          <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)] shrink-0" />
-          <span>Cloud AI: {providerLabel}</span>
+          <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[1.75] shrink-0" />
+          <span className="text-slate-600 group-hover:text-slate-900 dark:text-zinc-400 dark:group-hover:text-zinc-200">100% Local Inference</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)] shrink-0 ml-0.5" />
         </button>
       );
     }
@@ -136,50 +125,40 @@ export const AIPrivacyBadge: React.FC = () => {
     return (
       <button
         onClick={handleToggle}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 transition-colors cursor-pointer"
-        title={`API key required or authentication failed for ${providerLabel}. Click to toggle.`}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 transition-all cursor-pointer"
+        title={`Cannot reach ${providerLabel} at ${getBaseUrl(settings)}. Ensure local model engine is running. Click to toggle.`}
       >
-        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-        <span>Cloud AI: Key Required</span>
+        <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400 stroke-[1.75] shrink-0" />
+        <span className="text-rose-600 dark:text-rose-400">AI Offline ({providerLabel})</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 ml-0.5" />
       </button>
     );
   }
 
-  // Local AI styling
-  if (isChecking && isOnline === null) {
-    return (
-      <button
-        onClick={handleToggle}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-50 dark:bg-slate-900 text-slate-500 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
-        title={`Connecting to ${providerLabel}... Click to turn OFF.`}
-      >
-        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
-        <span>Connecting {providerLabel}...</span>
-      </button>
-    );
-  }
-
-  if (isOnline) {
-    return (
-      <button
-        onClick={handleToggle}
-        className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-50/80 hover:bg-emerald-100/80 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/60 transition-colors cursor-pointer"
-        title={`Local AI connected (${providerLabel}). Click to turn OFF.`}
-      >
-        <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] shrink-0" />
-        <span>Local AI: {providerLabel}</span>
-      </button>
-    );
-  }
-
+  // Cloud AI telemetry
   return (
     <button
       onClick={handleToggle}
-      className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-rose-50/60 hover:bg-rose-100/60 dark:bg-slate-900 dark:hover:bg-slate-800 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer"
-      title={`Cannot reach ${providerLabel}. Ensure local engine is running.`}
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 hover:bg-slate-200 dark:bg-[#141418] dark:hover:bg-[#1a1a20] border transition-all cursor-pointer group ${
+        isOnline
+          ? 'text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-white/[0.07]'
+          : 'text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/20 bg-amber-50 dark:bg-[#141418]'
+      }`}
+      title={
+        isOnline
+          ? `Cloud inference via ${providerLabel}. Click to toggle.`
+          : `API key or connection required for ${providerLabel}. Click to toggle.`
+      }
     >
-      <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-      <span>AI Offline ({providerLabel})</span>
+      <Globe className="w-3 h-3 text-blue-600 dark:text-blue-400 stroke-[1.75] shrink-0" />
+      <span className="text-slate-600 group-hover:text-slate-900 dark:text-zinc-400 dark:group-hover:text-zinc-200">Cloud AI: {providerLabel}</span>
+      <span
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ml-0.5 ${
+          isOnline
+            ? 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.5)]'
+            : 'bg-amber-500'
+        }`}
+      />
     </button>
   );
 };

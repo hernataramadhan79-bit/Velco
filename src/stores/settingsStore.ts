@@ -23,6 +23,13 @@ export function loadSettings(): AppSettings {
 }
 
 let currentSettings: AppSettings = loadSettings();
+if (typeof document !== 'undefined') {
+  applyTheme(currentSettings.theme);
+}
+
+export function getSettings(): AppSettings {
+  return currentSettings;
+}
 const listeners = new Set<() => void>();
 
 function notifyListeners() {

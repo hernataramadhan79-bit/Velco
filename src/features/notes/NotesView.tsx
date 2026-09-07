@@ -44,7 +44,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       {!isCreating ? (
         <button
           onClick={() => setIsCreating(true)}
-          className="w-full py-3.5 px-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-400 dark:hover:border-slate-700 bg-white/50 dark:bg-slate-900/50 flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer"
+          className="w-full py-3.5 px-4 rounded-xl border border-dashed border-slate-300 dark:border-white/[0.12] text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:border-slate-400 dark:hover:border-white/[0.2] bg-white/60 dark:bg-[#141418]/60 flex items-center justify-center gap-2 text-xs font-semibold transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Write a new note...</span>
@@ -52,14 +52,14 @@ export const NotesView: React.FC<NotesViewProps> = ({
       ) : (
         <form
           onSubmit={handleCreate}
-          className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
+          className="p-4 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] shadow-2xs space-y-3"
         >
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Note title..."
-            className="w-full text-base font-bold bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            className="w-full text-base font-bold bg-transparent text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 focus:outline-none"
             autoFocus
           />
           <textarea
@@ -67,19 +67,19 @@ export const NotesView: React.FC<NotesViewProps> = ({
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your note in Markdown..."
             rows={4}
-            className="w-full text-xs font-mono bg-transparent text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none resize-none leading-relaxed"
+            className="w-full text-xs font-mono bg-transparent text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 focus:outline-none resize-none leading-relaxed"
           />
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
             <button
               type="button"
               onClick={() => setIsCreating(false)}
-              className="px-3 py-1.5 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="px-3 py-1.5 rounded-lg text-xs text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
+              className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold cursor-pointer shadow-2xs"
             >
               Save Note
             </button>
@@ -107,7 +107,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                     }
                   : undefined
               }
-              badge="📝"
+              badgeIcon={FileText}
             />
           ) : (
             notes.map((item) => (

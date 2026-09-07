@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { RecipeOutput, LlmProviderConfig, AIModelInfo } from '../../types/ai';
+import { getSettings } from '../../stores/settingsStore';
 
 /**
  * AI service — thin IPC wrapper over Rust backend commands.
@@ -12,13 +13,17 @@ export const aiService = {
     recipe: string,
     customPrompt?: string,
     providerConfig?: LlmProviderConfig,
-  ) =>
-    invoke<RecipeOutput>('execute_context_recipe', {
+  ) => {
+    if (!getSettings().aiEnabled) {
+      return Promise.reject(new Error('AI features are disabled in Settings.'));
+    }
+    return invoke<RecipeOutput>('execute_context_recipe', {
       itemIds,
       recipe,
       customPrompt: customPrompt || null,
       providerConfig: providerConfig || null,
-    }),
+    });
+  },
 
   /** Apply recipe output artifacts (tasks, tags, notes) to the database. */
   applyArtifacts: (output: RecipeOutput, targetItemId?: string) =>
@@ -53,13 +58,17 @@ export const aiService = {
     }),
 
   /** Generate raw AI completion. */
-  generateCompletion: (prompt: string, model: string, baseUrl?: string, apiKey?: string) =>
-    invoke<string>('generate_ai_completion', {
+  generateCompletion: (prompt: string, model: string, baseUrl?: string, apiKey?: string) => {
+    if (!getSettings().aiEnabled) {
+      return Promise.reject(new Error('AI features are disabled in Settings.'));
+    }
+    return invoke<string>('generate_ai_completion', {
       baseUrl: baseUrl || null,
       model,
       prompt,
       apiKey: apiKey || null,
-    }),
+    });
+  },
 
   /** Execute streaming context chat against staged items. */
   executeChat: (
@@ -67,11 +76,15 @@ export const aiService = {
     messages: Array<{ role: string; content: string }>,
     itemIds: string[],
     providerConfig?: LlmProviderConfig,
-  ) =>
-    invoke<string>('execute_context_chat', {
+  ) => {
+    if (!getSettings().aiEnabled) {
+      return Promise.reject(new Error('AI features are disabled in Settings.'));
+    }
+    return invoke<string>('execute_context_chat', {
       requestId,
       messages,
       itemIds,
       providerConfig: providerConfig || null,
-    }),
+    });
+  },
 };

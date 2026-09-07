@@ -7,7 +7,6 @@ import { AIModelInfo } from '../../types/ai';
 import { PriorityLevel } from '../../types/item';
 import {
   ArrowLeft,
-  X,
   Folder,
   Palette,
   Shield,
@@ -414,30 +413,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   );
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans select-none">
-      {/* 1. SIMPLE, STREAMLINED SETTINGS SIDEBAR */}
-      <aside className="w-60 lg:w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col justify-between p-3.5">
+    <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans select-none">
+      {/* 1. INDUSTRIAL SETTINGS SIDEBAR */}
+      <aside className="w-60 lg:w-64 shrink-0 border-r border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d10] flex flex-col justify-between p-3">
         <div className="space-y-3">
           {/* Back button to workspace */}
           <button
             onClick={onBack}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer border border-slate-200/80 dark:border-slate-800 shadow-2xs"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/[0.05] hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer border border-slate-200 dark:border-white/[0.08] shadow-2xs"
           >
-            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <ArrowLeft className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />
             <span>Back to Workspace</span>
-            <kbd className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+            <kbd className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-zinc-400">
               Esc
             </kbd>
           </button>
 
           {/* Section Heading */}
           <div className="px-3 pt-1">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Settings
+            <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
+              Settings &amp; Workstation
             </h2>
           </div>
 
-          {/* Simple Clean Section List */}
+          {/* Clean Section Navigation */}
           <nav className="space-y-1">
             {sections.map((sec) => {
               const Icon = sec.icon;
@@ -446,22 +445,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 <button
                   key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-blue-600 text-white font-semibold shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-slate-100'
+                      ? 'bg-slate-900 text-white dark:bg-white/[0.1] dark:text-white border border-transparent dark:border-white/[0.1] shadow-2xs font-semibold'
+                      : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-zinc-100'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white dark:text-white' : 'text-slate-400 dark:text-zinc-500'}`} />
                     <span>{sec.label}</span>
                   </div>
                   {sec.badge && (
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full capitalize ${
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded capitalize ${
                         isActive
                           ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                          : 'bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-zinc-400'
                       }`}
                     >
                       {sec.badge}
@@ -473,29 +472,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
           </nav>
         </div>
 
-        {/* Footer info */}
-        <div className="px-3 py-2 text-[11px] text-slate-400 font-mono border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
+        {/* Footer telemetry */}
+        <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-zinc-500 font-mono border-t border-slate-200 dark:border-white/[0.07] flex items-center justify-between">
           <span>Velco Desktop</span>
-          <span className="font-bold">v0.1.0</span>
+          <span className="font-semibold text-slate-600 dark:text-zinc-400">v0.1.0</span>
         </div>
       </aside>
 
-      {/* 2. FOCUSED SETTINGS CONTENT WORKSPACE */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-100/60 dark:bg-slate-900/40">
+      {/* 2. FOCUSED SETTINGS WORKSPACE */}
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-100/60 dark:bg-[#09090b]">
         {/* Top Header */}
-        <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-8 flex items-center justify-between shrink-0">
+        <header className="h-12 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d10] px-6 flex items-center shrink-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            <h1 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
               {activeSectionItem.label}
             </h1>
           </div>
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Close settings"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </header>
 
         {/* Scrollable Section Content */}
@@ -505,13 +497,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             {activeSection === 'ai' && (
               <div className="space-y-6 animate-in fade-in duration-100">
                 {/* Master Switch Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-xs flex items-center justify-between">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <div className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-blue-500" />
+                    <div className="text-sm font-semibold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                      <Cpu className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       <span>Enable AI Features</span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
                       Powers The Foundry synthesis recipes, auto-tagging, and contextual summarization.
                     </p>
                   </div>
@@ -522,21 +514,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       onChange={(e) => updateSettings({ aiEnabled: e.target.checked })}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+                    <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-white/[0.1] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-transparent peer-checked:bg-blue-600"></div>
                   </label>
                 </div>
 
                 {settings.aiEnabled ? (
                   <>
                     {/* Select Engine Card */}
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-4">
+                      <div className="text-xs font-semibold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
                         Select AI Engine
                       </div>
 
                       {/* Local vs Cloud Engine selection */}
                       <div className="space-y-2">
-                        <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                        <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                           <Server className="w-3.5 h-3.5" />
                           <span>Local Offline Engines</span>
                         </div>
@@ -544,26 +536,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                           {[
                             { id: 'lmstudio', name: 'LM Studio / Local OpenAI', port: 'port 1234' },
                             { id: 'ollama', name: 'Ollama Daemon', port: 'port 11434' },
-                          ].map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => updateSettings({ aiProvider: p.id as AIProviderType })}
-                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                settings.aiProvider === p.id
-                                  ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500/20 shadow-xs'
-                                  : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                              }`}
-                            >
-                              <div className="font-semibold text-xs">{p.name}</div>
-                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">{p.port}</div>
-                            </button>
-                          ))}
+                          ].map((p) => {
+                            const isSelected = settings.aiProvider === p.id;
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => updateSettings({ aiProvider: p.id as AIProviderType })}
+                                className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-950 dark:text-blue-100 ring-1 ring-blue-500/30 shadow-2xs'
+                                    : 'border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#101014] text-slate-700 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-white/[0.14]'
+                                }`}
+                              >
+                                <div className="font-semibold text-xs">{p.name}</div>
+                                <div className="text-[10px] text-slate-500 dark:text-zinc-500 font-mono mt-0.5">{p.port}</div>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/[0.06]">
+                        <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5" />
                           <span>Cloud AI Platforms</span>
                         </div>
@@ -581,14 +576,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 key={p.id}
                                 type="button"
                                 onClick={() => updateSettings({ aiProvider: p.id as AIProviderType })}
-                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                                className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer relative ${
                                   isSelected
-                                    ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500/20 shadow-xs'
-                                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:border-slate-300'
+                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-950 dark:text-blue-100 ring-1 ring-blue-500/30 shadow-2xs'
+                                    : 'border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#101014] text-slate-700 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-white/[0.14]'
                                 }`}
                               >
                                 {p.badge && (
-                                  <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded text-[8px] font-bold bg-emerald-500 text-white">
+                                  <span className="absolute -top-1.5 -right-1 px-1.5 py-0.2 rounded text-[8px] font-bold font-mono bg-emerald-600 text-white">
                                     {p.badge}
                                   </span>
                                 )}
@@ -601,10 +596,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                     </div>
 
                     {/* Active Provider Config */}
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-4">
-                      <div className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <Sliders className="w-4 h-4 text-blue-500" />
-                        <span>Configure {settings.aiProvider}</span>
+                    <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-4">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-slate-800 dark:text-zinc-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span>Configure {settings.aiProvider}</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                          Active Provider
+                        </span>
                       </div>
 
                       {/* OpenRouter */}
@@ -612,15 +612,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         <div className="space-y-4">
                           <div>
                             <div className="flex items-center justify-between mb-1 text-xs">
-                              <label className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                                <Key className="w-3.5 h-3.5 text-indigo-500" />
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                                <Key className="w-3.5 h-3.5 text-slate-400" />
                                 <span>OpenRouter API Key</span>
                               </label>
                               <a
                                 href="https://openrouter.ai/keys"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-blue-600 hover:underline flex items-center gap-1 text-[11px]"
+                                className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-[11px]"
                               >
                                 Get Key <ExternalLink className="w-3 h-3" />
                               </a>
@@ -631,12 +631,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.openrouterApiKey}
                                 onChange={(e) => updateSettings({ openrouterApiKey: e.target.value })}
                                 placeholder="sk-or-v1-..."
-                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono text-xs focus:outline-none focus:border-blue-500"
+                                className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:border-blue-500 dark:focus:border-blue-400"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowApiKey(!showApiKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
                               >
                                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
@@ -644,10 +644,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                           </div>
 
                           {/* Live Models Browser */}
-                          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                          <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] space-y-2.5">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="font-semibold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                                 <span>Live Models Catalog</span>
                               </span>
                               <button
@@ -662,14 +662,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                              <div className="flex items-center gap-1 bg-white dark:bg-[#141418] p-0.5 rounded-md border border-slate-200 dark:border-white/[0.08] text-xs">
                                 <button
                                   type="button"
                                   onClick={() => setModelFilter('free')}
-                                  className={`px-2 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
+                                  className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer ${
                                     modelFilter === 'free'
-                                      ? 'bg-emerald-600 text-white shadow-xs'
-                                      : 'text-slate-600 dark:text-slate-400'
+                                      ? 'bg-slate-900 text-white dark:bg-white dark:text-zinc-950 font-bold'
+                                      : 'text-slate-600 dark:text-zinc-400'
                                   }`}
                                 >
                                   Free ({freeOpenRouterCount})
@@ -677,10 +677,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 <button
                                   type="button"
                                   onClick={() => setModelFilter('all')}
-                                  className={`px-2 py-0.5 rounded-md font-semibold transition-all cursor-pointer ${
+                                  className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer ${
                                     modelFilter === 'all'
-                                      ? 'bg-blue-600 text-white shadow-xs'
-                                      : 'text-slate-600 dark:text-slate-400'
+                                      ? 'bg-slate-900 text-white dark:bg-white dark:text-zinc-950 font-bold'
+                                      : 'text-slate-600 dark:text-zinc-400'
                                   }`}
                                 >
                                   All ({totalOpenRouterCount})
@@ -688,18 +688,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               </div>
 
                               <div className="relative flex-1">
-                                <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                <Search className="w-3 h-3 text-slate-400 dark:text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                                 <input
                                   type="text"
                                   value={modelSearch}
                                   onChange={(e) => setModelSearch(e.target.value)}
-                                  placeholder="Filter models..."
-                                  className="w-full pl-7 pr-2 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none"
+                                  placeholder="Filter models by name or id..."
+                                  className="w-full pl-7 pr-2 py-1 text-xs rounded-md bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                                 />
                               </div>
                             </div>
 
-                            <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                               {filteredOpenRouterModels.map((m) => {
                                 const isSelected = settings.openrouterModel === m.id;
                                 return (
@@ -707,33 +707,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                     key={m.id}
                                     type="button"
                                     onClick={() => updateSettings({ openrouterModel: m.id })}
-                                    className={`w-full text-left p-2 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                    className={`w-full text-left p-2 rounded-md border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                                       isSelected
-                                        ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 shadow-xs'
-                                        : 'border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:border-slate-300'
+                                        ? 'border-blue-600 dark:border-blue-500 bg-blue-50/60 dark:bg-blue-950/30'
+                                        : 'border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#141418] hover:border-slate-300 dark:hover:border-white/[0.12]'
                                     }`}
                                   >
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="font-semibold text-xs text-slate-900 dark:text-slate-100 truncate">
+                                        <span className="font-medium text-xs text-slate-900 dark:text-zinc-100 truncate">
                                           {m.name}
                                         </span>
                                         {isModelFree(m) && (
-                                          <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                          <span className="px-1 py-0.2 rounded text-[8px] font-bold font-mono bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                                             FREE
                                           </span>
                                         )}
                                         {formatContextLength(m.contextLength) && (
-                                          <span className="text-[9px] font-mono text-slate-400">
+                                          <span className="text-[9px] font-mono text-slate-400 dark:text-zinc-500">
                                             {formatContextLength(m.contextLength)}
                                           </span>
                                         )}
                                       </div>
-                                      <div className="text-[10px] font-mono text-slate-400 truncate">
+                                      <div className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 truncate">
                                         {m.id}
                                       </div>
                                     </div>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
                                   </button>
                                 );
                               })}
@@ -745,7 +745,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.openrouterModel}
                                 onChange={(e) => updateSettings({ openrouterModel: e.target.value })}
                                 placeholder="Custom Model ID"
-                                className="w-full px-2.5 py-1 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                                className="w-full px-2.5 py-1 text-xs rounded-md bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                           </div>
@@ -757,7 +757,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         <div className="space-y-3 text-xs">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                                 Ollama URL
                               </label>
                               <input
@@ -765,11 +765,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.ollamaUrl}
                                 onChange={(e) => updateSettings({ ollamaUrl: e.target.value })}
                                 placeholder="http://localhost:11434"
-                                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                             <div>
-                              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                                 Model Tag
                               </label>
                               <input
@@ -777,7 +777,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.ollamaModel}
                                 onChange={(e) => updateSettings({ ollamaModel: e.target.value })}
                                 placeholder="qwen2.5:latest"
-                                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                           </div>
@@ -798,7 +798,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         <div className="space-y-3 text-xs">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                                 LM Studio URL
                               </label>
                               <input
@@ -806,11 +806,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.lmstudioUrl}
                                 onChange={(e) => updateSettings({ lmstudioUrl: e.target.value })}
                                 placeholder="http://localhost:1234/v1"
-                                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                             <div>
-                              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                                 Loaded Model Identifier
                               </label>
                               <input
@@ -818,7 +818,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.lmstudioModel}
                                 onChange={(e) => updateSettings({ lmstudioModel: e.target.value })}
                                 placeholder="qwen2.5-coder-7b-instruct"
-                                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                           </div>
@@ -839,14 +839,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         <div className="space-y-3 text-xs">
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <label className="font-semibold text-slate-700 dark:text-slate-300">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300">
                                 Google Gemini API Key
                               </label>
                               <a
                                 href="https://aistudio.google.com/app/apikey"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-blue-600 hover:underline text-[11px]"
+                                className="text-blue-600 dark:text-blue-400 hover:underline text-[11px]"
                               >
                                 Get Free Key
                               </a>
@@ -857,12 +857,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.geminiApiKey}
                                 onChange={(e) => updateSettings({ geminiApiKey: e.target.value })}
                                 placeholder="AIzaSy..."
-                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                                className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-blue-500"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowApiKey(!showApiKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
                                 aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                               >
                                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -875,10 +875,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 key={m}
                                 type="button"
                                 onClick={() => updateSettings({ geminiModel: m })}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-mono border cursor-pointer ${
+                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
                                   settings.geminiModel === m
-                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
+                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
                                 }`}
                               >
                                 {m}
@@ -892,7 +892,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {settings.aiProvider === 'openai' && (
                         <div className="space-y-3 text-xs">
                           <div>
-                            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                               OpenAI API Key
                             </label>
                             <div className="relative">
@@ -901,12 +901,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.openaiApiKey}
                                 onChange={(e) => updateSettings({ openaiApiKey: e.target.value })}
                                 placeholder="sk-..."
-                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                                className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-blue-500"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowApiKey(!showApiKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
                                 aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                               >
                                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -919,10 +919,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 key={m}
                                 type="button"
                                 onClick={() => updateSettings({ openaiModel: m })}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-mono border cursor-pointer ${
+                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
                                   settings.openaiModel === m
-                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
+                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
                                 }`}
                               >
                                 {m}
@@ -936,7 +936,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {settings.aiProvider === 'anthropic' && (
                         <div className="space-y-3 text-xs">
                           <div>
-                            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                               Anthropic API Key
                             </label>
                             <div className="relative">
@@ -945,12 +945,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 value={settings.anthropicApiKey}
                                 onChange={(e) => updateSettings({ anthropicApiKey: e.target.value })}
                                 placeholder="sk-ant-api03-..."
-                                className="w-full pl-3 pr-10 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:border-blue-500"
+                                className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-blue-500"
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowApiKey(!showApiKey)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
                                 aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                               >
                                 {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -963,10 +963,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 key={m}
                                 type="button"
                                 onClick={() => updateSettings({ anthropicModel: m })}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-mono border cursor-pointer ${
+                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
                                   settings.anthropicModel === m
-                                    ? 'border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
+                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
                                 }`}
                               >
                                 {m.split('-')[0]} {m.split('-')[1]}
@@ -980,7 +980,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {settings.aiProvider === 'custom' && (
                         <div className="space-y-3 text-xs">
                           <div>
-                            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                               Endpoint URL
                             </label>
                             <input
@@ -988,11 +988,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               value={settings.customApiUrl}
                               onChange={(e) => updateSettings({ customApiUrl: e.target.value })}
                               placeholder="https://api.groq.com/openai/v1"
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                             />
                           </div>
                           <div>
-                            <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                               Model Name
                             </label>
                             <input
@@ -1000,24 +1000,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               value={settings.customModel}
                               onChange={(e) => updateSettings({ customModel: e.target.value })}
                               placeholder="llama-3.3-70b-versatile"
-                              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-slate-900 dark:text-slate-100 focus:outline-none"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
                             />
                           </div>
                         </div>
                       )}
 
                       {/* Connection Test Action */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <div className="pt-3 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between">
                         <button
                           type="button"
                           onClick={testAiConnection}
                           disabled={isTestingAi}
-                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                          className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                         >
                           <RefreshCw className={`w-3.5 h-3.5 ${isTestingAi ? 'animate-spin' : ''}`} />
                           <span>{isTestingAi ? 'Testing...' : 'Test Connection'}</span>
                         </button>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                        <div className="text-[11px] text-slate-400 dark:text-zinc-500 flex items-center gap-1">
                           <Lock className="w-3 h-3 text-emerald-500" />
                           <span>Keys stored locally</span>
                         </div>
@@ -1025,16 +1025,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
                       {testResult && (
                         <div
-                          className={`p-3 rounded-xl flex items-start gap-2 text-xs ${
+                          className={`p-3 rounded-lg flex items-start gap-2 text-xs ${
                             testResult.success
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/60'
-                              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800/60'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800/50'
+                              : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800/50'
                           }`}
                         >
                           {testResult.success ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                           ) : (
-                            <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <XCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                           )}
                           <div>
                             <div className="font-semibold">
@@ -1047,12 +1047,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                     </div>
                   </>
                 ) : (
-                  <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-                    <Cpu className="w-8 h-8 text-slate-400 mx-auto" />
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <div className="p-8 text-center bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] space-y-2">
+                    <Cpu className="w-8 h-8 text-slate-400 dark:text-zinc-600 mx-auto" />
+                    <div className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                       AI Features Disabled
                     </div>
-                    <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-xs mx-auto">
                       Enable the switch above to connect local offline models or cloud frontier APIs.
                     </p>
                   </div>
@@ -1063,48 +1063,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             {/* SECTION: STORAGE & HIERARCHY */}
             {activeSection === 'storage' && (
               <div className="space-y-6 animate-in fade-in duration-100">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
                     <HardDrive className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Data Root Directory</span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
                     Velco stores all SQLite databases and attachments on your local file system.
                   </p>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                    <label className="text-xs font-medium text-slate-700 dark:text-zinc-300 block mb-1">
                       Directory Path
                     </label>
                     <input
                       type="text"
                       value={settings.storageDir}
                       onChange={(e) => updateSettings({ storageDir: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-mono focus:outline-none"
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
                     <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Subdirectory Hierarchy</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                      <span className="font-mono font-bold text-blue-600 block mb-0.5">📁 database/</span>
-                      <span className="text-[11px] text-slate-400">SQLite file `velco.db` with FTS5 search index.</span>
+                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07]">
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 mb-0.5">
+                        <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span>database/</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-zinc-500">SQLite file `velco.db` with FTS5 search index.</span>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                      <span className="font-mono font-bold text-emerald-600 block mb-0.5">📁 attachments/</span>
-                      <span className="text-[11px] text-slate-400">Imported files, PDFs, and images with SHA-256 hash.</span>
+                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07]">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 mb-0.5">
+                        <Folder className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span>attachments/</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-zinc-500">Imported files, PDFs, and images with SHA-256 hash.</span>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                      <span className="font-mono font-bold text-purple-600 block mb-0.5">📁 thumbnails/</span>
-                      <span className="text-[11px] text-slate-400">Cached image thumbnails for fast rendering.</span>
+                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07]">
+                      <span className="font-mono font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1.5 mb-0.5">
+                        <Folder className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                        <span>thumbnails/</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-zinc-500">Cached image thumbnails for fast rendering.</span>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-                      <span className="font-mono font-bold text-amber-600 block mb-0.5">📁 cache/ & logs/</span>
-                      <span className="text-[11px] text-slate-400">Temporary processing data and diagnostic logs.</span>
+                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07]">
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mb-0.5">
+                        <Folder className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>cache/ &amp; logs/</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-zinc-500">Temporary processing data and diagnostic logs.</span>
                     </div>
                   </div>
                 </div>
@@ -1115,37 +1127,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             {activeSection === 'backup' && (
               <div className="space-y-6 animate-in fade-in duration-100">
                 {backupMessage && (
-                  <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-semibold border border-blue-200 dark:border-blue-800">
+                  <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-xs font-medium border border-blue-200 dark:border-blue-800">
                     {backupMessage}
                   </div>
                 )}
 
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
                     <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>Export Local Backup</span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
                     Downloads an unencrypted, complete JSON backup containing all items, tasks, notes, links, tags, and AI synthesis history.
                   </p>
                   <button
                     onClick={handleExportBackup}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                    className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold flex items-center gap-2 shadow-2xs transition-colors cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Export JSON Backup</span>
                   </button>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-zinc-100">
                     <Upload className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <span>Restore from Backup</span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
                     Select a previously exported JSON backup to restore relational records and repopulate the FTS5 search index.
                   </p>
-                  <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer">
+                  <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-800 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer border border-slate-200 dark:border-white/[0.08]">
                     <Upload className="w-3.5 h-3.5" />
                     <span>Select Backup File (.json)</span>
                     <input
@@ -1162,9 +1174,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             {/* SECTION: APPEARANCE & UI */}
             {activeSection === 'appearance' && (
               <div className="space-y-6 animate-in fade-in duration-100">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Theme Mode
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                      Theme Mode
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                      Choose between native Dark Mode, clean Light Mode, or automatic System synchronization.
+                    </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     {[
@@ -1179,26 +1196,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                           key={t.id}
                           type="button"
                           onClick={() => updateSettings({ theme: t.id as any })}
-                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                          className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
                             isSelected
-                              ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/50 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500/20 shadow-xs'
-                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                              ? 'border-blue-600 dark:border-blue-500 bg-blue-50/60 dark:bg-blue-950/25 text-blue-950 dark:text-blue-100 ring-1 ring-blue-500/30 shadow-2xs'
+                              : 'border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#101014] text-slate-700 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-white/[0.14]'
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            <Icon className="w-4 h-4" />
-                            <span className="text-xs font-semibold">{t.label}</span>
+                            <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-zinc-500'}`} />
+                            <span className="text-xs font-medium">{t.label}</span>
                           </div>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                    Default Task Priority
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                      Default Task Priority
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5">
+                      Newly created tasks without explicit priority tags will inherit this level.
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => {
@@ -1208,10 +1230,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                           key={p}
                           type="button"
                           onClick={() => updateSettings({ defaultTaskPriority: p })}
-                          className={`px-3.5 py-1.5 rounded-xl text-xs capitalize font-semibold border transition-all cursor-pointer ${
+                          className={`px-3 py-1.5 rounded-lg text-xs capitalize font-medium border transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                              ? 'bg-slate-900 text-white dark:bg-white dark:text-zinc-950 border-transparent shadow-2xs'
+                              : 'bg-slate-50 dark:bg-[#101014] border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-400 hover:border-slate-300 dark:hover:border-white/[0.14]'
                           }`}
                         >
                           {p}
@@ -1226,35 +1248,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             {/* SECTION: SYSTEM & ABOUT */}
             {activeSection === 'about' && (
               <div className="space-y-6 animate-in fade-in duration-100">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs flex items-center justify-between">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <div className="text-sm font-bold text-slate-900 dark:text-zinc-100">
                       Velco Desktop
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">
                       Local-First Context-Bound AI Workstation
                     </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-mono text-xs font-bold border border-blue-200 dark:border-blue-800">
+                  <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 font-mono text-xs font-semibold border border-slate-200 dark:border-white/[0.08]">
                     v0.1.0
                   </span>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
                     Keyboard Shortcuts
                   </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  <div className="divide-y divide-slate-100 dark:divide-white/[0.06] text-xs">
                     {[
                       { key: 'Ctrl + B', label: 'Toggle Sidebar' },
                       { key: 'Ctrl + K', label: 'Global Search' },
                       { key: 'Ctrl + J', label: 'Toggle The Foundry' },
                       { key: 'Ctrl + Enter', label: 'Save capture' },
-                      { key: 'Escape', label: 'Close modals / search' },
+                      { key: 'Escape', label: 'Close modals / return to workspace' },
                     ].map((s, idx) => (
-                      <div key={idx} className="py-2 flex items-center justify-between">
-                        <span className="text-slate-600 dark:text-slate-400">{s.label}</span>
-                        <kbd className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      <div key={idx} className="py-2.5 flex items-center justify-between">
+                        <span className="text-slate-600 dark:text-zinc-400">{s.label}</span>
+                        <kbd className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/[0.05] font-mono text-[10px] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/[0.08]">
                           {s.key}
                         </kbd>
                       </div>

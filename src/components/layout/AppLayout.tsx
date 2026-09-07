@@ -46,6 +46,9 @@ const SettingsView = lazy(() =>
 const TheBridgeView = lazy(() =>
   import('../../features/bridge/TheBridgeView').then((m) => ({ default: m.TheBridgeView }))
 );
+const PlaygroundView = lazy(() =>
+  import('../../features/playground/PlaygroundView').then((m) => ({ default: m.PlaygroundView }))
+);
 
 // ── Drag Drop Indicator ────────────────────────────────────
 interface DragDropIndicatorProps {
@@ -55,17 +58,17 @@ interface DragDropIndicatorProps {
 const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => {
   if (!isDragging) return null;
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 text-white shadow-2xl border border-blue-500/40 backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-150">
-      <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md animate-bounce">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white dark:bg-[#141418] text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-white/[0.12] backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-150">
+      <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
         <Upload className="w-4 h-4" />
       </div>
       <div className="flex flex-col text-left">
-        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+        <div className="text-xs font-semibold text-slate-800 dark:text-zinc-100 flex items-center gap-1.5">
           Drop files to import
-          <span className="text-[10px] font-medium bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded">Velco</span>
+          <span className="text-[10px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-300 px-1.5 py-0.2 rounded border border-slate-200 dark:border-white/[0.08]">Velco</span>
         </div>
-        <div className="text-[10px] text-slate-400 font-normal">
-          Release anywhere to save attachments
+        <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+          Release anywhere to attach
         </div>
       </div>
     </div>
@@ -83,37 +86,37 @@ const NotificationToast: React.FC = React.memo(() => {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 border select-none max-w-sm ${
+      className={`fixed bottom-6 right-6 z-50 px-3.5 py-2.5 rounded-lg shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 border select-none max-w-sm backdrop-blur-md ${
         isReminder
-          ? 'bg-slate-900/95 dark:bg-slate-900/95 text-white border-indigo-500/40 shadow-indigo-500/10 backdrop-blur-md ring-2 ring-indigo-500/20'
-          : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-800 dark:border-slate-200'
+          ? 'bg-white dark:bg-[#141418] text-slate-900 dark:text-white border-blue-500/50 shadow-blue-500/10 ring-1 ring-blue-500/20'
+          : 'bg-white dark:bg-[#141418] text-slate-900 dark:text-zinc-100 border-slate-200 dark:border-white/[0.1]'
       }`}
     >
       {isReminder ? (
         <>
-          <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 animate-pulse">
-            <Bell className="w-4 h-4" />
+          <div className="w-7 h-7 rounded-md bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
+            <Bell className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0 pr-1 flex-1">
-            <div className="text-[11px] uppercase tracking-wider font-bold text-indigo-400 font-mono">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 font-mono">
               Task Reminder
             </div>
-            <div className="text-xs font-semibold text-slate-100 truncate">
+            <div className="text-xs font-medium text-zinc-200 truncate">
               {notification.message}
             </div>
           </div>
         </>
       ) : (
-        <span className="text-xs font-semibold flex-1">{notification.message}</span>
+        <span className="text-xs font-medium text-zinc-200 flex-1">{notification.message}</span>
       )}
 
       {/* Dismiss button */}
       <button
         onClick={dismissNotification}
-        className="p-1 rounded-lg opacity-60 hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+        className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
         aria-label="Dismiss notification"
       >
-        <X className="w-3 h-3" />
+        <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );
@@ -166,6 +169,11 @@ export const AppLayout: React.FC = () => {
     const current = useItemStore.getState().currentView;
     if (current !== 'settings') {
       previousViewRef.current = current;
+    }
+    if (view === 'workbench') {
+      setIsFoundryOpen(true);
+      setIsFoundryExpanded(true);
+      return;
     }
     setCurrentView(view);
   }, [setCurrentView]);
@@ -277,7 +285,7 @@ export const AppLayout: React.FC = () => {
   // ── Settings View (full-screen) ──────────────────────────
   if (currentView === 'settings') {
     return (
-      <div className="flex h-screen w-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans">
+      <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
         <Suspense fallback={<ViewSkeleton />}>
           <SettingsView
             onBack={() => {
@@ -313,7 +321,7 @@ export const AppLayout: React.FC = () => {
 
   // ── Main Layout ──────────────────────────────────────────
   return (
-    <div className="flex h-screen w-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
       {/* Pane 1: Collapsible Sidebar */}
       <div
         className={`transition-all duration-200 ease-in-out flex shrink-0 overflow-hidden ${
@@ -337,7 +345,7 @@ export const AppLayout: React.FC = () => {
       </div>
 
       {/* Pane 2: Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white dark:bg-slate-900/50">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-50 dark:bg-[#09090b]">
         <Header
           currentView={currentView}
           onNewCaptureClick={() => navigateToView('inbox')}
@@ -345,6 +353,7 @@ export const AppLayout: React.FC = () => {
           onToggleFoundry={() => setIsFoundryOpen((prev) => !prev)}
           isSidebarOpen={isSidebarOpen}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          onOpenSearch={() => setIsSearchOpen(true)}
         />
 
         {/* Scrollable View Content */}
@@ -457,6 +466,17 @@ export const AppLayout: React.FC = () => {
               {currentView === 'bridge' && (
                 <TheBridgeView
                   onNotify={(msg, type) => notify(msg, type)}
+                />
+              )}
+
+              {currentView === 'playground' && (
+                <PlaygroundView
+                  onOpenSettings={() => navigateToView('settings')}
+                  onArtifactCreated={(msg) => {
+                    refreshItems();
+                    refreshCounts();
+                    notify(msg, 'success');
+                  }}
                 />
               )}
             </div>

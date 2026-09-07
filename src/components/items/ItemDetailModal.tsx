@@ -377,15 +377,15 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl">
       <div className="space-y-4">
         {/* Top Navigation & Actions Bar */}
-        <div className="flex items-center justify-between pb-3 -mt-1 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between pb-3 -mt-1 border-b border-slate-200 dark:border-white/[0.08]">
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shadow-2xs"
             title="Back to workspace (Esc)"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back</span>
-            <kbd className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500 font-mono">
+            <kbd className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400 font-mono">
               Esc
             </kbd>
           </button>
@@ -428,7 +428,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                     item.favorite
                       ? 'border-amber-300 bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:border-amber-700'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-amber-500'
+                      : 'border-slate-200 dark:border-white/[0.08] text-slate-400 hover:text-amber-500'
                   }`}
                   title="Favorite"
                 >
@@ -440,7 +440,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                     item.archived
                       ? 'border-blue-300 bg-blue-50 text-blue-600 dark:bg-blue-950/40'
-                      : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-blue-500'
+                      : 'border-slate-200 dark:border-white/[0.08] text-slate-400 hover:text-blue-500'
                   }`}
                   title="Archive"
                 >
@@ -452,7 +452,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     onTrash(item.id);
                     onClose();
                   }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                   title="Trash"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -467,7 +467,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1.5">
               <Badge variant="default">{item.type}</Badge>
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
                 Created {new Date(item.createdAt).toLocaleString()}
               </span>
             </div>
@@ -477,10 +477,10 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-2 py-1 text-base font-bold rounded bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
+                className="w-full px-2.5 py-1 text-base font-bold rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.1] text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-zinc-100 tracking-tight">
                 {item.title}
               </h2>
             )}
@@ -488,7 +488,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
           <button
             onClick={() => (isEditing ? handleSaveEdit() : setIsEditing(true))}
-            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer shrink-0"
+            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shrink-0"
           >
             {isEditing ? 'Done' : 'Edit'}
           </button>
@@ -496,8 +496,8 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
         {/* Task row if task */}
         {item.type === 'task' && item.task && (
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-xs">
-            <label className="flex items-center gap-2 font-semibold cursor-pointer">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs">
+            <label className="flex items-center gap-2 font-semibold cursor-pointer text-slate-800 dark:text-zinc-200">
               <input
                 type="checkbox"
                 checked={item.task.completed}
@@ -510,9 +510,9 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     },
                   })
                 }
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700"
+                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-zinc-700 bg-white dark:bg-[#141418]"
               />
-              <span className={item.task.completed ? 'line-through text-slate-400' : ''}>
+              <span className={item.task.completed ? 'line-through text-slate-400 dark:text-zinc-500' : ''}>
                 {item.task.completed ? 'Completed' : 'Pending Task'}
               </span>
             </label>
@@ -562,7 +562,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
         {/* Task Details Editor (Priority & Due Date & Reminder) */}
         {item.type === 'task' && (
-          <div className="p-3.5 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Task Settings
@@ -591,10 +591,10 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200 dark:border-white/[0.08]">
               {/* Priority Selector */}
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-slate-400 text-[11px]">Priority:</span>
+                <span className="text-slate-400 dark:text-zinc-500 text-[11px]">Priority:</span>
                 {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => {
                   const active = (item.task?.priority || 'medium') === p;
                   return (
@@ -612,7 +612,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       className={`px-2 py-0.5 rounded-md capitalize text-[11px] font-medium transition-colors cursor-pointer ${
                         active
                           ? 'bg-blue-600 text-white font-semibold shadow-2xs'
-                          : 'bg-slate-200/70 hover:bg-slate-300/70 dark:bg-slate-700/60 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
+                          : 'bg-slate-200/70 hover:bg-slate-300/70 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-300'
                       }`}
                     >
                       {p}
@@ -682,13 +682,13 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pt-2 text-xs">
+        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/[0.08] pt-2 text-xs">
           <button
             onClick={() => setActiveTab('content')}
             className={`pb-2 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
               activeTab === 'content'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             Content & Notes
@@ -698,7 +698,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
             className={`pb-2 px-1 font-semibold border-b-2 flex items-center gap-1 transition-colors cursor-pointer ${
               activeTab === 'ai'
                 ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -713,7 +713,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
               className={`pb-2 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'attachments'
                   ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
               }`}
             >
               Attachments ({item.attachments.length})
@@ -736,14 +736,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     return (
                       <div
                         key={att.id}
-                        className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 p-1 shadow-xs"
+                        className="rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.07] bg-slate-100 dark:bg-[#101014] p-1 shadow-xs"
                       >
                         <img
                           src={att.dataUrl}
                           alt={att.fileName}
                           className="w-full max-h-[380px] object-contain rounded-xl"
                         />
-                        <div className="p-2 flex items-center justify-between text-xs text-slate-500">
+                        <div className="p-2 flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
                           <span className="font-medium truncate">{att.fileName}</span>
                           <span className="font-mono text-[10px]">
                             {(att.fileSize / 1024).toFixed(1)} KB
@@ -756,17 +756,17 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   return (
                     <div
                       key={att.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs"
+                      className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs"
                     >
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
                           <Paperclip className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-semibold text-slate-900 dark:text-slate-100">
+                          <div className="font-semibold text-slate-900 dark:text-zinc-100">
                             {att.fileName}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-mono">
+                          <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
                             {(att.fileSize / 1024).toFixed(1)} KB • {att.mimeType}
                           </div>
                         </div>
@@ -775,7 +775,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                         <a
                           href={att.dataUrl}
                           download={att.fileName}
-                          className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-semibold transition-colors"
+                          className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] text-slate-800 dark:text-zinc-200 text-xs font-semibold transition-colors"
                         >
                           Download
                         </a>
@@ -791,19 +791,19 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={10}
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.08] text-sm text-slate-900 dark:text-zinc-100 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
                 placeholder="Markdown content..."
               />
             ) : (
               item.content ? (
-                <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 min-h-[100px] text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
+                <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-[#101014]/60 border border-slate-200/80 dark:border-white/[0.06] min-h-[100px] text-sm text-slate-800 dark:text-zinc-200 leading-relaxed">
                   <MarkdownViewer content={item.content} />
                 </div>
               ) : null
             )}
 
             <div className="flex items-center justify-between pt-1">
-              <div className="text-[11px] text-slate-400 font-mono">
+              <div className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
                 {item.content ? `${item.content.split(/\s+/).filter(Boolean).length} words` : '0 words'}
               </div>
 
@@ -816,7 +816,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       setContent(item.content);
                       setIsEditing(false);
                     }}
-                    className="px-3 py-1 text-xs rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                    className="px-3 py-1 text-xs rounded-lg text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-white/[0.06]"
                   >
                     Cancel
                   </button>
@@ -845,7 +845,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsEditing(true)}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                   >
                     Edit Note
                   </button>
@@ -859,7 +859,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         {activeTab === 'ai' && (
           <div className="space-y-4">
             {!settings.aiEnabled ? (
-              <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+              <div className="p-6 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] text-center space-y-3">
                 <div className="w-10 h-10 mx-auto rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400">
                   <Bot className="w-5 h-5" />
                 </div>
@@ -890,7 +890,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 <button
                   onClick={() => runAiAction('summarize')}
                   disabled={isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAiLoading && activeAiAction === 'summarize' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />
@@ -902,7 +902,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 <button
                   onClick={() => runAiAction('classify')}
                   disabled={isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAiLoading && activeAiAction === 'classify' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
@@ -914,7 +914,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 <button
                   onClick={() => runAiAction('tags')}
                   disabled={isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAiLoading && activeAiAction === 'tags' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
@@ -926,7 +926,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 <button
                   onClick={() => runAiAction('extract_tasks')}
                   disabled={isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAiLoading && activeAiAction === 'extract_tasks' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
@@ -938,7 +938,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 <button
                   onClick={() => runAiAction('explain')}
                   disabled={isAiLoading}
-                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isAiLoading && activeAiAction === 'explain' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
@@ -952,54 +952,54 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
             {/* Minimal inline processing status */}
             {isAiLoading && activeAiAction !== 'chat' && (
-              <div className="flex items-center gap-2 py-1 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500 shrink-0" />
+              <div className="flex items-center gap-2 py-1 px-2.5 rounded-md bg-slate-50 dark:bg-[#101014] border border-slate-200/70 dark:border-white/[0.07] text-xs text-slate-500 dark:text-zinc-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
                 <span>Processing AI request...</span>
               </div>
             )}
 
             {/* Error banner */}
             {aiError && (
-              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-200">
                 {aiError}
               </div>
             )}
 
             {/* AI Summary View */}
             {item.aiMetadata?.summary && (
-              <div className="p-3.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800 space-y-1">
-                <div className="flex items-center justify-between text-xs font-bold text-purple-700 dark:text-purple-300">
+              <div className="p-3.5 rounded-xl bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200/70 dark:border-blue-900/40 space-y-1">
+                <div className="flex items-center justify-between text-xs font-bold text-blue-700 dark:text-blue-300">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Summary ({item.aiMetadata.model})</span>
                   </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
                     {new Date(item.aiMetadata.processedAt).toLocaleTimeString()}
                   </span>
                 </div>
-                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-700 dark:text-zinc-300 leading-relaxed">
                   {item.aiMetadata.summary}
                 </p>
                 {item.aiMetadata.classification && (
-                  <div className="pt-1 text-[11px] text-slate-500">
-                    Category: <span className="font-semibold">{item.aiMetadata.classification}</span>
+                  <div className="pt-1 text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
+                    Category: <span className="font-semibold text-slate-700 dark:text-zinc-300">{item.aiMetadata.classification}</span>
                   </div>
                 )}
               </div>
             )}
 
             {/* Context-bound AI Chat */}
-            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/40 dark:bg-slate-900/40">
-              <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div className="border border-slate-200 dark:border-white/[0.07] rounded-xl overflow-hidden bg-slate-50/40 dark:bg-[#101014]">
+              <div className="p-2.5 bg-slate-100 dark:bg-[#141418] text-xs font-semibold text-slate-700 dark:text-zinc-300 border-b border-slate-200 dark:border-white/[0.06] flex items-center justify-between">
                 <span>Ask About This Item</span>
-                <span className="text-[10px] text-slate-400 font-normal">
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">
                   Context bounded to this note
                 </span>
               </div>
 
-              <div className="p-3 max-h-48 overflow-y-auto space-y-2 text-xs">
+              <div className="p-3 max-h-48 overflow-y-auto space-y-2 text-xs custom-scrollbar">
                 {chatMessages.length === 0 ? (
-                  <div className="text-slate-400 text-center py-4 text-[11px]">
+                  <div className="text-slate-400 dark:text-zinc-500 text-center py-4 text-[11px]">
                     Ask any question about this item's content.
                   </div>
                 ) : (
@@ -1009,7 +1009,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       className={`p-2 rounded-lg leading-relaxed ${
                         msg.role === 'user'
                           ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-950 dark:text-blue-100 ml-6'
-                          : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 mr-6 border border-slate-200/80 dark:border-slate-700'
+                          : 'bg-white dark:bg-[#141418] text-slate-800 dark:text-zinc-200 mr-6 border border-slate-200/80 dark:border-white/[0.07]'
                       }`}
                     >
                       <div className="font-semibold text-[10px] mb-0.5 opacity-70">
@@ -1022,14 +1022,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
                 {/* Minimal typing indicator for chat */}
                 {isAiLoading && activeAiAction === 'chat' && (
-                  <div className="flex items-center gap-2 py-1 px-2.5 rounded-md bg-slate-50 dark:bg-slate-800/80 text-xs text-slate-500 border border-slate-200/60 dark:border-slate-700/60 w-fit">
-                    <Loader2 className="w-3 h-3 animate-spin text-purple-500 shrink-0" />
+                  <div className="flex items-center gap-2 py-1 px-2.5 rounded-md bg-slate-50 dark:bg-[#141418] text-xs text-slate-500 border border-slate-200/60 dark:border-white/[0.07] w-fit">
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
                     <span>Typing response...</span>
                   </div>
                 )}
               </div>
 
-              <div className="p-2 border-t border-slate-200 dark:border-slate-800 flex items-center gap-1.5 bg-white dark:bg-slate-900">
+              <div className="p-2 border-t border-slate-200 dark:border-white/[0.06] flex items-center gap-1.5 bg-white dark:bg-[#101014]">
                 <input
                   type="text"
                   value={chatInput}
@@ -1039,13 +1039,13 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   }}
                   placeholder="Ask a question..."
                   disabled={isAiLoading}
-                  className="flex-1 px-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none disabled:opacity-50"
+                  className="flex-1 px-3 py-1.5 rounded-md text-xs bg-slate-50 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500 disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={handleSendChat}
                   disabled={isAiLoading || !chatInput.trim()}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-40 cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40 cursor-pointer flex items-center gap-1 shadow-2xs"
                 >
                   {isAiLoading && activeAiAction === 'chat' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1065,7 +1065,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
             {item.attachments.map((att) => (
               <div
                 key={att.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs"
+                className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs"
               >
                 <div className="flex items-center gap-3">
                   {att.mimeType.startsWith('image/') && att.dataUrl ? (
@@ -1075,15 +1075,15 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       className="w-10 h-10 object-cover rounded-lg"
                     />
                   ) : (
-                    <div className="p-2 rounded-lg bg-slate-200 dark:bg-slate-700">
-                      <Paperclip className="w-5 h-5 text-slate-500" />
+                    <div className="p-2 rounded-lg bg-slate-200 dark:bg-white/[0.08]">
+                      <Paperclip className="w-5 h-5 text-slate-500 dark:text-zinc-400" />
                     </div>
                   )}
                   <div>
-                    <div className="font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="font-semibold text-slate-900 dark:text-zinc-100">
                       {att.fileName}
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono">
+                    <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
                       {(att.fileSize / 1024).toFixed(1)} KB • {att.mimeType}
                     </div>
                   </div>
@@ -1093,7 +1093,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   <a
                     href={att.dataUrl}
                     download={att.fileName}
-                    className="px-2.5 py-1 rounded bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-medium"
+                    className="px-2.5 py-1 rounded bg-slate-200 hover:bg-slate-300 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] text-slate-800 dark:text-zinc-200 text-xs font-medium"
                   >
                     Download
                   </a>

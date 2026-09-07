@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Send,
   Square,
   Trash2,
-  Sparkles,
   Bot,
   User,
   Check,
@@ -14,19 +12,25 @@ import {
   Cpu,
   Globe,
   Settings as SettingsIcon,
-  ArrowRight,
   Loader2,
   ListTodo,
   Paperclip,
   X,
   Search,
+  CornerDownLeft,
+  Calendar,
+  BarChart3,
+  Lightbulb,
+  SlidersHorizontal,
+  Plus,
+  ShieldAlert,
+  Zap,
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useSettings } from '../../stores/settingsStore';
 import { useItemStore } from '../../stores/itemStore';
-import { ChatMessage } from '../../types/ai';
 import { formatTaskBatchSource } from '../../types/item';
 import {
   StructuredTaskItem,
@@ -37,33 +41,39 @@ import {
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { MarkdownViewer } from '../common/MarkdownViewer';
 import { db } from '../../services/database';
-import { getLlmProviderConfig, getProviderDisplayName } from '../../utils/aiUtils';
+import { getProviderDisplayName, getLlmProviderConfig } from '../../utils/aiUtils';
 
 interface LandingHeroAiChatProps {
   onArtifactCreated?: (msg: string) => void;
   onOpenSettings?: () => void;
 }
 
-const SMART_PROMPT_CHIPS = [
+interface SmartPromptChip {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  prompt: string;
+}
+
+const DEVELOPER_PROMPT_CHIPS: SmartPromptChip[] = [
   {
-    icon: '📅',
-    label: 'What are my top priorities today?',
-    prompt: 'What are my highest priority tasks today based on items in Velco? Give me a recommended execution order.',
+    icon: Calendar,
+    label: 'Prioritize tasks & deadlines',
+    prompt: 'What are my highest priority tasks and approaching deadlines based on items in Velco? Outline a sequential execution plan.',
   },
   {
-    icon: '📊',
-    label: 'Summarize recent notes & progress',
-    prompt: 'Please draft an executive summary of my recent notes, updates, and progress stored here.',
+    icon: BarChart3,
+    label: 'Synthesize recent notes',
+    prompt: 'Please draft an executive synthesis of my recent notes, updates, and research stored in the workstation.',
   },
   {
-    icon: '💡',
-    label: 'Brainstorm active project ideas',
-    prompt: 'Help me brainstorm 3-5 breakthrough ideas or next steps to advance my active projects.',
+    icon: Lightbulb,
+    label: 'Brainstorm next steps',
+    prompt: 'Analyze my active context items and brainstorm 3-5 concrete architectural or procedural next steps.',
   },
   {
-    icon: '🔍',
-    label: 'Analyze blockers & find solutions',
-    prompt: 'Based on available context, analyze potential issues or bottlenecks and provide step-by-step solutions.',
+    icon: Search,
+    label: 'Analyze gaps & blockers',
+    prompt: 'Based on available workstation context, identify potential contradictions, gaps, or dependencies that require resolution.',
   },
 ];
 
@@ -75,14 +85,12 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const {
     chatContextItems,
     addChatContextItem,
-    addChatContextItems,
     removeChatContextItem,
     clearChatContext,
     totalChatTokens,
   } = useContextStore();
-  const { items: allDbItems, refreshItems } = useItemStore();
-  const { selectedIds, clearSelection } = useSelectionStore();
-  const { settings } = useSettings();
+  const { items: allDbItems } = useItemStore();
+  const { settings, updateSettings } = useSettings();
 
   const [prompt, setPrompt] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -94,6 +102,8 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const [extractBatchTitle, setExtractBatchTitle] = useState<string>('');
   const [isContextPickerOpen, setIsContextPickerOpen] = useState(false);
   const [contextSearch, setContextSearch] = useState('');
+  const [showParameters, setShowParameters] = useState(false);
+  const [temperature, setTemperature] = useState(0.7);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -118,19 +128,30 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     };
     if (isContextPickerOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
   }, [isContextPickerOpen]);
 
-  const handleSend = async (overridePrompt?: string) => {
-    const textToSend = (overridePrompt ?? prompt).trim();
-    if (!textToSend || isGenerating) return;
+  // Auto-resize textarea
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPrompt(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+    }
+  };
 
-    setPrompt('');
+  const handleSend = (textToSend?: string) => {
+    const content = textToSend || prompt.trim();
+    if (!content || isGenerating || !settings.aiEnabled) return;
+
+    // Send with context & provider config
     const config = getLlmProviderConfig(settings);
-    await sendMessage(textToSend, chatContextItems, config);
+    sendMessage(content, chatContextItems, config);
+    setPrompt('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -140,75 +161,69 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     }
   };
 
-  const handleCopy = (id: string, text: string) => {
+  const handleCopyMessage = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleSaveAsNote = async (msg: ChatMessage) => {
-    if (!msg.content.trim()) return;
+  const handleSaveToNote = async (msgId: string, content: string) => {
     try {
-      const cleanContent = msg.content.replace(/^[#\s*>-]+/, '').trim();
-      const firstLine = cleanContent.split('\n')[0] || 'AI Assistant Note';
-      const title = firstLine.slice(0, 60) + (firstLine.length > 60 ? '...' : '');
-
+      const title = content.slice(0, 50).trim() || 'Chat Note';
       await db.createItem({
         type: 'note',
-        title: `AI Note: ${title}`,
-        content: msg.content,
-        source: 'landing_ai_chat',
+        title,
+        content,
+        source: 'ai_chat',
       });
-      await refreshItems();
-
-      setSavedNoteId(msg.id);
-      setTimeout(() => setSavedNoteId(null), 2500);
+      await useItemStore.getState().refreshItems();
+      await useItemStore.getState().refreshCounts();
+      setSavedNoteId(msgId);
+      setTimeout(() => setSavedNoteId(null), 3000);
 
       if (onArtifactCreated) {
-        onArtifactCreated(`Created note "${title}"`);
+        onArtifactCreated(`Saved note: "${title}"`);
       }
-    } catch (err: any) {
-      console.error('Failed to save note from chat:', err);
+    } catch (err) {
+      console.error('Failed to save chat message as note:', err);
     }
   };
 
-  const handleStartTaskExtraction = async (msg: ChatMessage) => {
-    if (!msg.content.trim() || extractingMsgId) return;
+  const handleExtractTasksFromMessage = async (msg: { id: string; content: string }) => {
+    setExtractingMsgId(msg.id);
     try {
-      setExtractingMsgId(msg.id);
+      const generatedTitle = generateCleanBatchTitle(msg.content, 'Chat Action Items');
+      setExtractBatchTitle(generatedTitle);
+
+      if (!settings.aiEnabled) {
+        const fallback = smartHeuristicTaskExtraction(msg.content);
+        if (fallback.length > 0) {
+          setExtractedTasks(fallback);
+          setIsExtractModalOpen(true);
+        }
+        return;
+      }
+
       const llmConfig = getLlmProviderConfig(settings);
       const model = llmConfig.config.model;
       const baseUrl = llmConfig.config.base_url;
-      const apiKey = (llmConfig.config as any).api_key || '';
+      const apiKey = 'api_key' in llmConfig.config ? llmConfig.config.api_key : undefined;
 
-      const batchTitle = generateCleanBatchTitle(msg.content, 'Chat Action Items');
-
-      let tasks: StructuredTaskItem[] = [];
-      try {
-        tasks = await extractStructuredTasks(msg.content, model, baseUrl, apiKey);
-      } catch (aiErr: any) {
-        console.warn('AI task extraction error, using heuristic parser:', aiErr);
-        tasks = smartHeuristicTaskExtraction(msg.content);
-      }
-
-      if (!tasks || tasks.length === 0) {
-        tasks = smartHeuristicTaskExtraction(msg.content);
-      }
-
-      if (tasks && tasks.length > 0) {
-        setExtractBatchTitle(batchTitle);
+      const tasks = await extractStructuredTasks(msg.content, model, baseUrl, apiKey);
+      if (tasks.length > 0) {
         setExtractedTasks(tasks);
         setIsExtractModalOpen(true);
       } else {
-        alert('No actionable tasks or to-do items could be identified in this message.');
+        const fallback = smartHeuristicTaskExtraction(msg.content);
+        if (fallback.length > 0) {
+          setExtractedTasks(fallback);
+          setIsExtractModalOpen(true);
+        }
       }
     } catch (err: any) {
-      console.error('Failed to extract tasks from chat:', err);
-      // Guarantee user is never stranded
-      const fallbackTasks = smartHeuristicTaskExtraction(msg.content);
-      if (fallbackTasks.length > 0) {
-        setExtractBatchTitle(generateCleanBatchTitle(msg.content, 'Chat Action Items'));
-        setExtractedTasks(fallbackTasks);
+      const fallback = smartHeuristicTaskExtraction(msg.content);
+      if (fallback.length > 0) {
+        setExtractedTasks(fallback);
         setIsExtractModalOpen(true);
       }
     } finally {
@@ -251,7 +266,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
       setIsExtractModalOpen(false);
 
       if (onArtifactCreated) {
-        onArtifactCreated(`Created ${tasksToCreate.length} task${tasksToCreate.length > 1 ? 's' : ''}: "${extractBatchTitle}"`);
+        onArtifactCreated(`Created ${tasksToCreate.length} task${tasksToCreate.length > 1 ? 's' : ''}`);
       }
     } catch (err: any) {
       console.error('Failed to save extracted tasks from chat:', err);
@@ -259,49 +274,60 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   };
 
   return (
-    <div className="w-full min-w-0 bg-white dark:bg-slate-900/90 rounded-2xl border border-slate-200/90 dark:border-slate-800/90 shadow-sm overflow-hidden flex flex-col transition-all">
-      {/* Top Bar: Engine & Context Pill Header */}
-      <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-slate-950/60 border-b border-slate-200/70 dark:border-slate-800/70 flex items-center justify-between gap-3 text-xs">
+    <div className="w-full min-w-0 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] overflow-hidden flex flex-col transition-all shadow-xs">
+      {/* Top Model Parameter & Telemetry Bar */}
+      <div className="px-3.5 py-2 bg-slate-50 dark:bg-[#101014] border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-            <Sparkles className="w-3 h-3 animate-pulse" />
-          </div>
-          <span className="font-semibold text-slate-800 dark:text-slate-200 tracking-tight">
-            Velco AI Assistant
-          </span>
+          {settings.aiEnabled ? (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] text-[11px] font-mono text-slate-700 dark:text-zinc-300">
+              {providerInfo.isLocal ? (
+                <Cpu className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              ) : (
+                <Globe className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
+              )}
+              <span className="truncate max-w-[160px] sm:max-w-[220px]">
+                {providerInfo.providerName} &bull; {providerInfo.modelName}
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => updateSettings({ aiEnabled: true })}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-[11px] font-mono text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
+              title="AI is currently disabled. Click to turn ON."
+            >
+              <ShieldAlert className="w-3 h-3 text-amber-500 shrink-0" />
+              <span>AI Disabled (Click to Turn On)</span>
+            </button>
+          )}
 
-          <span className="text-slate-300 dark:text-slate-700">|</span>
-
-          {/* Active Model Indicator */}
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
-            {providerInfo.isLocal ? (
-              <Cpu className="w-3 h-3 text-emerald-500 shrink-0" />
-            ) : (
-              <Globe className="w-3 h-3 text-blue-500 shrink-0" />
-            )}
-            <span className="truncate max-w-[140px] sm:max-w-[200px]">
-              {providerInfo.providerName} &bull; {providerInfo.modelName}
-            </span>
-          </div>
-
-          {/* Staged Chat Context Items Badge */}
           {chatContextItems.length > 0 && (
-            <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-mono text-[11px]">
-              <Layers className="w-3 h-3 text-indigo-500" />
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300 font-mono text-[10px]">
+              <Layers className="w-3 h-3 text-blue-600 dark:text-blue-400" />
               <span>{chatContextItems.length} context ({chatTokens.toLocaleString()}t)</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setShowParameters(!showParameters)}
+            className={`p-1 rounded text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 transition-colors cursor-pointer ${
+              showParameters ? 'bg-slate-200 dark:bg-white/[0.08] text-slate-800 dark:text-zinc-200' : 'hover:bg-slate-100 dark:hover:bg-white/[0.04]'
+            }`}
+            title="Model parameters"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 stroke-[1.5]" />
+          </button>
+
           {messages.length > 0 && (
             <button
               onClick={clearChat}
               disabled={isGenerating}
-              className="px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-              title="Clear chat"
+              className="px-2 py-0.8 text-[11px] font-mono text-slate-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              title="Clear conversation"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3 h-3 stroke-[1.5]" />
               <span className="hidden sm:inline">Clear</span>
             </button>
           )}
@@ -309,18 +335,45 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-              title="Configure AI Provider"
+              className="p-1 text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.04] rounded transition-colors cursor-pointer"
+              title="Configure Model Engine"
             >
-              <SettingsIcon className="w-3.5 h-3.5" />
+              <SettingsIcon className="w-3.5 h-3.5 stroke-[1.5]" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Conversation Stream (Collapsible / Scrollable if messages exist) */}
+      {/* Optional Parameter Drawer */}
+      {showParameters && (
+        <div className="px-4 py-2.5 bg-slate-100/80 dark:bg-[#0d0d10] border-b border-slate-200 dark:border-white/[0.06] flex items-center justify-between gap-4 text-xs font-mono text-slate-600 dark:text-zinc-400">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 dark:text-zinc-500 text-[11px]">Temperature:</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={temperature}
+              onChange={(e) => setTemperature(parseFloat(e.target.value))}
+              className="w-24 h-1 bg-slate-300 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+            <span className="text-slate-800 dark:text-zinc-300 text-[11px]">{temperature}</span>
+          </div>
+
+          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-zinc-500">
+            <span>Context Limit:</span>
+            <span className="text-slate-800 dark:text-zinc-300">8192t</span>
+          </div>
+        </div>
+      )}
+
+      {/* Conversation Thread Area */}
       {messages.length > 0 && (
-        <div className="p-4 space-y-4 max-h-[380px] overflow-y-auto overflow-x-hidden border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-950/20 w-full min-w-0">
+        <div
+          ref={chatContainerRef}
+          className="p-4 space-y-4 max-h-[420px] overflow-y-auto overflow-x-hidden border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#09090b]/50 w-full min-w-0"
+        >
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             const isSavedNote = savedNoteId === msg.id;
@@ -336,175 +389,170 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                 }`}
               >
                 {!isUser && (
-                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                    <Bot className="w-4 h-4" />
+                  <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
                   </div>
                 )}
 
                 <div
-                  className={`flex flex-col max-w-[85%] min-w-0 ${
+                  className={`flex flex-col max-w-[88%] min-w-0 ${
                     isUser ? 'items-end' : 'items-start'
                   }`}
                 >
                   <div
-                    className={`p-3.5 rounded-2xl leading-relaxed break-words overflow-hidden min-w-0 ${
+                    className={`p-3 rounded-lg leading-relaxed break-words overflow-hidden min-w-0 ${
                       isUser
-                        ? 'bg-blue-600 text-white rounded-br-xs shadow-xs'
-                        : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 rounded-bl-xs shadow-xs'
+                        ? 'bg-slate-100 text-slate-900 border border-slate-200 dark:bg-white/[0.06] dark:border-white/[0.08] dark:text-zinc-100'
+                        : 'text-slate-800 dark:text-zinc-200'
                     }`}
                   >
                     {isUser ? (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     ) : (
-                      <div className="prose prose-xs dark:prose-invert max-w-none">
+                      <div className="prose prose-slate dark:prose-invert prose-xs max-w-none text-slate-800 dark:text-zinc-200">
                         <MarkdownViewer content={msg.content} />
-                        {msg.isStreaming && (
-                          <span className="inline-block w-1.5 h-3.5 bg-indigo-500 animate-pulse ml-1 align-middle" />
-                        )}
-                        {msg.error && (
-                          <div className="mt-2 p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 flex items-center gap-1.5 text-xs">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{msg.error}</span>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Actionable Artifact Buttons for Assistant Messages */}
-                  {!isUser && !msg.isStreaming && msg.content.trim() && (
-                    <div className="flex items-center gap-1.5 mt-1.5 ml-1 text-[11px] text-slate-400">
+                  {/* Message Action Bar (Assistant Only) */}
+                  {!isUser && (
+                    <div className="flex items-center gap-1 mt-1 px-1">
                       <button
-                        onClick={() => handleSaveAsNote(msg)}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                          isSavedNote
-                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 font-semibold'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                        title="Save as Note in SQLite"
-                      >
-                        {isSavedNote ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            <span>Saved!</span>
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="w-3 h-3" />
-                            <span>Save Note</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleStartTaskExtraction(msg)}
-                        disabled={isExtracting}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                          isSavedBatch
-                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 font-semibold'
-                            : isExtracting
-                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 font-medium'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'
-                        }`}
-                        title="Analyze content and extract into structured tasks"
-                      >
-                        {isExtracting ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
-                            <span>Extracting...</span>
-                          </>
-                        ) : isSavedBatch ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            <span>Tasks Created!</span>
-                          </>
-                        ) : (
-                          <>
-                            <ListTodo className="w-3 h-3 text-indigo-500" />
-                            <span>Extract Tasks</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleCopy(msg.id, msg.content)}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                        onClick={() => handleCopyMessage(msg.id, msg.content)}
+                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
                         title="Copy response"
                       >
                         {isCopied ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-500" />
-                            <span>Copied</span>
-                          </>
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[2]" />
                         ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Copy</span>
-                          </>
+                          <Copy className="w-3 h-3 stroke-[1.5]" />
                         )}
+                      </button>
+
+                      <button
+                        onClick={() => handleSaveToNote(msg.id, msg.content)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
+                          isSavedNote
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
+                        }`}
+                        title="Save response to a new Note"
+                      >
+                        <FileText className="w-2.5 h-2.5" />
+                        <span>{isSavedNote ? 'Saved' : 'Save as Note'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleExtractTasksFromMessage(msg)}
+                        disabled={isExtracting}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
+                          isSavedBatch
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
+                        }`}
+                        title="Extract actionable tasks from this response"
+                      >
+                        {isExtracting ? (
+                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-500 dark:text-blue-400" />
+                        ) : (
+                          <ListTodo className="w-2.5 h-2.5" />
+                        )}
+                        <span>{isSavedBatch ? 'Extracted' : 'Extract Tasks'}</span>
                       </button>
                     </div>
                   )}
                 </div>
 
                 {isUser && (
-                  <div className="w-7 h-7 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="w-4 h-4" />
+                  <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <User className="w-3.5 h-3.5 stroke-[1.5]" />
                   </div>
                 )}
               </div>
             );
           })}
+
+          {isGenerating && (
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500 font-mono py-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
+              <span>Generating response...</span>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Smart Prompt Chips (Only shown on clean initial state before user types or sends a prompt) */}
+      {/* Suggested Prompts (Zero Emojis, Pure Monospace Vector Chips) */}
       {messages.length === 0 && !prompt.trim() && (
-        <div className="px-4 pt-2.5 pb-1 transition-all duration-200">
-          <div className="flex items-center gap-1.5 mb-2 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            <Sparkles className="w-3 h-3 text-indigo-500 shrink-0" />
-            <span>Suggested Prompts</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SMART_PROMPT_CHIPS.map((chip, idx) => (
+        <div className="p-4 space-y-2.5">
+          {!settings.aiEnabled ? (
+            <div className="p-4 rounded-xl bg-amber-500/[0.04] dark:bg-amber-500/[0.05] border border-amber-500/20 text-center space-y-2.5">
+              <div className="w-8 h-8 mx-auto rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+                  AI Features are Currently Disabled
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-0.5 max-w-sm mx-auto">
+                  Turn on AI in Settings or click below to enable workspace chat, synthesis, and reasoning.
+                </p>
+              </div>
               <button
-                key={idx}
-                onClick={() => handleSend(chip.prompt)}
-                disabled={isGenerating}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100/70 hover:bg-indigo-50 dark:bg-slate-800/60 dark:hover:bg-indigo-950/50 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-300 border border-slate-200/60 dark:border-slate-700/60 hover:border-indigo-300 dark:hover:border-indigo-700 text-xs transition-all cursor-pointer shadow-2xs group text-left disabled:opacity-50 max-w-full min-w-0"
+                type="button"
+                onClick={() => updateSettings({ aiEnabled: true })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors cursor-pointer shadow-xs"
               >
-                <span className="text-xs shrink-0 group-hover:scale-110 transition-transform">
-                  {chip.icon}
-                </span>
-                <span className="font-medium truncate max-w-[200px] sm:max-w-[280px]">
-                  {chip.label}
-                </span>
-                <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500 shrink-0" />
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Turn On AI</span>
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 dark:text-zinc-500 font-semibold">
+                Suggested Prompts
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {DEVELOPER_PROMPT_CHIPS.map((chip, idx) => {
+                  const Icon = chip.icon;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(chip.prompt)}
+                      disabled={isGenerating}
+                      className="flex items-center gap-2.5 p-2 rounded-md bg-slate-50 hover:bg-slate-100 dark:bg-[#101014] dark:hover:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.12] text-left transition-all cursor-pointer group disabled:opacity-50"
+                    >
+                      <Icon className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 dark:text-zinc-500 dark:group-hover:text-zinc-300 stroke-[1.5] shrink-0" />
+                      <span className="text-xs text-slate-600 group-hover:text-slate-900 dark:text-zinc-400 dark:group-hover:text-zinc-200 truncate">
+                        {chip.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Attached Chat Context Bar */}
       {chatContextItems.length > 0 && (
-        <div className="px-3.5 py-2 bg-indigo-50/50 dark:bg-indigo-950/30 border-t border-b border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center gap-1.5 text-xs">
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mr-1">
-            <Layers className="w-3 h-3 text-indigo-500" />
-            <span>Chat Context ({chatTokens.toLocaleString()}t):</span>
+        <div className="px-3 py-1.5 bg-slate-50 dark:bg-[#101014] border-t border-b border-slate-200 dark:border-white/[0.06] flex flex-wrap items-center gap-1.5 text-xs">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-slate-500 dark:text-zinc-500 mr-1">
+            <Layers className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+            <span>Context:</span>
           </div>
 
           {chatContextItems.map((item) => (
             <div
               key={item.id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-indigo-200/80 dark:border-indigo-800/80 text-[11px] text-slate-700 dark:text-slate-200 shadow-2xs"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.07] text-[11px] font-mono text-slate-700 dark:text-zinc-300"
             >
-              <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]">{item.title}</span>
+              <span className="truncate max-w-[150px]">{item.title}</span>
               <button
                 type="button"
                 onClick={() => removeChatContextItem(item.id)}
-                className="p-0.5 text-slate-400 hover:text-rose-500 rounded transition-colors cursor-pointer"
-                title="Remove item from chat context"
+                className="p-0.5 text-slate-400 hover:text-rose-600 dark:text-zinc-500 dark:hover:text-rose-400 rounded cursor-pointer"
               >
                 <X className="w-2.5 h-2.5" />
               </button>
@@ -514,62 +562,58 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
           <button
             type="button"
             onClick={clearChatContext}
-            className="text-[10px] text-slate-400 hover:text-rose-500 font-medium px-1.5 py-0.5 rounded cursor-pointer transition-colors ml-auto"
-            title="Clear all attached chat context"
+            className="text-[10px] font-mono text-slate-400 hover:text-rose-600 dark:text-zinc-500 dark:hover:text-rose-400 px-1 py-0.5 rounded cursor-pointer ml-auto"
           >
             Clear All
           </button>
         </div>
       )}
 
-      {/* Prompt Input Dock */}
-      <div className="p-3.5 relative">
+      {/* Input Dock */}
+      <div className="p-3 relative bg-white dark:bg-[#141418]">
         {/* Inline Context Picker Popover */}
         {isContextPickerOpen && (
           <div
             ref={pickerRef}
-            className="absolute bottom-full left-3.5 right-3.5 mb-2 p-3 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 z-30 view-enter"
+            className="absolute bottom-full left-3 right-3 mb-2 p-3 bg-white dark:bg-[#1a1a20] rounded-xl shadow-2xl border border-slate-200 dark:border-white/[0.1] z-30"
           >
-            <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800 text-xs">
-              <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
-                <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Attach Items to AI Chat Context</span>
+            <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200 dark:border-white/[0.06] text-xs">
+              <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-700 dark:text-zinc-300">
+                <Paperclip className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                <span>Attach Items to AI Context</span>
               </div>
               <button
                 onClick={() => setIsContextPickerOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                className="p-0.5 text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 rounded cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </div>
 
-            {/* Search filter input */}
             <div className="relative mb-2">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3 h-3 text-slate-400 dark:text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={contextSearch}
                 onChange={(e) => setContextSearch(e.target.value)}
-                placeholder="Search notes, tasks, files to attach..."
-                className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+                placeholder="Filter items..."
+                className="w-full bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] rounded-md pl-7 pr-2.5 py-1 text-xs text-slate-900 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-slate-400 dark:focus:border-white/[0.2]"
               />
             </div>
 
-            {/* Filtered items list */}
-            <div className="max-h-48 overflow-y-auto space-y-1">
+            <div className="max-h-44 overflow-y-auto space-y-1">
               {allDbItems
-                .filter((item) => !item.archived && item.status !== 'trash' && !item.deletedAt)
-                .filter((item) =>
-                  !contextSearch
-                    ? true
-                    : item.title.toLowerCase().includes(contextSearch.toLowerCase()) ||
-                      (item.content && item.content.toLowerCase().includes(contextSearch.toLowerCase()))
+                .filter(
+                  (item) =>
+                    !contextSearch.trim() ||
+                    item.title.toLowerCase().includes(contextSearch.toLowerCase()) ||
+                    item.content.toLowerCase().includes(contextSearch.toLowerCase())
                 )
-                .slice(0, 12)
+                .slice(0, 8)
                 .map((item) => {
                   const isAttached = chatContextItems.some((c) => c.id === item.id);
                   return (
-                    <div
+                    <button
                       key={item.id}
                       onClick={() => {
                         if (isAttached) {
@@ -578,135 +622,94 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                           addChatContextItem(itemToStagedItem(item));
                         }
                       }}
-                      className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-all ${
+                      className={`w-full flex items-center justify-between px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
                         isAttached
-                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium'
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20'
+                          : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        {item.type === 'task' ? (
-                          <ListTodo className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        ) : (
-                          <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        )}
-                        <span className="truncate max-w-[220px] sm:max-w-[320px]">{item.title}</span>
-                      </div>
-                      <div
-                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          isAttached
-                            ? 'bg-indigo-600 border-indigo-600 text-white'
-                            : 'border-slate-300 dark:border-slate-700'
-                        }`}
-                      >
-                        {isAttached && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                      </div>
-                    </div>
+                      <span className="truncate max-w-[280px]">{item.title || 'Untitled'}</span>
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-600 uppercase">{item.type}</span>
+                    </button>
                   );
                 })}
             </div>
           </div>
         )}
 
-        <div className="relative flex items-center gap-2 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all shadow-inner">
-          {/* Quick Context Attach Button */}
+        {!settings.aiEnabled && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-mono text-[11px]">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+              <span>AI features are turned off</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateSettings({ aiEnabled: true })}
+              className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors cursor-pointer"
+            >
+              Turn On AI
+            </button>
+          </div>
+        )}
+
+        <div className={`flex items-end gap-2 bg-slate-50 dark:bg-[#0d0d10] border border-slate-200 dark:border-white/[0.08] focus-within:border-slate-400 dark:focus-within:border-white/[0.18] rounded-lg p-1.5 transition-colors ${
+          !settings.aiEnabled ? 'opacity-60 cursor-not-allowed' : ''
+        }`}>
           <button
             type="button"
-            onClick={() => {
-              if (selectedIds.size > 0) {
-                const toAdd = allDbItems
-                  .filter((i) => selectedIds.has(i.id))
-                  .map(itemToStagedItem);
-                addChatContextItems(toAdd);
-                clearSelection();
-              } else {
-                setIsContextPickerOpen((prev) => !prev);
-              }
-            }}
-            className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-xs shrink-0 ${
-              isContextPickerOpen || chatContextItems.length > 0
-                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-            }`}
-            title={
-              selectedIds.size > 0
-                ? `Attach ${selectedIds.size} selected items to AI Chat`
-                : 'Attach context items to AI Chat'
-            }
+            onClick={() => settings.aiEnabled && setIsContextPickerOpen(!isContextPickerOpen)}
+            disabled={!settings.aiEnabled}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.05] disabled:opacity-40 transition-colors cursor-pointer shrink-0"
+            title="Attach workspace context (+ file, + note)"
           >
-            <Paperclip className="w-3.5 h-3.5" />
-            {selectedIds.size > 0 && (
-              <span className="text-[10px] font-bold bg-indigo-600 text-white rounded-full px-1.5 py-0.2">
-                +{selectedIds.size}
-              </span>
-            )}
+            <Paperclip className="w-3.5 h-3.5 stroke-[1.5]" />
           </button>
 
           <textarea
             ref={textareaRef}
             rows={1}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
+            disabled={!settings.aiEnabled}
             placeholder={
-              isGenerating
-                ? 'AI is generating response...'
-                : chatContextItems.length > 0
-                ? `Ask about the ${chatContextItems.length} attached items... (Enter to send)`
-                : 'Ask anything, analyze notes, or schedule tasks... (Enter to send)'
+              settings.aiEnabled
+                ? "Ask anything or request synthesis... (Enter to send, Shift+Enter for newline)"
+                : "AI features are turned off. Enable AI to chat..."
             }
-            disabled={isGenerating}
-            className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none resize-none text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 py-1.5 px-2 leading-relaxed max-h-32 min-h-[34px]"
+            className="flex-1 bg-transparent border-none outline-none resize-none text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 max-h-44 py-1 leading-relaxed disabled:cursor-not-allowed"
           />
 
-          <div className="flex items-center gap-1.5 shrink-0 pr-1">
-            {isGenerating ? (
-              <button
-                onClick={stopGenerating}
-                className="px-2.5 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer animate-pulse"
-                title="Stop generating response"
-              >
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span className="hidden sm:inline">Stop</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleSend()}
-                disabled={!prompt.trim()}
-                className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 dark:disabled:bg-slate-800 text-white disabled:text-slate-400 transition-all shadow-xs cursor-pointer disabled:cursor-not-allowed"
-                title="Send (Enter)"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          {isGenerating ? (
+            <button
+              type="button"
+              onClick={stopGenerating}
+              className="p-1.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-600 dark:text-rose-300 transition-colors cursor-pointer shrink-0"
+              title="Stop generation"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleSend()}
+              disabled={!prompt.trim() || !settings.aiEnabled}
+              className="p-1.5 rounded bg-slate-900 hover:bg-slate-800 text-white dark:bg-white/[0.08] dark:hover:bg-white/[0.14] dark:text-zinc-200 disabled:opacity-30 transition-all cursor-pointer shrink-0 shadow-2xs"
+              title={settings.aiEnabled ? "Send message (Enter)" : "AI is disabled in Settings"}
+            >
+              <CornerDownLeft className="w-3.5 h-3.5 stroke-[1.75]" />
+            </button>
+          )}
         </div>
-
-        {/* Warning if Cloud Provider configured without API Key */}
-        {!providerInfo.isLocal && !providerInfo.hasKey && (
-          <div className="mt-2 flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-900">
-            <div className="flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>API key for {providerInfo.providerName} is not configured.</span>
-            </div>
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                className="underline font-semibold hover:text-amber-800 dark:hover:text-amber-200 cursor-pointer"
-              >
-                Configure now
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Structured Task Extraction Review Modal */}
+      {/* Task Extraction Modal Dialog */}
       <TaskExtractionModal
         isOpen={isExtractModalOpen}
         onClose={() => setIsExtractModalOpen(false)}
         tasks={extractedTasks}
-        sourceTitle={extractBatchTitle || 'AI Assistant'}
+        sourceTitle={extractBatchTitle}
         onConfirm={handleConfirmExtractTasks}
       />
     </div>

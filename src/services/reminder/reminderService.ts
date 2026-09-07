@@ -214,7 +214,7 @@ class ReminderService {
 
     // 3. In-App Notification Toast
     if (this.onInAppNotifyFn) {
-      this.onInAppNotifyFn(`🔔 ${title}`);
+      this.onInAppNotifyFn(title);
     }
   }
 
@@ -264,7 +264,7 @@ class ReminderService {
 
     // 4. Trigger in-app notification feedback
     if (this.onInAppNotifyFn) {
-      this.onInAppNotifyFn(`🔔 ${title}`);
+      this.onInAppNotifyFn(title);
     }
 
     return { granted };

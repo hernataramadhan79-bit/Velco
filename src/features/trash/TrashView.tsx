@@ -22,9 +22,9 @@ export const TrashView: React.FC<TrashViewProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Trash Header Banner */}
-      <div className="p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between text-xs">
+      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2.5 text-amber-800 dark:text-amber-200">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>
             Items in Trash are preserved locally. You can restore them or delete them permanently.
           </span>
@@ -33,7 +33,7 @@ export const TrashView: React.FC<TrashViewProps> = ({
         {items.length > 0 && (
           <button
             onClick={onEmptyTrash}
-            className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors cursor-pointer shrink-0 ml-4"
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold transition-colors cursor-pointer shrink-0 ml-4 shadow-2xs"
           >
             Empty Trash
           </button>
@@ -52,7 +52,7 @@ export const TrashView: React.FC<TrashViewProps> = ({
               icon={Trash2}
               title="Trash is clean"
               description="Items deleted from your workstation will appear here before permanent removal."
-              badge="🗑️"
+              badgeIcon={Trash2}
             />
           ) : (
             items.map((item) => (

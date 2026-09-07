@@ -41,24 +41,24 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
   if (tags.length === 0) return null;
 
   return (
-    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-slate-50/60 dark:from-indigo-950/30 dark:via-blue-950/20 dark:to-slate-900/40 border border-indigo-200/70 dark:border-indigo-800/50 space-y-2.5 view-enter select-none">
+    <div className="p-3 rounded-xl bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] space-y-2.5 view-enter select-none shadow-xs">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
             <Sparkles className="w-3 h-3" />
           </div>
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-            AI Tag Recommendations
+          <span className="text-[11px] font-mono uppercase tracking-wider font-semibold text-slate-800 dark:text-zinc-200">
+            Suggested Tags
           </span>
-          <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
-            • Select which tags to attach
+          <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 hidden sm:inline">
+            [AI Recommendations]
           </span>
         </div>
 
         <button
           type="button"
           onClick={onDismiss}
-          className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
           title="Dismiss suggestions"
         >
           <X className="w-3.5 h-3.5" />
@@ -73,10 +73,10 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
             type="button"
             onClick={() => toggleTag(tag.name)}
             title={tag.reason ? `${tag.reason} (${tag.category})` : tag.category}
-            className={`px-2.5 py-1 rounded-xl text-xs font-medium flex items-center gap-1.5 border transition-all cursor-pointer ${
+            className={`px-2 py-0.8 rounded-md text-xs font-mono flex items-center gap-1.5 border transition-all cursor-pointer ${
               tag.selected
-                ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
-                : 'bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200/90 dark:border-slate-700/80 hover:border-indigo-400'
+                ? 'bg-blue-600 text-white border-blue-500 shadow-2xs'
+                : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-white/[0.06] hover:border-slate-300 dark:hover:border-white/[0.12]'
             }`}
           >
             {tag.selected ? (
@@ -90,7 +90,7 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
                 className={`text-[9px] px-1 py-0.2 rounded font-mono ${
                   tag.selected
                     ? 'bg-white/20 text-white'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
+                    : 'bg-slate-200/80 dark:bg-white/[0.08] text-slate-600 dark:text-zinc-400'
                 }`}
               >
                 existing
@@ -101,8 +101,8 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
       </div>
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between pt-1 border-t border-indigo-100 dark:border-indigo-900/40 text-xs">
-        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/[0.06] text-xs">
+        <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-400">
           {selectedCount} selected
         </span>
 
@@ -110,7 +110,7 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
           <button
             type="button"
             onClick={onDismiss}
-            className="px-2.5 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium cursor-pointer"
+            className="px-2.5 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 font-medium cursor-pointer"
           >
             Cancel
           </button>
@@ -118,9 +118,9 @@ export const TagRecommendationBar: React.FC<TagRecommendationBarProps> = ({
             type="button"
             onClick={handleApply}
             disabled={selectedCount === 0 || isApplying || isLoading}
-            className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+            className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-mono text-xs font-semibold flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
           >
-            <span>{isApplying ? 'Applying...' : `Apply ${selectedCount} Tags`}</span>
+            <span>{isApplying ? 'Applying...' : `Apply (${selectedCount})`}</span>
           </button>
         </div>
       </div>

@@ -52,7 +52,7 @@ export const LinksView: React.FC<LinksViewProps> = ({
       {/* Quick Link Input */}
       <form
         onSubmit={handleAddLink}
-        className="p-2.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-2"
+        className="p-2.5 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] shadow-2xs flex items-center gap-2"
       >
         <Link2 className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
         <input
@@ -60,12 +60,12 @@ export const LinksView: React.FC<LinksViewProps> = ({
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Paste a URL (e.g. https://github.com)..."
-          className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none"
+          className="flex-1 bg-transparent text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 focus:outline-none"
         />
         <button
           type="submit"
           disabled={!url.trim()}
-          className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-1"
+          className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Save Link</span>
@@ -83,7 +83,7 @@ export const LinksView: React.FC<LinksViewProps> = ({
               icon={Link2}
               title="No saved links yet"
               description="Paste and bookmark URLs to docs, articles, design files, or research repositories."
-              badge="🔗"
+              badgeIcon={Link2}
             />
           ) : (
             links.map((item) => (

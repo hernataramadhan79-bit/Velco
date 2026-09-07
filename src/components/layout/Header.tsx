@@ -2,7 +2,7 @@ import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
-import { Sun, Moon, Laptop, Plus, Zap, PanelLeft } from 'lucide-react';
+import { Sun, Moon, Laptop, PanelLeft, Search, Zap, Cpu } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 
 interface HeaderProps {
@@ -12,6 +12,7 @@ interface HeaderProps {
   onToggleFoundry?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  onOpenSearch?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = React.memo(({
@@ -21,22 +22,38 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   onToggleFoundry,
   isSidebarOpen = true,
   onToggleSidebar,
+  onOpenSearch,
 }) => {
   const { settings, updateSettings } = useSettings();
   const stagedCount = useContextStore((state) => state.stagedItems.length);
 
-  const viewTitles: Record<NavigationView, string> = {
-    inbox: 'Inbox',
-    tasks: 'Tasks',
-    notes: 'Notes',
-    files: 'Files & Attachments',
-    links: 'Bookmarks & Links',
-    tags: 'Tags & Taxonomy',
-    archive: 'Archive',
-    trash: 'Trash',
-    settings: 'Settings',
-    bridge: 'The Bridge',
+  const breadcrumbs: Record<NavigationView, string> = {
+    inbox: 'VELCO / WORKSTATION / INBOX',
+    playground: 'VELCO / PLAYGROUND',
+    workbench: 'VELCO / WORKBENCH',
+    bridge: 'VELCO / CONTEXT HUB',
+    tasks: 'VELCO / WORKSTATION / TASKS',
+    notes: 'VELCO / WORKSTATION / NOTES',
+    files: 'VELCO / WORKSTATION / FILES',
+    links: 'VELCO / WORKSTATION / LINKS',
+    tags: 'VELCO / TAXONOMY / TAGS',
+    archive: 'VELCO / ARCHIVE',
+    trash: 'VELCO / SYSTEM / TRASH',
+    settings: 'VELCO / SYSTEM / SETTINGS',
   };
+
+  const isLocal = ['ollama', 'lmstudio'].includes(settings.aiProvider);
+  const activeModel = isLocal
+    ? (settings.aiProvider === 'ollama' ? (settings.ollamaModel || 'qwen2.5:latest') : (settings.lmstudioModel || 'qwen2.5-coder'))
+    : (settings.aiProvider === 'openai' ? (settings.openaiModel || 'gpt-4o-mini') :
+       settings.aiProvider === 'gemini' ? (settings.geminiModel || 'gemini-1.5-flash') :
+       settings.aiProvider === 'openrouter' ? (settings.openrouterModel || 'openai/gpt-4o-mini') :
+       'cloud-model');
+
+  const activeProvider = settings.aiProvider === 'none' ? 'None' :
+    settings.aiProvider === 'ollama' ? 'Ollama' :
+    settings.aiProvider === 'lmstudio' ? 'LM Studio' :
+    settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
 
   const cycleTheme = () => {
     const themes: ('system' | 'light' | 'dark')[] = ['system', 'light', 'dark'];
@@ -45,70 +62,96 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   };
 
   return (
-    <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-6 flex items-center justify-between shrink-0 select-none">
-      <div className="flex items-center gap-3">
+    <header
+      data-tauri-drag-region
+      className="h-11 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#09090b] px-4 flex items-center justify-between shrink-0 select-none z-10 text-slate-800 dark:text-zinc-100"
+    >
+      {/* Left: Sidebar Toggle + Uppercase Mono Breadcrumb */}
+      <div className="flex items-center gap-3 min-w-0" data-tauri-drag-region>
         {!isSidebarOpen && onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+            className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
             title="Open sidebar (Ctrl+B)"
           >
-            <PanelLeft className="w-4 h-4" />
+            <PanelLeft className="w-3.5 h-3.5 stroke-[1.5]" />
           </button>
         )}
-        <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-          {viewTitles[currentView]}
-        </h1>
+
+        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400 dark:text-zinc-500 tracking-wider truncate" data-tauri-drag-region>
+          <span className="text-slate-800 dark:text-zinc-300 font-semibold">{breadcrumbs[currentView] || 'VELCO'}</span>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Center: Command Palette Trigger Pill */}
+      {onOpenSearch && (
+        <div className="hidden md:flex items-center justify-center flex-1 px-4 max-w-sm">
+          <button
+            onClick={onOpenSearch}
+            className="w-full flex items-center justify-between px-2.5 py-1 rounded-md bg-slate-100 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/[0.14] text-slate-500 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-300 text-xs transition-all cursor-pointer shadow-2xs"
+          >
+            <span className="flex items-center gap-2">
+              <Search className="w-3 h-3 stroke-[1.5]" />
+              <span className="text-[11px] text-slate-600 dark:text-zinc-400">Search workstation...</span>
+            </span>
+            <kbd className="px-1.5 py-0.2 rounded bg-slate-200/80 dark:bg-white/[0.04] border border-slate-300/80 dark:border-white/[0.07] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+              Ctrl+K
+            </kbd>
+          </button>
+        </div>
+      )}
+
+      {/* Right: Engine Telemetry & Actions */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* LM Studio Style Engine Telemetry Pill */}
+        {settings.aiEnabled && settings.aiProvider !== 'none' && (
+          <div
+            className="hidden lg:flex items-center gap-1.5 px-2 py-0.8 rounded-md bg-slate-100 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] text-[11px] font-mono text-slate-600 dark:text-zinc-400"
+            title={`Active Engine: ${activeProvider} (${activeModel})`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isLocal ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-blue-500'}`} />
+            <span className="text-slate-500 dark:text-zinc-500">{activeProvider}:</span>
+            <span className="text-slate-800 dark:text-zinc-300 truncate max-w-[130px]">{activeModel}</span>
+          </div>
+        )}
+
         <AIPrivacyBadge />
 
-        {/* Theme switcher */}
-        <button
-          onClick={cycleTheme}
-          className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-900 transition-colors cursor-pointer"
-          title={`Theme: ${settings.theme} (click to toggle)`}
-        >
-          {settings.theme === 'light' ? (
-            <Sun className="w-4 h-4 text-amber-500" />
-          ) : settings.theme === 'dark' ? (
-            <Moon className="w-4 h-4 text-blue-400" />
-          ) : (
-            <Laptop className="w-4 h-4 text-slate-400" />
-          )}
-        </button>
-
-        {/* The Foundry / Context Cart Workstation Toggle Button */}
+        {/* Studio / Workbench Toggle */}
         {onToggleFoundry && (
           <button
             onClick={onToggleFoundry}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono transition-all cursor-pointer ${
               isFoundryOpen
-                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 shadow-2xs'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:text-slate-800 dark:hover:text-slate-200 shadow-2xs'
+                ? 'bg-slate-200 dark:bg-white/[0.1] border-slate-300 dark:border-white/[0.2] text-slate-900 dark:text-zinc-100 shadow-xs font-semibold'
+                : 'bg-slate-100 dark:bg-[#141418] border-slate-200 dark:border-white/[0.07] text-slate-700 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-white/[0.14]'
             }`}
-            title="Toggle The Foundry (Ctrl+J)"
+            title="Toggle Studio Workbench (Ctrl+J)"
           >
-            <Zap className={`w-3.5 h-3.5 ${isFoundryOpen ? 'fill-indigo-600 dark:fill-indigo-400' : ''}`} />
-            <span>The Foundry</span>
+            <Zap className={`w-3 h-3 ${isFoundryOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
+            <span>Workbench</span>
             {stagedCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+              <span className="px-1.5 py-0.2 rounded bg-blue-600 text-white text-[10px] font-bold">
                 {stagedCount}
               </span>
             )}
           </button>
         )}
 
-        {onNewCaptureClick && currentView !== 'inbox' && (
-          <button
-            onClick={onNewCaptureClick}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Capture</span>
-          </button>
-        )}
+        {/* Theme Switcher */}
+        <button
+          onClick={cycleTheme}
+          className="p-1 rounded-md border border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 bg-slate-100 dark:bg-[#141418] hover:bg-slate-200/80 dark:hover:bg-[#1a1a20] transition-colors cursor-pointer"
+          title={`Theme: ${settings.theme} (click to toggle)`}
+        >
+          {settings.theme === 'light' ? (
+            <Sun className="w-3.5 h-3.5 text-amber-500 stroke-[1.5]" />
+          ) : settings.theme === 'dark' ? (
+            <Moon className="w-3.5 h-3.5 text-blue-400 stroke-[1.5]" />
+          ) : (
+            <Laptop className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400 stroke-[1.5]" />
+          )}
+        </button>
       </div>
     </header>
   );

@@ -32,7 +32,7 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
               icon={Archive}
               title="No archived items"
               description="Keep your active workspace tidy. Archived items stay fully searchable and can be restored anytime."
-              badge="📦"
+              badgeIcon={Archive}
             />
           ) : (
             items.map((item) => (

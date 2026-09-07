@@ -18,7 +18,7 @@ export const ViewSkeleton: React.FC = () => {
         {[1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
-            className="flex items-center gap-4 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/30"
+            className="flex items-center gap-4 p-4 rounded-xl border border-slate-200/60 dark:border-white/[0.07] bg-white/50 dark:bg-[#141418]/40"
           >
             <div className="skeleton w-10 h-10 rounded-xl shrink-0" />
             <div className="flex-1 space-y-2">
