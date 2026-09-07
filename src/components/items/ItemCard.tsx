@@ -10,16 +10,17 @@ import {
   ExternalLink,
   Sparkles,
   Paperclip,
-  Layers,
   Calendar,
   Clock,
   AlertCircle,
   Check,
   Archive,
+  Zap,
 } from 'lucide-react';
 import { Item } from '../../types/item';
 import { Badge } from '../common/Badge';
-import { useContextStore, estimateTokens } from '../../stores/contextStore';
+import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
+import { useSelectionStore } from '../../stores/selectionStore';
 import { formatTaskDueDate } from '../../utils/dateUtils';
 
 interface ItemCardProps {
@@ -45,6 +46,18 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onPermanentDelete,
   isTrashView = false,
 }) => {
+  // Global Selection state
+  const isSelected = useSelectionStore((state) => state.isItemSelected(item.id));
+  const toggleSelectItem = useSelectionStore((state) => state.toggleSelectItem);
+  const selectedCount = useSelectionStore((state) => state.selectedIds.size);
+  const hasAnySelection = selectedCount > 0;
+
+  // Dual-channel context status
+  const isChatContext = useContextStore((state) => state.isChatContext(item.id));
+  const isFoundryStaged = useContextStore((state) => state.isFoundryStaged(item.id));
+  const toggleChatContextItem = useContextStore((state) => state.toggleChatContextItem);
+  const toggleFoundryItem = useContextStore((state) => state.toggleFoundryItem);
+
   const getTypeIcon = () => {
     switch (item.type) {
       case 'task':
@@ -57,7 +70,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
         return <ImageIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />;
       case 'note':
       default:
-        return <FileText className="w-4 h-4 text-slate-600 dark:text-slate-400" />;
+        return <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />;
     }
   };
 
@@ -79,50 +92,68 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     day: 'numeric',
   });
 
-  const isStaged = useContextStore((state) => state.isStaged(item.id));
-  const toggleStage = useContextStore((state) => state.toggleStage);
-
-  const handleToggleStage = (e: React.MouseEvent | React.ChangeEvent) => {
+  const handleSelectionClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleStage({
-      id: item.id,
-      type: (item.type as any) || 'note',
-      title: item.title,
-      plainText: item.content || item.title,
-      estimatedTokens: estimateTokens(`${item.title}\n\n${item.content || ''}`),
-    });
+    toggleSelectItem(item.id);
   };
 
   return (
     <div
       onClick={() => onSelect(item)}
       className={`group relative rounded-xl p-4 transition-all duration-150 cursor-pointer select-none border w-full min-w-0 overflow-hidden ${
-        isStaged
-          ? 'bg-indigo-50/40 dark:bg-indigo-950/25 border-indigo-500/80 ring-2 ring-indigo-500/20 shadow-xs'
+        isSelected
+          ? 'bg-indigo-50/50 dark:bg-indigo-950/35 border-indigo-500/90 ring-2 ring-indigo-500/25 shadow-xs'
+          : isChatContext
+          ? 'bg-indigo-50/20 dark:bg-indigo-950/15 border-indigo-200/80 dark:border-indigo-800/80 hover:bg-slate-50/90 dark:hover:bg-slate-800/90 shadow-2xs hover:shadow-xs'
           : 'bg-white dark:bg-slate-900 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5 flex-1 min-w-0">
-          {/* If it's a task, show interactive checkbox */}
-          {item.type === 'task' && onToggleTask ? (
-            <input
-              type="checkbox"
-              checked={item.task?.completed || false}
-              onChange={(e) => {
-                e.stopPropagation();
-                onToggleTask(item.id, e.target.checked);
-              }}
-              className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-700 cursor-pointer"
-            />
-          ) : (
-            <div className="mt-0.5 p-1 rounded-md bg-slate-100 dark:bg-slate-800 shrink-0">
-              {getTypeIcon()}
-            </div>
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* 1. Dedicated Selection Checkbox (Visible on hover or when items are selected) */}
+          {!isTrashView && (
+            <button
+              type="button"
+              onClick={handleSelectionClick}
+              aria-label={isSelected ? 'Deselect item' : 'Select item'}
+              className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center cursor-pointer transition-all shrink-0 ${
+                isSelected
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                  : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 bg-white dark:bg-slate-800 text-transparent opacity-0 group-hover:opacity-100'
+              } ${hasAnySelection ? 'opacity-100' : ''}`}
+              title={isSelected ? 'Deselect item' : 'Select item for batch actions'}
+            >
+              <Check className={`w-3 h-3 stroke-[3] ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+            </button>
           )}
 
+          {/* 2. Consistent Type Logo for ALL items */}
+          <div className="mt-0.5 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700/60 shrink-0">
+            {getTypeIcon()}
+          </div>
+
+          {/* 3. Main Content: Title, Priority, Snippets, Attachments */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
+              {/* Task Completion Check Ring (Only for task items) */}
+              {item.type === 'task' && onToggleTask && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleTask(item.id, !item.task?.completed);
+                  }}
+                  className={`p-0.5 rounded-full border transition-all cursor-pointer shrink-0 ${
+                    item.task?.completed
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500 text-transparent hover:text-emerald-500/40'
+                  }`}
+                  title={item.task?.completed ? 'Mark task as pending' : 'Mark task as completed'}
+                >
+                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                </button>
+              )}
+
               <h3
                 className={`text-sm font-semibold truncate ${
                   item.type === 'task' && item.task?.completed
@@ -164,7 +195,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             {/* Visual preview for images & attachments */}
             {item.attachments && item.attachments.length > 0 && (
               <div className="mt-2.5 space-y-2">
-                {/* 1. If there is an image, show visual thumbnail */}
+                {/* Visual thumbnail for images */}
                 {(() => {
                   const imageAtt = item.attachments.find(
                     (a) => a.dataUrl && (a.mimeType.startsWith('image/') || a.fileName.match(/\.(png|jpe?g|webp|gif|svg)$/i))
@@ -184,7 +215,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                   return null;
                 })()}
 
-                {/* 2. File badge list */}
+                {/* File badge list */}
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                   {item.attachments.map((att, idx) => (
                     <div
@@ -261,45 +292,79 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           </div>
         </div>
 
-        {/* Right column: Date, Context Cart Staging, & Quick Actions */}
-        <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-          <div className="flex items-center gap-2">
-            {!isTrashView && (
-              <label
-                onClick={(e) => e.stopPropagation()}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium cursor-pointer transition-all ${
-                  isStaged
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 ring-1 ring-indigo-500/30'
-                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 opacity-0 group-hover:opacity-100'
-                }`}
-                title={isStaged ? 'Staged in Context Cart (Click to remove)' : 'Stage into Context Cart'}
+        {/* Right column: Context Indicators, Date, & Quick Actions */}
+        <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Active Context Badges */}
+            {isChatContext && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80"
+                title="Active in Landing AI Chat Context"
               >
-                <input
-                  type="checkbox"
-                  checked={isStaged}
-                  onChange={handleToggleStage}
-                  className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
-                />
-                <span className="text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1">
-                  <Layers className="w-2.5 h-2.5" />
-                  {isStaged ? 'Staged' : 'Stage'}
-                </span>
-              </label>
+                <Sparkles className="w-2.5 h-2.5 text-indigo-500" />
+                <span>Chat</span>
+              </span>
             )}
+
+            {isFoundryStaged && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80"
+                title="Active in The Foundry Staging"
+              >
+                <Zap className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                <span>Foundry</span>
+              </span>
+            )}
+
             <div className="text-[11px] text-slate-400 font-mono">{formattedDate}</div>
           </div>
 
-          {/* Action buttons (revealed on hover) */}
-          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity mt-2">
+          {/* Quick Context / Item Action Buttons (revealed on hover) */}
+          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
             {!isTrashView ? (
               <>
+                {/* 1-Click Quick Toggle for AI Chat Context */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleChatContextItem(itemToStagedItem(item));
+                  }}
+                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                    isChatContext
+                      ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60'
+                      : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title={isChatContext ? 'Remove from AI Chat Context' : 'Attach to AI Chat Context'}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+
+                {/* 1-Click Quick Toggle for The Foundry Context */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFoundryItem(itemToStagedItem(item));
+                  }}
+                  className={`p-1 rounded-md transition-colors cursor-pointer ${
+                    isFoundryStaged
+                      ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60'
+                      : 'text-slate-400 hover:text-amber-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title={isFoundryStaged ? 'Remove from The Foundry' : 'Send to The Foundry'}
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isFoundryStaged ? 'fill-current' : ''}`} />
+                </button>
+
                 {onToggleFavorite && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleFavorite(item.id);
                     }}
-                    className="p-1 rounded text-slate-400 hover:text-amber-500 transition-colors"
+                    className="p-1 rounded-md text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title={item.favorite ? 'Unfavorite' : 'Favorite'}
                   >
                     <Star
@@ -309,13 +374,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                     />
                   </button>
                 )}
+
                 {onToggleArchive && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleArchive(item.id);
                     }}
-                    className={`p-1 rounded transition-colors ${
+                    className={`p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
                       item.archived
                         ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700'
                         : 'text-slate-400 hover:text-blue-500'
@@ -325,13 +392,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                     <Archive className="w-3.5 h-3.5" />
                   </button>
                 )}
+
                 {onTrash && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onTrash(item.id);
                     }}
-                    className="p-1 rounded text-slate-400 hover:text-red-500 transition-colors"
+                    className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title="Move to Trash"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -342,22 +411,24 @@ export const ItemCard: React.FC<ItemCardProps> = ({
               <>
                 {onRestore && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onRestore(item.id);
                     }}
-                    className="px-2 py-0.5 rounded text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-medium"
+                    className="px-2 py-0.5 rounded-md text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
                   >
                     Restore
                   </button>
                 )}
                 {onPermanentDelete && (
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onPermanentDelete(item.id);
                     }}
-                    className="p-1 rounded text-slate-400 hover:text-red-500 transition-colors"
+                    className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title="Delete permanently"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

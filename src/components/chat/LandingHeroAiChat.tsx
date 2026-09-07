@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Send,
   Square,
@@ -9,7 +9,6 @@ import {
   Check,
   Copy,
   FileText,
-  CheckSquare,
   Layers,
   AlertCircle,
   Cpu,
@@ -18,14 +17,23 @@ import {
   ArrowRight,
   Loader2,
   ListTodo,
+  Paperclip,
+  X,
+  Search,
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
-import { useContextStore } from '../../stores/contextStore';
+import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
+import { useSelectionStore } from '../../stores/selectionStore';
 import { useSettings } from '../../stores/settingsStore';
 import { useItemStore } from '../../stores/itemStore';
 import { ChatMessage } from '../../types/ai';
 import { formatTaskBatchSource } from '../../types/item';
-import { StructuredTaskItem, extractStructuredTasks } from '../../services/ai/taskExtractor';
+import {
+  StructuredTaskItem,
+  extractStructuredTasks,
+  generateCleanBatchTitle,
+  smartHeuristicTaskExtraction,
+} from '../../services/ai/taskExtractor';
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { MarkdownViewer } from '../common/MarkdownViewer';
 import { db } from '../../services/database';
@@ -63,28 +71,58 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   onArtifactCreated,
   onOpenSettings,
 }) => {
-  const { stagedItems, totalTokens } = useContextStore();
-  const { settings } = useSettings();
+  const { messages, isGenerating, sendMessage, stopGenerating, clearChat } = useChatStore();
   const {
-    messages,
-    isGenerating,
-    sendMessage,
-    stopGenerating,
-    clearChat,
-  } = useChatStore();
+    chatContextItems,
+    addChatContextItem,
+    addChatContextItems,
+    removeChatContextItem,
+    clearChatContext,
+    totalChatTokens,
+  } = useContextStore();
+  const { items: allDbItems, refreshItems } = useItemStore();
+  const { selectedIds, clearSelection } = useSelectionStore();
+  const { settings } = useSettings();
 
   const [prompt, setPrompt] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedNoteId, setSavedNoteId] = useState<string | null>(null);
   const [extractingMsgId, setExtractingMsgId] = useState<string | null>(null);
   const [savedBatchMsgId, setSavedBatchMsgId] = useState<string | null>(null);
-  const [extractedTasks, setExtractedTasks] = useState<StructuredTaskItem[]>([]);
   const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
-  const [extractBatchTitle, setExtractBatchTitle] = useState('');
+  const [extractedTasks, setExtractedTasks] = useState<StructuredTaskItem[]>([]);
+  const [extractBatchTitle, setExtractBatchTitle] = useState<string>('');
+  const [isContextPickerOpen, setIsContextPickerOpen] = useState(false);
+  const [contextSearch, setContextSearch] = useState('');
+
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const providerInfo = getProviderDisplayName(settings);
-  const tokens = totalTokens();
+  const chatTokens = totalChatTokens();
+
+  // Auto-scroll chat to latest message on update
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages, isGenerating]);
+
+  // Click outside listener to close context picker
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setIsContextPickerOpen(false);
+      }
+    };
+    if (isContextPickerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isContextPickerOpen]);
 
   const handleSend = async (overridePrompt?: string) => {
     const textToSend = (overridePrompt ?? prompt).trim();
@@ -92,7 +130,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
 
     setPrompt('');
     const config = getLlmProviderConfig(settings);
-    await sendMessage(textToSend, stagedItems, config);
+    await sendMessage(textToSend, chatContextItems, config);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -111,8 +149,8 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const handleSaveAsNote = async (msg: ChatMessage) => {
     if (!msg.content.trim()) return;
     try {
-      const cleanText = msg.content.replace(/^[#\s*>-]+/, '').trim();
-      const firstLine = cleanText.split('\n')[0] || 'AI Note';
+      const cleanContent = msg.content.replace(/^[#\s*>-]+/, '').trim();
+      const firstLine = cleanContent.split('\n')[0] || 'AI Assistant Note';
       const title = firstLine.slice(0, 60) + (firstLine.length > 60 ? '...' : '');
 
       await db.createItem({
@@ -121,12 +159,13 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
         content: msg.content,
         source: 'landing_ai_chat',
       });
+      await refreshItems();
 
       setSavedNoteId(msg.id);
       setTimeout(() => setSavedNoteId(null), 2500);
 
       if (onArtifactCreated) {
-        onArtifactCreated(`Saved note: "${title}"`);
+        onArtifactCreated(`Created note "${title}"`);
       }
     } catch (err: any) {
       console.error('Failed to save note from chat:', err);
@@ -142,17 +181,36 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
       const baseUrl = llmConfig.config.base_url;
       const apiKey = (llmConfig.config as any).api_key || '';
 
-      const cleanText = msg.content.replace(/^[#\s*>-]+/, '').trim();
-      const firstLine = cleanText.split('\n')[0] || 'AI Assistant Tasks';
-      const batchTitle = firstLine.slice(0, 50) + (firstLine.length > 50 ? '...' : '');
+      const batchTitle = generateCleanBatchTitle(msg.content, 'Chat Action Items');
 
-      const tasks = await extractStructuredTasks(msg.content, model, baseUrl, apiKey);
+      let tasks: StructuredTaskItem[] = [];
+      try {
+        tasks = await extractStructuredTasks(msg.content, model, baseUrl, apiKey);
+      } catch (aiErr: any) {
+        console.warn('AI task extraction error, using heuristic parser:', aiErr);
+        tasks = smartHeuristicTaskExtraction(msg.content);
+      }
 
-      setExtractBatchTitle(batchTitle);
-      setExtractedTasks(tasks);
-      setIsExtractModalOpen(true);
+      if (!tasks || tasks.length === 0) {
+        tasks = smartHeuristicTaskExtraction(msg.content);
+      }
+
+      if (tasks && tasks.length > 0) {
+        setExtractBatchTitle(batchTitle);
+        setExtractedTasks(tasks);
+        setIsExtractModalOpen(true);
+      } else {
+        alert('No actionable tasks or to-do items could be identified in this message.');
+      }
     } catch (err: any) {
       console.error('Failed to extract tasks from chat:', err);
+      // Guarantee user is never stranded
+      const fallbackTasks = smartHeuristicTaskExtraction(msg.content);
+      if (fallbackTasks.length > 0) {
+        setExtractBatchTitle(generateCleanBatchTitle(msg.content, 'Chat Action Items'));
+        setExtractedTasks(fallbackTasks);
+        setIsExtractModalOpen(true);
+      }
     } finally {
       setExtractingMsgId(null);
     }
@@ -226,11 +284,11 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
             </span>
           </div>
 
-          {/* Staged Context Items Badge */}
-          {stagedItems.length > 0 && (
+          {/* Staged Chat Context Items Badge */}
+          {chatContextItems.length > 0 && (
             <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-mono text-[11px]">
               <Layers className="w-3 h-3 text-indigo-500" />
-              <span>{stagedItems.length} item ({tokens.toLocaleString()}t)</span>
+              <span>{chatContextItems.length} context ({chatTokens.toLocaleString()}t)</span>
             </div>
           )}
         </div>
@@ -428,9 +486,162 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
         </div>
       )}
 
+      {/* Attached Chat Context Bar */}
+      {chatContextItems.length > 0 && (
+        <div className="px-3.5 py-2 bg-indigo-50/50 dark:bg-indigo-950/30 border-t border-b border-indigo-100 dark:border-indigo-900/50 flex flex-wrap items-center gap-1.5 text-xs">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 mr-1">
+            <Layers className="w-3 h-3 text-indigo-500" />
+            <span>Chat Context ({chatTokens.toLocaleString()}t):</span>
+          </div>
+
+          {chatContextItems.map((item) => (
+            <div
+              key={item.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-indigo-200/80 dark:border-indigo-800/80 text-[11px] text-slate-700 dark:text-slate-200 shadow-2xs"
+            >
+              <span className="font-medium truncate max-w-[140px] sm:max-w-[200px]">{item.title}</span>
+              <button
+                type="button"
+                onClick={() => removeChatContextItem(item.id)}
+                className="p-0.5 text-slate-400 hover:text-rose-500 rounded transition-colors cursor-pointer"
+                title="Remove item from chat context"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={clearChatContext}
+            className="text-[10px] text-slate-400 hover:text-rose-500 font-medium px-1.5 py-0.5 rounded cursor-pointer transition-colors ml-auto"
+            title="Clear all attached chat context"
+          >
+            Clear All
+          </button>
+        </div>
+      )}
+
       {/* Prompt Input Dock */}
-      <div className="p-3.5">
+      <div className="p-3.5 relative">
+        {/* Inline Context Picker Popover */}
+        {isContextPickerOpen && (
+          <div
+            ref={pickerRef}
+            className="absolute bottom-full left-3.5 right-3.5 mb-2 p-3 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 z-30 view-enter"
+          >
+            <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800 text-xs">
+              <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Attach Items to AI Chat Context</span>
+              </div>
+              <button
+                onClick={() => setIsContextPickerOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Search filter input */}
+            <div className="relative mb-2">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={contextSearch}
+                onChange={(e) => setContextSearch(e.target.value)}
+                placeholder="Search notes, tasks, files to attach..."
+                className="w-full bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            {/* Filtered items list */}
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {allDbItems
+                .filter((item) => !item.archived && item.status !== 'trash' && !item.deletedAt)
+                .filter((item) =>
+                  !contextSearch
+                    ? true
+                    : item.title.toLowerCase().includes(contextSearch.toLowerCase()) ||
+                      (item.content && item.content.toLowerCase().includes(contextSearch.toLowerCase()))
+                )
+                .slice(0, 12)
+                .map((item) => {
+                  const isAttached = chatContextItems.some((c) => c.id === item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (isAttached) {
+                          removeChatContextItem(item.id);
+                        } else {
+                          addChatContextItem(itemToStagedItem(item));
+                        }
+                      }}
+                      className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer transition-all ${
+                        isAttached
+                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.type === 'task' ? (
+                          <ListTodo className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        ) : (
+                          <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        )}
+                        <span className="truncate max-w-[220px] sm:max-w-[320px]">{item.title}</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                          isAttached
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : 'border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        {isAttached && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
         <div className="relative flex items-center gap-2 p-1.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all shadow-inner">
+          {/* Quick Context Attach Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedIds.size > 0) {
+                const toAdd = allDbItems
+                  .filter((i) => selectedIds.has(i.id))
+                  .map(itemToStagedItem);
+                addChatContextItems(toAdd);
+                clearSelection();
+              } else {
+                setIsContextPickerOpen((prev) => !prev);
+              }
+            }}
+            className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-xs shrink-0 ${
+              isContextPickerOpen || chatContextItems.length > 0
+                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+            }`}
+            title={
+              selectedIds.size > 0
+                ? `Attach ${selectedIds.size} selected items to AI Chat`
+                : 'Attach context items to AI Chat'
+            }
+          >
+            <Paperclip className="w-3.5 h-3.5" />
+            {selectedIds.size > 0 && (
+              <span className="text-[10px] font-bold bg-indigo-600 text-white rounded-full px-1.5 py-0.2">
+                +{selectedIds.size}
+              </span>
+            )}
+          </button>
+
           <textarea
             ref={textareaRef}
             rows={1}
@@ -440,10 +651,12 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
             placeholder={
               isGenerating
                 ? 'AI is generating response...'
+                : chatContextItems.length > 0
+                ? `Ask about the ${chatContextItems.length} attached items... (Enter to send)`
                 : 'Ask anything, analyze notes, or schedule tasks... (Enter to send)'
             }
             disabled={isGenerating}
-            className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none resize-none text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 py-1.5 px-2.5 leading-relaxed max-h-32 min-h-[34px]"
+            className="w-full bg-transparent border-0 focus:ring-0 focus:outline-none resize-none text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 py-1.5 px-2 leading-relaxed max-h-32 min-h-[34px]"
           />
 
           <div className="flex items-center gap-1.5 shrink-0 pr-1">

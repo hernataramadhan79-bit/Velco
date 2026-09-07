@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Item } from '../../types/item';
 import { ItemCard } from './ItemCard';
 import { Inbox, ChevronDown, ChevronRight } from 'lucide-react';
+import { useSelectionStore } from '../../stores/selectionStore';
 
 interface ItemListProps {
   items: Item[];
@@ -28,6 +29,15 @@ export const ItemList: React.FC<ItemListProps> = ({
   emptyMessage = 'No items found in this view',
   groupByDate = false,
 }) => {
+  const selectedIds = useSelectionStore((state) => state.selectedIds);
+  const selectAll = useSelectionStore((state) => state.selectAll);
+  const clearSelection = useSelectionStore((state) => state.clearSelection);
+
+  const allIdsInList = items.map((i) => i.id);
+  const allSelectedInList =
+    allIdsInList.length > 0 && allIdsInList.every((id) => selectedIds.has(id));
+  const someSelectedInList = allIdsInList.some((id) => selectedIds.has(id));
+
   const [collapsedGroups, setCollapsedGroups] = useState<{ [key: string]: boolean }>({
     thisWeek: true,
     earlier: true,
@@ -70,10 +80,43 @@ export const ItemList: React.FC<ItemListProps> = ({
     );
   }
 
+  const renderSelectionBar = () => {
+    if (!someSelectedInList) return null;
+    return (
+      <div className="flex items-center justify-between px-3 py-2 text-xs text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-200/70 dark:border-indigo-800/70 mb-3 shadow-2xs">
+        <label className="flex items-center gap-2 cursor-pointer select-none font-medium">
+          <input
+            type="checkbox"
+            checked={allSelectedInList}
+            onChange={(e) => {
+              if (e.target.checked) {
+                selectAll(allIdsInList);
+              } else {
+                clearSelection();
+              }
+            }}
+            className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+          />
+          <span className="text-[11px]">
+            {allSelectedInList ? 'All items in this list selected' : `Select all ${items.length} items`}
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={clearSelection}
+          className="text-[11px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-medium cursor-pointer"
+        >
+          Deselect
+        </button>
+      </div>
+    );
+  };
+
   // If date grouping is not requested, render standard flat list
   if (!groupByDate) {
     return (
       <div className="space-y-2.5 w-full min-w-0">
+        {renderSelectionBar()}
         {items.map((item) => (
           <ItemCard
             key={item.id}
@@ -141,6 +184,7 @@ export const ItemList: React.FC<ItemListProps> = ({
 
   return (
     <div className="space-y-4 w-full min-w-0">
+      {renderSelectionBar()}
       {grouped.map((group) => {
         if (group.items.length === 0) return null;
         const isCollapsed = Boolean(collapsedGroups[group.key]);

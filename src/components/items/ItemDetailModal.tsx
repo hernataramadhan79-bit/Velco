@@ -29,11 +29,13 @@ import { formatTaskBatchSource } from '../../types/item';
 import {
   extractStructuredTasks,
   recommendCategorizedTags,
+  smartHeuristicTaskExtraction,
   StructuredTaskItem,
   TagRecommendation,
 } from '../../services/ai/taskExtractor';
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { TagRecommendationBar } from './TagRecommendationBar';
+import { getProviderDisplayName } from '../../utils/aiUtils';
 
 interface ItemDetailModalProps {
   item: Item | null;
@@ -139,18 +141,19 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   };
 
   const getAiConfig = () => {
+    const providerInfo = getProviderDisplayName(settings);
     let baseUrl: string | undefined;
     let apiKey: string | undefined;
-    let model = 'llama3';
+    let model = providerInfo.modelName;
 
     switch (settings.aiProvider) {
       case 'ollama':
         baseUrl = settings.ollamaUrl || 'http://localhost:11434';
-        model = settings.ollamaModel || 'llama3';
+        model = settings.ollamaModel || 'qwen2.5:latest';
         break;
       case 'lmstudio':
         baseUrl = settings.lmstudioUrl || 'http://localhost:1234/v1';
-        model = settings.lmstudioModel || 'local-model';
+        model = settings.lmstudioModel || 'qwen2.5-coder-7b-instruct';
         break;
       case 'openai':
         baseUrl = 'https://api.openai.com/v1';
@@ -182,11 +185,11 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     }
 
     return {
-      name: settings.aiProvider,
+      name: providerInfo.providerName,
       baseUrl,
       apiKey,
       model,
-      isLocal: ['ollama', 'lmstudio'].includes(settings.aiProvider),
+      isLocal: providerInfo.isLocal,
     };
   };
 
@@ -213,9 +216,16 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     try {
       const isOnline = await aiService.checkStatus(active.baseUrl, active.apiKey);
       if (!isOnline) {
+        // If extracting tasks while AI is unreachable, gracefully fallback to smart heuristics
+        if (action === 'extract_tasks') {
+          const structuredTasks = smartHeuristicTaskExtraction(textToProcess);
+          setExtractedTasks(structuredTasks);
+          setIsExtractionModalOpen(true);
+          return;
+        }
         throw new Error(
           active.isLocal
-            ? `AI provider (${active.name}) is unreachable at ${active.baseUrl || 'local endpoint'}. Make sure your local server is running.`
+            ? `AI provider (${active.name}) is unreachable at ${active.baseUrl || 'local endpoint'}. Make sure your local server (e.g. Ollama) is running.`
             : `Cloud AI provider (${active.name}) is not connected. Please verify your API key in Settings.`
         );
       }
@@ -874,7 +884,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 {/* AI Action Buttons */}
                 <div>
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Actions ({settings.aiProvider === 'lmstudio' ? 'LM Studio / OpenAI' : 'Ollama'})
+                    Actions ({getProviderDisplayName(settings).providerName})
                   </div>
               <div className="flex flex-wrap gap-2">
                 <button

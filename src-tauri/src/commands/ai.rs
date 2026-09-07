@@ -178,9 +178,11 @@ async fn call_llm(
 
     let raw_response = match provider_config {
         LlmProviderConfig::Ollama { base_url, model } => {
+            let ollama_client = crate::ai::ollama::LocalAiClient::new(Some(base_url.clone()), None);
+            let target_model = ollama_client.resolve_local_model(model).await;
             let url = format!("{}/api/generate", base_url.trim_end_matches('/'));
             let payload = serde_json::json!({
-                "model": model,
+                "model": target_model,
                 "prompt": format!("{}\n\n{}", system_prompt, user_prompt),
                 "stream": false,
                 "format": "json"
@@ -196,6 +198,17 @@ async fn call_llm(
             if !resp.status().is_success() {
                 let status = resp.status();
                 let err_text = resp.text().await.unwrap_or_default();
+                if status == reqwest::StatusCode::NOT_FOUND {
+                    let installed = ollama_client.list_models().await.unwrap_or_default();
+                    if !installed.is_empty() {
+                        return Err(format!(
+                            "Ollama error: Model '{}' not found. Installed models: [{}]. Please select one in Settings or run 'ollama pull {}'.",
+                            target_model,
+                            installed.join(", "),
+                            target_model
+                        ));
+                    }
+                }
                 return Err(format!("Ollama error (HTTP {}): {}", status, err_text));
             }
 
@@ -364,7 +377,8 @@ fn sanitize_json_control_chars(json: &str) -> String {
 
 /// Extracts JSON content from raw LLM output, unwrapping markdown fences and stripping chatter.
 fn extract_json_from_response(raw: &str) -> String {
-    let trimmed = raw.trim();
+    let clean_raw = crate::ai::ollama::strip_think_tags(raw);
+    let trimmed = clean_raw.trim();
 
     // 1. Unwrap markdown code blocks (```json ... ``` or ``` ... ```)
     let unwrapped = if let Some(start) = trimmed.find("```json") {

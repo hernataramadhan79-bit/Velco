@@ -18,6 +18,25 @@ pub struct DetailedModelInfo {
     pub description: Option<String>,
 }
 
+pub fn strip_think_tags(text: &str) -> String {
+    let mut result = text.to_string();
+    loop {
+        let lower = result.to_lowercase();
+        if let Some(start) = lower.find("<think>") {
+            if let Some(end) = lower[start..].find("</think>") {
+                let full_end = start + end + 8;
+                result.replace_range(start..full_end, "");
+            } else {
+                result.truncate(start);
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    result.trim().to_string()
+}
+
 pub struct LocalAiClient {
     base_url: String,
     api_key: Option<String>,
@@ -27,13 +46,13 @@ pub struct LocalAiClient {
 impl LocalAiClient {
     pub fn new(base_url: Option<String>, api_key: Option<String>) -> Self {
         let raw_url = base_url
-            .unwrap_or_else(|| "http://localhost:1234/v1".to_string())
+            .unwrap_or_else(|| "http://localhost:11434".to_string())
             .trim()
             .trim_end_matches('/')
             .to_string();
 
         let base_url = if raw_url.is_empty() {
-            "http://localhost:1234/v1".to_string()
+            "http://localhost:11434".to_string()
         } else {
             raw_url
         };
@@ -65,9 +84,10 @@ impl LocalAiClient {
 
         let is_cloud = self.base_url.starts_with("https://");
         let timeout_duration = if is_cloud {
-            std::time::Duration::from_millis(2000)
+            std::time::Duration::from_millis(3000)
         } else {
-            std::time::Duration::from_millis(600)
+            // Local timeout: 2500ms allows Windows dual-stack IPv6/IPv4 fallback without false negatives
+            std::time::Duration::from_millis(2500)
         };
 
         let health_client = reqwest::Client::builder()
@@ -75,17 +95,46 @@ impl LocalAiClient {
             .build()
             .unwrap_or_else(|_| self.client.clone());
 
-        // 1. Try OpenAI compatible /models or /v1/models
-        let openai_urls = if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
-            vec![format!("{}/models", self.base_url)]
-        } else {
-            vec![
-                format!("{}/v1/models", self.base_url),
-                format!("{}/models", self.base_url),
-            ]
-        };
+        let is_ollama_port = self.base_url.contains("11434") || (!is_cloud && !self.base_url.ends_with("/v1"));
 
-        for url in openai_urls {
+        let mut candidate_urls = Vec::new();
+
+        // 1. If Ollama or default local port, probe native Ollama tags/version endpoints first
+        if is_ollama_port {
+            let ollama_base = self.base_url.trim_end_matches("/v1");
+            candidate_urls.push(format!("{}/api/tags", ollama_base));
+            candidate_urls.push(format!("{}/api/version", ollama_base));
+            if ollama_base.contains("localhost") {
+                let alt = ollama_base.replace("localhost", "127.0.0.1");
+                candidate_urls.push(format!("{}/api/tags", alt));
+                candidate_urls.push(format!("{}/api/version", alt));
+            }
+        }
+
+        // 2. Probe OpenAI compatible /models or /v1/models (LM Studio, OpenRouter, etc.)
+        if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
+            candidate_urls.push(format!("{}/models", self.base_url));
+            if self.base_url.contains("localhost") {
+                candidate_urls.push(format!("{}/models", self.base_url.replace("localhost", "127.0.0.1")));
+            }
+        } else {
+            candidate_urls.push(format!("{}/v1/models", self.base_url));
+            candidate_urls.push(format!("{}/models", self.base_url));
+            if self.base_url.contains("localhost") {
+                candidate_urls.push(format!("{}/v1/models", self.base_url.replace("localhost", "127.0.0.1")));
+            }
+        }
+
+        // 3. Ollama fallback if not already checked
+        if !is_cloud && !is_ollama_port {
+            let ollama_base = self.base_url.trim_end_matches("/v1");
+            candidate_urls.push(format!("{}/api/tags", ollama_base));
+            if ollama_base.contains("localhost") {
+                candidate_urls.push(format!("{}/api/tags", ollama_base.replace("localhost", "127.0.0.1")));
+            }
+        }
+
+        for url in candidate_urls {
             let mut req = health_client.get(&url);
             if let Some(ref key) = self.api_key {
                 req = req.header("Authorization", format!("Bearer {}", key));
@@ -97,17 +146,6 @@ impl LocalAiClient {
             }
 
             if let Ok(resp) = req.send().await {
-                if resp.status().is_success() {
-                    return true;
-                }
-            }
-        }
-
-        // 2. Fallback to Ollama /api/tags (local only)
-        if !is_cloud {
-            let ollama_base = self.base_url.trim_end_matches("/v1");
-            let ollama_url = format!("{}/api/tags", ollama_base);
-            if let Ok(resp) = health_client.get(&ollama_url).send().await {
                 if resp.status().is_success() {
                     return true;
                 }
@@ -127,7 +165,37 @@ impl LocalAiClient {
             ]);
         }
 
-        // 1. Try OpenAI format /models
+        let is_cloud = self.base_url.starts_with("https://");
+        let is_ollama_port = self.base_url.contains("11434") || (!is_cloud && !self.base_url.ends_with("/v1"));
+
+        // 1. For Ollama endpoints, try native /api/tags first
+        if is_ollama_port {
+            let ollama_base = self.base_url.trim_end_matches("/v1");
+            let mut tags_urls = vec![format!("{}/api/tags", ollama_base)];
+            if ollama_base.contains("localhost") {
+                tags_urls.push(format!("{}/api/tags", ollama_base.replace("localhost", "127.0.0.1")));
+            }
+
+            for url in tags_urls {
+                if let Ok(resp) = self.client.get(&url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("models").and_then(|m| m.as_array()) {
+                                let models: Vec<String> = arr
+                                    .iter()
+                                    .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                                    .collect();
+                                if !models.is_empty() {
+                                    return Ok(models);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Try OpenAI format /models
         let openai_urls = if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
             vec![format!("{}/models", self.base_url)]
         } else {
@@ -167,7 +235,7 @@ impl LocalAiClient {
             }
         }
 
-        // 2. Fallback to Ollama format
+        // 3. Fallback to Ollama format
         let ollama_base = self.base_url.trim_end_matches("/v1");
         let ollama_url = format!("{}/api/tags", ollama_base);
         let resp = self
@@ -195,6 +263,49 @@ impl LocalAiClient {
         }
 
         Ok(vec![])
+    }
+
+    /// Intelligently resolves local model names against installed models.
+    /// Handles tag differences (e.g. "llama3" -> "llama3:latest" or "llama3.2:latest"),
+    /// family prefix matches, or seamlessly adopts the single installed model.
+    pub async fn resolve_local_model(&self, requested_model: &str) -> String {
+        let is_cloud = self.base_url.starts_with("https://");
+        if is_cloud || requested_model.trim().is_empty() {
+            return requested_model.to_string();
+        }
+
+        let installed = match self.list_models().await {
+            Ok(models) if !models.is_empty() => models,
+            _ => return requested_model.to_string(),
+        };
+
+        // 1. Exact match
+        if installed.iter().any(|m| m == requested_model) {
+            return requested_model.to_string();
+        }
+
+        // 2. Base name match without tag (e.g. "llama3" matches "llama3:latest" or "llama3:8b")
+        let req_base = requested_model.split(':').next().unwrap_or(requested_model);
+        for inst in &installed {
+            let inst_base = inst.split(':').next().unwrap_or(inst);
+            if req_base.eq_ignore_ascii_case(inst_base) {
+                return inst.clone();
+            }
+        }
+
+        // 3. Substring / family match (e.g. "qwen2.5" matches "qwen2.5-coder:7b" or "qwen2.5:7b")
+        for inst in &installed {
+            if inst.to_lowercase().contains(&req_base.to_lowercase()) {
+                return inst.clone();
+            }
+        }
+
+        // 4. If only 1 model is installed locally, seamlessly adopt it
+        if installed.len() == 1 {
+            return installed[0].clone();
+        }
+
+        requested_model.to_string()
     }
 
     pub async fn list_detailed_models(&self, provider: Option<&str>) -> Result<Vec<DetailedModelInfo>, String> {
@@ -544,6 +655,16 @@ impl LocalAiClient {
     }
 
     pub async fn generate(&self, model: &str, prompt: &str) -> Result<String, String> {
+        let is_json_request = prompt.contains("JSON") || prompt.contains("json");
+        let is_cloud = self.base_url.starts_with("https://");
+
+        // Resolve model for local providers (handling tag mismatches or installed alternatives)
+        let target_model = if !is_cloud {
+            self.resolve_local_model(model).await
+        } else {
+            model.to_string()
+        };
+
         // 1. Anthropic Claude
         if self.base_url.contains("anthropic.com") {
             let api_key = self
@@ -553,7 +674,7 @@ impl LocalAiClient {
 
             let messages_url = "https://api.anthropic.com/v1/messages";
             let payload = serde_json::json!({
-                "model": model,
+                "model": target_model,
                 "max_tokens": 2048,
                 "messages": [
                     { "role": "user", "content": prompt }
@@ -593,14 +714,14 @@ impl LocalAiClient {
                 .and_then(|item| item.get("text"))
                 .and_then(|t| t.as_str())
             {
-                return Ok(content.to_string());
+                return Ok(strip_think_tags(content));
             }
 
             return Err("Empty response received from Anthropic Claude".to_string());
         }
 
-        // 2. Try OpenAI chat completions
-        let chat_urls = if self.base_url.ends_with("/chat/completions") {
+        // 2. Try OpenAI chat completions (OpenAI, Gemini, OpenRouter, LM Studio, etc.)
+        let mut chat_urls = if self.base_url.ends_with("/chat/completions") {
             vec![self.base_url.clone()]
         } else if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
             vec![format!("{}/chat/completions", self.base_url)]
@@ -611,15 +732,23 @@ impl LocalAiClient {
             ]
         };
 
+        if !is_cloud && self.base_url.contains("localhost") {
+            chat_urls.push(format!("{}/v1/chat/completions", self.base_url.replace("localhost", "127.0.0.1")));
+        }
+
         for url in chat_urls {
-            let payload = serde_json::json!({
-                "model": model,
+            let mut payload = serde_json::json!({
+                "model": target_model,
                 "messages": [
                     { "role": "user", "content": prompt }
                 ],
-                "temperature": 0.7,
+                "temperature": 0.2,
                 "stream": false
             });
+
+            if is_json_request && !self.base_url.contains("anthropic.com") {
+                payload["response_format"] = serde_json::json!({ "type": "json_object" });
+            }
 
             let mut req = self.client.post(&url).json(&payload);
             if let Some(ref key) = self.api_key {
@@ -642,10 +771,10 @@ impl LocalAiClient {
                             .and_then(|m| m.get("content"))
                             .and_then(|s| s.as_str())
                         {
-                            return Ok(content.to_string());
+                            return Ok(strip_think_tags(content));
                         }
                     }
-                } else if self.base_url.starts_with("https://") || self.api_key.is_some() {
+                } else if is_cloud || self.api_key.is_some() {
                     // For cloud / authenticated providers, surface exact API error immediately
                     let err_text = resp.text().await.unwrap_or_default();
                     let err_msg = serde_json::from_str::<Value>(&err_text)
@@ -658,38 +787,56 @@ impl LocalAiClient {
         }
 
         // 3. Fallback to Ollama native /api/generate (local only)
-        if !self.base_url.starts_with("https://") {
+        if !is_cloud {
             let ollama_base = self.base_url.trim_end_matches("/v1");
-            let ollama_url = format!("{}/api/generate", ollama_base);
-            let payload = serde_json::json!({
-                "model": model,
-                "prompt": prompt,
-                "stream": false
-            });
-
-            let resp = self
-                .client
-                .post(&ollama_url)
-                .json(&payload)
-                .send()
-                .await
-                .map_err(|e| format!("AI request failed: {}", e))?;
-
-            if !resp.status().is_success() {
-                return Err(format!("AI server returned HTTP status {}", resp.status()));
+            let mut ollama_urls = vec![format!("{}/api/generate", ollama_base)];
+            if ollama_base.contains("localhost") {
+                ollama_urls.push(format!("{}/api/generate", ollama_base.replace("localhost", "127.0.0.1")));
             }
 
-            let val: Value = resp
-                .json()
-                .await
-                .map_err(|e| format!("Failed to parse AI output: {}", e))?;
+            for ollama_url in ollama_urls {
+                let mut payload = serde_json::json!({
+                    "model": target_model,
+                    "prompt": prompt,
+                    "stream": false
+                });
 
-            if let Some(content) = val.get("response").and_then(|r| r.as_str()) {
-                return Ok(content.to_string());
+                if is_json_request {
+                    payload["format"] = serde_json::json!("json");
+                }
+
+                if let Ok(resp) = self.client.post(&ollama_url).json(&payload).send().await {
+                    let status = resp.status();
+                    if status.is_success() {
+                        let val: Value = resp
+                            .json()
+                            .await
+                            .map_err(|e| format!("Failed to parse AI output: {}", e))?;
+
+                        if let Some(content) = val.get("response").and_then(|r| r.as_str()) {
+                            return Ok(strip_think_tags(content));
+                        }
+                    } else if status == reqwest::StatusCode::NOT_FOUND {
+                        let err_text = resp.text().await.unwrap_or_default();
+                        let installed = self.list_models().await.unwrap_or_default();
+                        if !installed.is_empty() {
+                            return Err(format!(
+                                "Model '{}' not found in local Ollama. Installed models: [{}]. Please select one in Settings or run 'ollama pull {}'.",
+                                target_model,
+                                installed.join(", "),
+                                target_model
+                            ));
+                        }
+                        return Err(format!("Ollama error (HTTP 404): {}. Please ensure the model is pulled.", err_text));
+                    } else {
+                        let err_text = resp.text().await.unwrap_or_default();
+                        return Err(format!("Ollama server returned HTTP status {}: {}", status, err_text));
+                    }
+                }
             }
         }
 
-        Err("No valid response received from AI server. Please verify your provider settings and model name.".to_string())
+        Err("No valid response received from AI server. Please verify your provider settings, ensure local server is running, and verify model name.".to_string())
     }
 
     pub async fn test_connection(
@@ -889,25 +1036,32 @@ impl LocalAiClient {
 
         // 3. Local engine (LM Studio / Ollama)
         if provider_id == "lmstudio" {
-            let url = format!("{}/models", self.base_url.trim_end_matches('/'));
-            if let Ok(resp) = test_client.get(&url).send().await {
-                if resp.status().is_success() {
-                    let val = resp.json::<Value>().await.ok();
-                    let models: Vec<String> = val
-                        .and_then(|v| v.get("data").and_then(|d| d.as_array()).cloned())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    return Ok(ConnectionTestResult {
-                        success: true,
-                        message: format!("LM Studio is running! {} models detected.", models.len()),
-                        models,
-                    });
+            let mut urls = vec![format!("{}/models", self.base_url.trim_end_matches('/'))];
+            if self.base_url.contains("localhost") {
+                urls.push(format!("{}/models", self.base_url.trim_end_matches('/').replace("localhost", "127.0.0.1")));
+            }
+
+            for url in urls {
+                if let Ok(resp) = test_client.get(&url).send().await {
+                    if resp.status().is_success() {
+                        let val = resp.json::<Value>().await.ok();
+                        let models: Vec<String> = val
+                            .and_then(|v| v.get("data").and_then(|d| d.as_array()).cloned())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        return Ok(ConnectionTestResult {
+                            success: true,
+                            message: format!("LM Studio is running! {} models detected.", models.len()),
+                            models,
+                        });
+                    }
                 }
             }
+
             return Ok(ConnectionTestResult {
                 success: false,
                 message: format!("Cannot reach LM Studio at {}. Make sure local server is running.", self.base_url),
@@ -917,23 +1071,29 @@ impl LocalAiClient {
 
         // Ollama
         let ollama_base = self.base_url.trim_end_matches("/v1");
-        let ollama_url = format!("{}/api/tags", ollama_base);
-        if let Ok(resp) = test_client.get(&ollama_url).send().await {
-            if resp.status().is_success() {
-                let val = resp.json::<Value>().await.ok();
-                let models: Vec<String> = val
-                    .and_then(|v| v.get("models").and_then(|m| m.as_array()).cloned())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                return Ok(ConnectionTestResult {
-                    success: true,
-                    message: format!("Ollama is running! {} models installed.", models.len()),
-                    models,
-                });
+        let mut ollama_urls = vec![format!("{}/api/tags", ollama_base)];
+        if ollama_base.contains("localhost") {
+            ollama_urls.push(format!("{}/api/tags", ollama_base.replace("localhost", "127.0.0.1")));
+        }
+
+        for ollama_url in ollama_urls {
+            if let Ok(resp) = test_client.get(&ollama_url).send().await {
+                if resp.status().is_success() {
+                    let val = resp.json::<Value>().await.ok();
+                    let models: Vec<String> = val
+                        .and_then(|v| v.get("models").and_then(|m| m.as_array()).cloned())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|m| m.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    return Ok(ConnectionTestResult {
+                        success: true,
+                        message: format!("Ollama is running! {} models installed.", models.len()),
+                        models,
+                    });
+                }
             }
         }
 

@@ -9,6 +9,7 @@ import { useTagStore } from '../../stores/tagStore';
 import { useContextStore } from '../../stores/contextStore';
 import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
+import { SelectionActionBar } from '../common/SelectionActionBar';
 import { ViewSkeleton } from '../common/ViewSkeleton';
 import { reminderService } from '../../services/reminder/reminderService';
 import { isTaskOverdue } from '../../utils/dateUtils';
@@ -142,7 +143,6 @@ export const AppLayout: React.FC = () => {
   const restoreItem = useItemStore((s) => s.restoreItem);
   const permanentDeleteItem = useItemStore((s) => s.permanentDeleteItem);
   const emptyTrash = useItemStore((s) => s.emptyTrash);
-  const importFilesFromPaths = useItemStore((s) => s.importFilesFromPaths);
   const refreshItems = useItemStore((s) => s.refreshItems);
   const refreshCounts = useItemStore((s) => s.refreshCounts);
   const notify = useItemStore((s) => s.notify);
@@ -515,6 +515,15 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Drag & Drop Indicator */}
       <DragDropIndicator isDragging={isGlobalDragging} />
+
+      {/* Global Multi-Select Action Bar */}
+      <SelectionActionBar
+        items={items}
+        onOpenFoundry={() => setIsFoundryOpen(true)}
+        onFocusChat={() => {
+          navigateToView('inbox');
+        }}
+      />
     </div>
   );
 };
