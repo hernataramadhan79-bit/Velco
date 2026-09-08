@@ -158,11 +158,33 @@ export const FilesView: React.FC<FilesViewProps> = ({
     const filesArray = Array.from(fileList);
     for (const file of filesArray) {
       let dataUrl: string | undefined = undefined;
+      let textContent: string | undefined = undefined;
       const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isText =
+        file.type.startsWith('text/') ||
+        file.type.includes('json') ||
+        file.type.includes('javascript') ||
+        /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|rs|html|css|xml|yaml|yml|sql|sh|bat|ini|env)$/i.test(
+          file.name
+        );
 
       if (isImage) {
         dataUrl = await createImageThumbnail(file, 480, 0.8);
-      } else if (file.size < 500 * 1024) {
+      } else if (isPdf && file.size <= 15 * 1024 * 1024) {
+        dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string) || undefined);
+          reader.onerror = () => resolve(undefined);
+          reader.readAsDataURL(file);
+        });
+      } else if (isText && file.size <= 5 * 1024 * 1024) {
+        try {
+          textContent = await file.text();
+        } catch {
+          /* fallback */
+        }
+      } else if (file.size < 2 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -171,10 +193,14 @@ export const FilesView: React.FC<FilesViewProps> = ({
         });
       }
 
+      const content =
+        textContent ||
+        `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${file.type}`;
+
       await onCapture({
         type: isImage ? 'image' : 'file',
         title: file.name,
-        content: `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${file.type}`,
+        content,
         attachments: [
           {
             id: crypto.randomUUID(),

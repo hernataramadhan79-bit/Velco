@@ -179,3 +179,29 @@ export interface SearchResult {
   snippet: string;
   rank: number;
 }
+
+/** Respon pratinjau konten berkas lengkap (teks, pdf, docx, code, dll.) */
+export interface FilePreviewContent {
+  attachmentId: string;
+  itemId: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  dataUrl?: string | null;
+  textContent?: string | null;
+  previewType:
+    | 'image'
+    | 'pdf'
+    | 'text'
+    | 'code'
+    | 'markdown'
+    | 'csv'
+    | 'docx'
+    | 'xlsx'
+    | 'audio'
+    | 'video'
+    | 'unsupported';
+  language?: string | null;
+  lineCount?: number | null;
+  charCount?: number | null;
+}

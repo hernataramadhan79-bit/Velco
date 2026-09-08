@@ -21,7 +21,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
   const [taskPriority, setTaskPriority] = useState<PriorityLevel>('medium');
   const [taskDueDate, setTaskDueDate] = useState<string>('');
   const [attachedFiles, setAttachedFiles] = useState<
-    { name: string; size: number; type: string; dataUrl?: string }[]
+    { name: string; size: number; type: string; dataUrl?: string; textContent?: string }[]
   >([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,9 +59,33 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
   const processFiles = async (files: File[]) => {
     for (const file of files) {
       let dataUrl: string | undefined = undefined;
-      if (file.type.startsWith('image/')) {
+      let textContent: string | undefined = undefined;
+      const isImg = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isText =
+        file.type.startsWith('text/') ||
+        file.type.includes('json') ||
+        file.type.includes('javascript') ||
+        /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|rs|html|css|xml|yaml|yml|sql|sh|bat|ini|env)$/i.test(
+          file.name
+        );
+
+      if (isImg) {
         dataUrl = await createImageThumbnail(file, 480, 0.8);
-      } else if (file.size < 500 * 1024) {
+      } else if (isPdf && file.size <= 15 * 1024 * 1024) {
+        dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string) || undefined);
+          reader.onerror = () => resolve(undefined);
+          reader.readAsDataURL(file);
+        });
+      } else if (isText && file.size <= 5 * 1024 * 1024) {
+        try {
+          textContent = await file.text();
+        } catch {
+          /* fallback */
+        }
+      } else if (file.size < 2 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -77,6 +101,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           size: file.size,
           type: file.type || 'application/octet-stream',
           dataUrl,
+          textContent,
         },
       ]);
     }
@@ -137,6 +162,9 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
         content = trimmed;
       } else if (attachedFiles.length > 0) {
         title = trimmed || attachedFiles[0].name;
+        if (!content && attachedFiles[0].textContent) {
+          content = attachedFiles[0].textContent;
+        }
       }
 
       const attachmentsPayload = attachedFiles.map((f) => ({
@@ -153,7 +181,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
       await onCapture({
         type: detectedType,
         title,
-        content: content || (detectedType === 'text' ? trimmed : ''),
+        content: content || (attachedFiles[0]?.textContent ? attachedFiles[0].textContent : (detectedType === 'text' ? trimmed : '')),
         task: taskMeta,
         link: linkMeta,
         attachments: attachmentsPayload,

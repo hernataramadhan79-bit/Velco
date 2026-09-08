@@ -41,6 +41,22 @@ pub struct SearchResult {
     pub rank: f64,
 }
 
+/// Respon pratinjau konten berkas lengkap (teks, pdf, docx, gambar, audio/video)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FilePreviewContent {
+    pub attachment_id: String,
+    pub item_id: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub file_size: i64,
+    pub data_url: Option<String>,
+    pub text_content: Option<String>,
+    pub preview_type: String, // "image" | "pdf" | "text" | "code" | "markdown" | "csv" | "docx" | "xlsx" | "audio" | "video" | "unsupported"
+    pub language: Option<String>,
+    pub line_count: Option<usize>,
+    pub char_count: Option<usize>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AttachmentSubRecord {
     pub id: String,
@@ -998,15 +1014,17 @@ pub fn import_files_from_paths(
             .save_attachment(&file_name, &file_bytes)
             .map_err(|e| format!("Failed to save attachment {}: {}", file_name, e))?;
 
-        // Small images (<= 3MB) get data URL for fast instant UI display
-        let data_url = if item_type == "image" && file_size <= 3 * 1024 * 1024 {
+        // Data URL generation: images up to 5MB, PDF up to 15MB
+        let data_url = if (item_type == "image" && file_size <= 5 * 1024 * 1024)
+            || (extension == "pdf" && file_size <= 15 * 1024 * 1024)
+        {
             let b64 = base64::engine::general_purpose::STANDARD.encode(&file_bytes);
             Some(format!("data:{};base64,{}", mime_type, b64))
         } else {
             None
         };
 
-        // Content summary & preview
+        // Content summary & preview: direct text extraction for text & docx files
         let mut content = format!(
             "File: {}\nSize: {:.1} KB\nType: {}\nPath: {}",
             file_name,
@@ -1015,12 +1033,21 @@ pub fn import_files_from_paths(
             path_str
         );
 
-        if (matches!(extension.as_str(), "txt" | "md" | "json" | "csv" | "log" | "rs" | "ts" | "js" | "html" | "css"))
-            && file_size <= 1024 * 1024
+        if matches!(
+            extension.as_str(),
+            "txt" | "md" | "json" | "csv" | "log" | "rs" | "ts" | "js" | "html" | "css" | "xml" | "yaml" | "yml" | "sql" | "py" | "sh" | "bat" | "env" | "ini"
+        ) && file_size <= 5 * 1024 * 1024
         {
             if let Ok(text) = String::from_utf8(file_bytes.clone()) {
-                content.push_str("\n\n--- Content Preview ---\n");
-                content.push_str(&text.chars().take(3000).collect::<String>());
+                content = text;
+            }
+        } else if extension == "docx" && file_size <= 15 * 1024 * 1024 {
+            if let Some(text) = extract_docx_text(&file_bytes) {
+                content = text;
+            }
+        } else if extension == "xlsx" && file_size <= 15 * 1024 * 1024 {
+            if let Some(text) = extract_xlsx_text(&file_bytes) {
+                content = text;
             }
         }
 
@@ -1054,4 +1081,360 @@ pub fn import_files_from_paths(
     }
 
     Ok(imported_items)
+}
+
+/// Helper: ekstrak teks dari file .docx (OpenXML) tanpa dependensi runtime eksternal
+pub fn extract_docx_text(bytes: &[u8]) -> Option<String> {
+    use std::io::Cursor;
+    let cursor = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    let mut file = archive.by_name("word/document.xml").ok()?;
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut file, &mut xml).ok()?;
+
+    let mut result = String::new();
+    let mut in_tag = false;
+    let mut tag_name = String::new();
+    let mut is_text_node = false;
+    let mut chars = xml.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '<' {
+            in_tag = true;
+            tag_name.clear();
+            while let Some(&next_c) = chars.peek() {
+                if next_c == '>' || next_c.is_whitespace() {
+                    break;
+                }
+                tag_name.push(chars.next().unwrap());
+            }
+            if tag_name == "w:p" || tag_name == "/w:p" {
+                if !result.ends_with('\n') && !result.is_empty() {
+                    result.push('\n');
+                }
+            }
+            is_text_node = tag_name == "w:t" || tag_name.starts_with("w:t ");
+        } else if c == '>' {
+            in_tag = false;
+        } else if !in_tag && is_text_node {
+            result.push(c);
+        }
+    }
+
+    let trimmed = result.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Helper: ekstrak teks dari file .xlsx (Excel)
+pub fn extract_xlsx_text(bytes: &[u8]) -> Option<String> {
+    use std::io::Cursor;
+    let cursor = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).ok()?;
+    let mut file = archive.by_name("xl/sharedStrings.xml").ok()?;
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut file, &mut xml).ok()?;
+
+    let mut result = String::new();
+    let mut in_t = false;
+    let mut tag = String::new();
+    let mut chars = xml.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '<' {
+            tag.clear();
+            while let Some(&next_c) = chars.peek() {
+                if next_c == '>' || next_c.is_whitespace() {
+                    break;
+                }
+                tag.push(chars.next().unwrap());
+            }
+            in_t = tag == "t";
+            if tag == "/si" {
+                result.push('\n');
+            }
+        } else if c == '>' {
+            // tag ended
+        } else if in_t {
+            result.push(c);
+        }
+    }
+    let trimmed = result.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// Ambil pratinjau konten berkas lengkap (teks, pdf, docx, xlsx, gambar, audio/video)
+#[tauri::command]
+pub fn get_attachment_preview(
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    attachment_id: String,
+) -> Result<FilePreviewContent, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Query lampiran dari DB
+    let query_res = conn.query_row(
+        "SELECT id, item_id, file_name, file_path, mime_type, file_size, data_url FROM attachments WHERE id = ?1",
+        params![attachment_id],
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        },
+    );
+
+    let (id, item_id, file_name, file_path, mime_type, file_size, db_data_url) = match query_res {
+        Ok(t) => t,
+        Err(_) => {
+            // Jika ID tidak ditemukan di attachments, mungkin ID adalah item_id
+            let alt_res = conn.query_row(
+                "SELECT id, item_id, file_name, file_path, mime_type, file_size, data_url FROM attachments WHERE item_id = ?1 LIMIT 1",
+                params![attachment_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, i64>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                    ))
+                },
+            );
+
+            match alt_res {
+                Ok(t) => t,
+                Err(_) => {
+                    // Fallback jika tidak ada lampiran sama sekali di tabel attachments
+                    let item_res = conn.query_row(
+                        "SELECT id, title, content, type FROM items WHERE id = ?1",
+                        params![attachment_id],
+                        |row| {
+                            Ok((
+                                row.get::<_, String>(0)?,
+                                row.get::<_, String>(1)?,
+                                row.get::<_, String>(2)?,
+                                row.get::<_, String>(3)?,
+                            ))
+                        },
+                    ).map_err(|e| format!("Attachment or item not found: {}", e))?;
+
+                    let (it_id, it_title, it_content, it_type) = item_res;
+                    let ext = std::path::Path::new(&it_title)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+
+                    let preview_type = match ext.as_str() {
+                        "md" | "markdown" => "markdown",
+                        "json" => "json",
+                        "csv" => "csv",
+                        "js" | "ts" | "jsx" | "tsx" | "py" | "rs" | "html" | "css" | "sql" => "code",
+                        _ => if it_type == "note" || !it_content.is_empty() { "text" } else { "unsupported" },
+                    };
+
+                    let line_count = Some(it_content.lines().count());
+                    let char_count = Some(it_content.chars().count());
+
+                    return Ok(FilePreviewContent {
+                        attachment_id: it_id.clone(),
+                        item_id: it_id,
+                        file_name: it_title,
+                        mime_type: "text/plain".to_string(),
+                        file_size: it_content.len() as i64,
+                        data_url: None,
+                        text_content: Some(it_content),
+                        preview_type: preview_type.to_string(),
+                        language: if ext.is_empty() { None } else { Some(ext) },
+                        line_count,
+                        char_count,
+                    });
+                }
+            }
+        }
+    };
+
+    let extension = std::path::Path::new(&file_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    // 1. Cek apakah berkas ada di disk
+    let candidate_paths = [
+        std::path::PathBuf::from(&file_path),
+        storage.attachments_dir().join(&file_path),
+        storage.attachments_dir().join(&file_name),
+    ];
+
+    let mut found_bytes: Option<Vec<u8>> = None;
+    for p in &candidate_paths {
+        if p.is_file() {
+            if let Ok(bytes) = std::fs::read(p) {
+                found_bytes = Some(bytes);
+                break;
+            }
+        }
+    }
+
+    // Jika belum ketemu di path langsung, scan folder attachments untuk UUID prefix
+    if found_bytes.is_none() {
+        if let Ok(entries) = std::fs::read_dir(storage.attachments_dir()) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() {
+                    let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if fname.ends_with(&format!("_{}", file_name)) || fname == file_name {
+                        if let Ok(bytes) = std::fs::read(&p) {
+                            found_bytes = Some(bytes);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Klasifikasi tipe pratinjau
+    let is_pdf = mime_type == "application/pdf" || extension == "pdf";
+    let is_image = mime_type.starts_with("image/") || matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp");
+    let is_docx = extension == "docx" || mime_type.contains("wordprocessingml");
+    let is_xlsx = extension == "xlsx" || mime_type.contains("spreadsheetml");
+    let is_markdown = matches!(extension.as_str(), "md" | "markdown");
+    let is_json = extension == "json" || mime_type == "application/json";
+    let is_csv = matches!(extension.as_str(), "csv" | "tsv");
+    let is_code = matches!(extension.as_str(), "js" | "jsx" | "ts" | "tsx" | "py" | "rs" | "go" | "java" | "c" | "cpp" | "h" | "hpp" | "html" | "css" | "scss" | "xml" | "yaml" | "yml" | "toml" | "ini" | "env" | "sql" | "sh" | "bash" | "bat" | "ps1");
+    let is_text = mime_type.starts_with("text/") || matches!(extension.as_str(), "txt" | "log" | "diff" | "patch" | "conf" | "properties");
+    let is_audio = mime_type.starts_with("audio/") || matches!(extension.as_str(), "mp3" | "wav" | "ogg" | "m4a" | "flac");
+    let is_video = mime_type.starts_with("video/") || matches!(extension.as_str(), "mp4" | "mkv" | "mov" | "webm");
+
+    let mut data_url = db_data_url;
+    let mut text_content: Option<String> = None;
+    let preview_type;
+
+    if is_pdf {
+        preview_type = "pdf".to_string();
+        if data_url.is_none() {
+            if let Some(bytes) = &found_bytes {
+                if bytes.len() <= 30 * 1024 * 1024 {
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    let url = format!("data:application/pdf;base64,{}", b64);
+                    // Cache kembali ke DB jika <= 10MB
+                    if bytes.len() <= 10 * 1024 * 1024 {
+                        let _ = conn.execute(
+                            "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
+                            params![url, id],
+                        );
+                    }
+                    data_url = Some(url);
+                }
+            }
+        }
+    } else if is_docx {
+        preview_type = "docx".to_string();
+        if let Some(bytes) = &found_bytes {
+            text_content = extract_docx_text(bytes);
+        }
+    } else if is_xlsx {
+        preview_type = "xlsx".to_string();
+        if let Some(bytes) = &found_bytes {
+            text_content = extract_xlsx_text(bytes);
+        }
+    } else if is_markdown || is_json || is_csv || is_code || is_text {
+        preview_type = if is_markdown {
+            "markdown".to_string()
+        } else if is_json {
+            "json".to_string()
+        } else if is_csv {
+            "csv".to_string()
+        } else if is_code {
+            "code".to_string()
+        } else {
+            "text".to_string()
+        };
+
+        if let Some(bytes) = &found_bytes {
+            if bytes.len() <= 10 * 1024 * 1024 {
+                text_content = Some(String::from_utf8_lossy(bytes).to_string());
+            }
+        } else if let Some(ref d_url) = data_url {
+            // Coba decode base64 dari data URL jika ada
+            if let Some(comma_pos) = d_url.find(',') {
+                let b64 = &d_url[comma_pos + 1..];
+                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                    text_content = Some(String::from_utf8_lossy(&bytes).to_string());
+                }
+            }
+        }
+
+        // Jika masih belum ada text_content, ambil dari content tabel items
+        if text_content.is_none() {
+            if let Ok(raw_content) = conn.query_row(
+                "SELECT content FROM items WHERE id = ?1",
+                params![item_id],
+                |r| r.get::<_, String>(0),
+            ) {
+                if !raw_content.trim().is_empty() {
+                    text_content = Some(raw_content);
+                }
+            }
+        }
+    } else if is_image {
+        preview_type = "image".to_string();
+        if data_url.is_none() {
+            if let Some(bytes) = &found_bytes {
+                if bytes.len() <= 15 * 1024 * 1024 {
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    let url = format!("data:{};base64,{}", mime_type, b64);
+                    data_url = Some(url);
+                }
+            }
+        }
+    } else if is_audio || is_video {
+        preview_type = if is_audio { "audio".to_string() } else { "video".to_string() };
+        if data_url.is_none() {
+            if let Some(bytes) = &found_bytes {
+                if bytes.len() <= 25 * 1024 * 1024 {
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                    let url = format!("data:{};base64,{}", mime_type, b64);
+                    data_url = Some(url);
+                }
+            }
+        }
+    } else {
+        preview_type = "unsupported".to_string();
+    }
+
+    let line_count = text_content.as_ref().map(|s| s.lines().count());
+    let char_count = text_content.as_ref().map(|s| s.chars().count());
+    let language = if extension.is_empty() { None } else { Some(extension) };
+
+    Ok(FilePreviewContent {
+        attachment_id: id,
+        item_id,
+        file_name,
+        mime_type,
+        file_size,
+        data_url,
+        text_content,
+        preview_type,
+        language,
+        line_count,
+        char_count,
+    })
 }

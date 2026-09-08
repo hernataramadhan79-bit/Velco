@@ -83,6 +83,7 @@ pub fn run() {
             commands::items::delete_item_permanent,
             commands::items::empty_trash,
             commands::items::import_files_from_paths,
+            commands::items::get_attachment_preview,
             // Tasks
             commands::tasks::toggle_task_complete,
             commands::tasks::reset_task_notified,

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Item, Tag, PriorityLevel, Attachment } from '../../types/item';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Item, Tag, PriorityLevel, Attachment, FilePreviewContent } from '../../types/item';
 import { Modal } from '../common/Modal';
 import { ItemTagsEditor } from './ItemTagsEditor';
 import { Badge } from '../common/Badge';
@@ -56,6 +56,103 @@ import {
 } from '../../utils/fileUtils';
 import { FileLightboxModal } from '../../features/files/FileLightboxModal';
 
+async function fetchAttachmentPreview(attachmentId: string): Promise<FilePreviewContent | null> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const res = await invoke<any>('get_attachment_preview', { attachmentId });
+    if (!res) return null;
+    return {
+      attachmentId: res.attachment_id,
+      itemId: res.item_id,
+      fileName: res.file_name,
+      mimeType: res.mime_type,
+      fileSize: res.file_size,
+      dataUrl: res.data_url,
+      textContent: res.text_content,
+      previewType: res.preview_type,
+      language: res.language,
+      lineCount: res.line_count,
+      charCount: res.char_count,
+    };
+  } catch (err) {
+    console.warn('Failed to fetch attachment preview:', err);
+    return null;
+  }
+}
+
+const CsvPreviewTable: React.FC<{ content: string }> = ({ content }) => {
+  const { headers, rows } = useMemo(() => {
+    const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length === 0) return { headers: [], rows: [] };
+
+    const parseLine = (line: string) => {
+      const res: string[] = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+          inQuotes = !inQuotes;
+        } else if (c === ',' && !inQuotes) {
+          res.push(cur.trim());
+          cur = '';
+        } else {
+          cur += c;
+        }
+      }
+      res.push(cur.trim());
+      return res;
+    };
+
+    const h = parseLine(lines[0]);
+    const r = lines.slice(1, 100).map(parseLine);
+    return { headers: h, rows: r };
+  }, [content]);
+
+  if (headers.length === 0) {
+    return <div className="text-slate-400 italic py-4 text-center">Empty CSV file</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-2xs">
+      <table className="min-w-full divide-y divide-slate-200 dark:divide-white/[0.08] text-xs font-mono">
+        <thead className="bg-slate-50 dark:bg-white/[0.04]">
+          <tr>
+            <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider w-10">
+              #
+            </th>
+            {headers.map((hdr, idx) => (
+              <th
+                key={idx}
+                className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-zinc-300 uppercase tracking-wider"
+              >
+                {hdr}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200 dark:divide-white/[0.05] bg-white dark:bg-[#101014]">
+          {rows.map((row, rIdx) => (
+            <tr
+              key={rIdx}
+              className={rIdx % 2 === 0 ? 'bg-transparent' : 'bg-slate-50/50 dark:bg-white/[0.02]'}
+            >
+              <td className="px-3 py-1.5 text-[10px] text-slate-400 dark:text-zinc-500 select-none">
+                {rIdx + 1}
+              </td>
+              {row.map((cell, cIdx) => (
+                <td key={cIdx} className="px-3 py-1.5 text-slate-800 dark:text-zinc-200 whitespace-nowrap">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 interface ItemDetailModalProps {
   item: Item | null;
   isOpen: boolean;
@@ -102,6 +199,10 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [selectedAttachmentIdx, setSelectedAttachmentIdx] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [filePreview, setFilePreview] = useState<FilePreviewContent | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [copiedPreviewText, setCopiedPreviewText] = useState(false);
+  const [textPreviewMode, setTextPreviewMode] = useState<'formatted' | 'raw'>('formatted');
 
   const hasFiles =
     item.type === 'file' ||
@@ -113,30 +214,111 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       ? item.attachments[Math.min(selectedAttachmentIdx, item.attachments.length - 1)]
       : undefined;
 
-  const activePreviewUrl =
-    activeAttachment?.dataUrl || item.thumbnailUrl || item.link?.previewImage || null;
+  useEffect(() => {
+    let isMounted = true;
+    if (!hasFiles) {
+      setFilePreview(null);
+      return;
+    }
+
+    const targetId = activeAttachment?.id || item.id;
+    setLoadingPreview(true);
+    fetchAttachmentPreview(targetId).then((res) => {
+      if (isMounted) {
+        setFilePreview(res);
+        setLoadingPreview(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasFiles, activeAttachment?.id, item.id]);
+
+  const handleCopyPreviewText = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedPreviewText(true);
+    setTimeout(() => setCopiedPreviewText(false), 2000);
+  };
 
   const activeFileName = activeAttachment?.fileName || item.title;
+  const rawExt = (activeFileName.split('.').pop() || '').toLowerCase();
   const activeMeta = getFileTypeMeta(activeFileName, activeAttachment?.mimeType);
+
+  const resolvedPreviewUrl =
+    filePreview?.dataUrl || activeAttachment?.dataUrl || item.thumbnailUrl || item.link?.previewImage || null;
+  const activePreviewUrl = resolvedPreviewUrl;
 
   const isImage =
     activeMeta.category === 'image' ||
     (activeAttachment && activeAttachment.mimeType.startsWith('image/')) ||
-    item.type === 'image';
+    item.type === 'image' ||
+    filePreview?.previewType === 'image';
 
   const isPdf =
     activeMeta.extension === 'PDF' ||
-    (activeAttachment && activeAttachment.mimeType.includes('pdf'));
+    filePreview?.previewType === 'pdf' ||
+    rawExt === 'pdf' ||
+    Boolean(activeAttachment && activeAttachment.mimeType.includes('pdf'));
 
   const isVideo =
     activeMeta.category === 'media' &&
     ((activeAttachment && activeAttachment.mimeType.startsWith('video/')) ||
-      ['mp4', 'webm', 'mov', 'mkv'].includes(activeMeta.extension.toLowerCase()));
+      ['mp4', 'webm', 'mov', 'mkv'].includes(rawExt));
 
   const isAudio =
     activeMeta.category === 'media' &&
     ((activeAttachment && activeAttachment.mimeType.startsWith('audio/')) ||
-      ['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(activeMeta.extension.toLowerCase()));
+      ['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(rawExt));
+
+  const isMarkdown =
+    filePreview?.previewType === 'markdown' ||
+    ['md', 'markdown'].includes(rawExt);
+
+  const isCsv =
+    filePreview?.previewType === 'csv' ||
+    ['csv', 'tsv'].includes(rawExt);
+
+  const isDocx =
+    filePreview?.previewType === 'docx' ||
+    rawExt === 'docx';
+
+  const isCode =
+    filePreview?.previewType === 'code' ||
+    ['js', 'jsx', 'ts', 'tsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'toml', 'ini', 'env', 'sql', 'sh', 'bash', 'bat', 'ps1', 'json'].includes(rawExt);
+
+  const resolvedTextContent =
+    filePreview?.textContent ||
+    (activeAttachment?.dataUrl?.startsWith('data:text/')
+      ? (() => {
+          try {
+            return decodeURIComponent(escape(atob(activeAttachment.dataUrl.split(',')[1] || '')));
+          } catch {
+            return null;
+          }
+        })()
+      : null) ||
+    (item.content && item.content.trim() && !item.content.startsWith('File: ') ? item.content : null);
+
+  const isTextLike =
+    !isImage &&
+    !isVideo &&
+    !isAudio &&
+    !isPdf &&
+    (filePreview?.previewType === 'text' ||
+      filePreview?.previewType === 'code' ||
+      filePreview?.previewType === 'markdown' ||
+      filePreview?.previewType === 'csv' ||
+      filePreview?.previewType === 'docx' ||
+      filePreview?.previewType === 'xlsx' ||
+      Boolean(resolvedTextContent) ||
+      isMarkdown ||
+      isCsv ||
+      isDocx ||
+      isCode ||
+      activeMeta.category === 'document' ||
+      activeMeta.category === 'code' ||
+      ['txt', 'log', 'diff', 'patch', 'conf', 'properties'].includes(rawExt));
 
   const lightboxItem = useMemo(
     () => ({
@@ -150,9 +332,9 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       tags: item.tags,
-      thumbnailUrl: activePreviewUrl,
+      thumbnailUrl: resolvedPreviewUrl,
     }),
-    [item, activeAttachment, activePreviewUrl]
+    [item, activeAttachment, resolvedPreviewUrl]
   );
 
   const handleDownloadAttachment = (att?: Attachment) => {
@@ -631,7 +813,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   </button>
                 )}
 
-                {activePreviewUrl && (
+                {resolvedPreviewUrl && (
                   <button
                     type="button"
                     onClick={() => handleDownloadAttachment()}
@@ -646,34 +828,64 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
             {/* Stage Body */}
             <div
-              className={`relative flex items-center justify-center min-h-[220px] max-h-[460px] overflow-auto p-4 ${
+              className={`relative flex items-center justify-center min-h-[220px] max-h-[500px] overflow-auto p-4 ${
                 isImage ? (isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in') : ''
               }`}
             >
-              {isImage && activePreviewUrl ? (
+              {loadingPreview ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 dark:text-zinc-500">
+                  <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
+                  <span className="text-xs font-medium">Loading file content preview...</span>
+                </div>
+              ) : isImage && resolvedPreviewUrl ? (
                 <img
-                  src={activePreviewUrl}
+                  src={resolvedPreviewUrl}
                   alt={activeFileName}
                   onClick={() => setIsLightboxOpen(true)}
                   className={`transition-all duration-200 select-none rounded-xl shadow-sm ${
                     isZoomed
                       ? 'max-w-none object-none'
-                      : 'max-w-full max-h-[420px] object-contain'
+                      : 'max-w-full max-h-[440px] object-contain'
                   }`}
                 />
-              ) : isPdf && activePreviewUrl ? (
-                <iframe
-                  src={activePreviewUrl}
-                  title={activeFileName}
-                  className="w-full h-[420px] rounded-xl border-0 shadow-inner bg-white"
-                />
-              ) : isVideo && activePreviewUrl ? (
+              ) : isPdf && resolvedPreviewUrl ? (
+                <div className="w-full h-[460px] flex flex-col rounded-xl overflow-hidden bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-white/[0.08] shadow-inner">
+                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-200/80 dark:bg-white/[0.06] border-b border-slate-300 dark:border-white/[0.08] text-xs shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-red-500" />
+                        <span>Interactive PDF Preview</span>
+                      </span>
+                      {activeAttachment?.fileSize ? (
+                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
+                          • {formatFileSize(activeAttachment.fileSize)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAttachment()}
+                        className="px-2.5 py-1 rounded text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/40 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>Download PDF</span>
+                      </button>
+                    </div>
+                  </div>
+                  <iframe
+                    src={resolvedPreviewUrl}
+                    title={activeFileName}
+                    className="w-full flex-1 border-0 bg-white"
+                  />
+                </div>
+              ) : isVideo && resolvedPreviewUrl ? (
                 <video
-                  src={activePreviewUrl}
+                  src={resolvedPreviewUrl}
                   controls
-                  className="w-full max-h-[420px] rounded-xl bg-black shadow-md"
+                  className="w-full max-h-[440px] rounded-xl bg-black shadow-md"
                 />
-              ) : isAudio && activePreviewUrl ? (
+              ) : isAudio && resolvedPreviewUrl ? (
                 <div className="w-full max-w-md p-6 flex flex-col items-center gap-4 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
                   <div className="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
                     <Music className="w-7 h-7" />
@@ -686,7 +898,108 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       {formatFileSize(activeAttachment?.fileSize)} • Audio File
                     </span>
                   </div>
-                  <audio src={activePreviewUrl} controls className="w-full" />
+                  <audio src={resolvedPreviewUrl} controls className="w-full" />
+                </div>
+              ) : isTextLike && resolvedTextContent ? (
+                /* Rich Text / Code / Markdown / CSV / Docx Content Stage */
+                <div className="w-full h-[460px] flex flex-col rounded-xl overflow-hidden bg-white dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] shadow-inner text-left">
+                  <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50 dark:bg-white/[0.04] border-b border-slate-200 dark:border-white/[0.08] text-xs shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border uppercase ${activeMeta.badgeBg} ${activeMeta.badgeText} ${activeMeta.badgeBorder}`}>
+                        {isMarkdown ? 'Markdown' : isCsv ? 'CSV Table' : isDocx ? 'Word Document' : isCode ? (filePreview?.language?.toUpperCase() || 'Code') : 'Text Preview'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
+                        {resolvedTextContent.split('\n').length} lines • {resolvedTextContent.length.toLocaleString()} chars
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {(isMarkdown || isCsv) && (
+                        <div className="flex items-center rounded-lg border border-slate-200 dark:border-white/[0.08] p-0.5 bg-slate-100 dark:bg-white/[0.05]">
+                          <button
+                            type="button"
+                            onClick={() => setTextPreviewMode('formatted')}
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                              textPreviewMode === 'formatted'
+                                ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 shadow-2xs font-semibold'
+                                : 'text-slate-500 dark:text-zinc-400'
+                            }`}
+                          >
+                            {isCsv ? 'Table' : 'Rendered'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTextPreviewMode('raw')}
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                              textPreviewMode === 'raw'
+                                ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-100 shadow-2xs font-semibold'
+                                : 'text-slate-500 dark:text-zinc-400'
+                            }`}
+                          >
+                            Raw
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPreviewText(resolvedTextContent)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/[0.08] flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Copy text to clipboard"
+                      >
+                        {copiedPreviewText ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Text</span>
+                          </>
+                        )}
+                      </button>
+
+                      {resolvedPreviewUrl && (
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment()}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-auto p-4 text-xs leading-relaxed">
+                    {isMarkdown && textPreviewMode === 'formatted' ? (
+                      <MarkdownViewer content={resolvedTextContent} />
+                    ) : isCsv && textPreviewMode === 'formatted' ? (
+                      <CsvPreviewTable content={resolvedTextContent} />
+                    ) : isDocx ? (
+                      <div className="space-y-3 font-sans text-sm text-slate-800 dark:text-zinc-200 max-w-3xl mx-auto py-2">
+                        {resolvedTextContent.split('\n').filter(Boolean).map((para, pIdx) => (
+                          <p key={pIdx} className="leading-relaxed">
+                            {para}
+                          </p>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Code / Plain Text Viewer with Line Numbers */
+                      <div className="flex font-mono text-[11px] leading-5">
+                        <div className="select-none pr-3 text-right text-slate-400 dark:text-zinc-600 border-r border-slate-200 dark:border-white/[0.08] min-w-[32px]">
+                          {resolvedTextContent.split('\n').map((_, lIdx) => (
+                            <div key={lIdx}>{lIdx + 1}</div>
+                          ))}
+                        </div>
+                        <div className="pl-3 flex-1 overflow-x-auto text-slate-800 dark:text-zinc-200 whitespace-pre">
+                          {resolvedTextContent}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 /* Fallback Document Card */
@@ -703,7 +1016,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     {formatFileSize(activeAttachment?.fileSize)} • {activeMeta.category.toUpperCase()} •{' '}
                     {activeAttachment?.mimeType || 'Standard file'}
                   </p>
-                  {activePreviewUrl && (
+                  {resolvedPreviewUrl && (
                     <button
                       type="button"
                       onClick={() => handleDownloadAttachment()}
