@@ -77,10 +77,10 @@ pub fn search_items_v2(
                  FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
                 '[]'
             ) as tags_json,
-            snippet(items_fts, 1, '<b>', '</b>', '...', 20) as snippet_text,
+            snippet(items_fts, 2, '<b>', '</b>', '...', 20) as snippet_text,
             bm25(items_fts) as rank
         FROM items_fts
-        JOIN items i ON items_fts.rowid = i.id
+        JOIN items i ON items_fts.item_id = i.id
         WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL
         ORDER BY bm25(items_fts)
         LIMIT 50
@@ -162,7 +162,7 @@ pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate:
 
     let mut item_ids: Vec<String> = Vec::new();
     if let Ok(mut stmt) = conn.prepare(
-        "SELECT i.id FROM items_fts JOIN items i ON items_fts.rowid = i.id WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL ORDER BY bm25(items_fts) LIMIT 50"
+        "SELECT i.id FROM items_fts JOIN items i ON items_fts.item_id = i.id WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL ORDER BY bm25(items_fts) LIMIT 50"
     ) {
         if let Ok(rows) = stmt.query_map(params![fts_query], |row| row.get::<_, String>(0)) {
             item_ids = rows.filter_map(|r| r.ok()).collect();

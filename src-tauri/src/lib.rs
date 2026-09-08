@@ -35,7 +35,7 @@ pub fn run() {
                 Code::Space,
             );
             let app_handle2 = app.handle().clone();
-            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
+            if let Err(e) = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
                 use tauri::Manager;
                 if let Some(window) = app_handle2.get_webview_window("spotlight") {
                     if window.is_visible().unwrap_or(false) {
@@ -53,7 +53,9 @@ pub fn run() {
                         let _ = window.set_focus();
                     }
                 }
-            })?;
+            }) {
+                eprintln!("Warning: failed to register global shortcut: {}", e);
+            }
 
             Ok(())
         })

@@ -1,22 +1,35 @@
 /// Jalankan migrasi skema database berbasis PRAGMA user_version.
 /// Setiap versi bersifat idempoten dan dieksekusi secara berurutan.
 pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
-    let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
 
     if version < 1 {
-        conn.execute_batch(MIGRATION_V1)?;
-        conn.execute_batch("PRAGMA user_version = 1")?;
+        // 1. Buat tabel-tabel inti
+        conn.execute_batch(MIGRATION_V1_TABLES)?;
+
+        // 2. Pastikan kolom-kolom baru tersedia pada database existing yang sudah memiliki tabel
+        let _ = conn.execute("ALTER TABLE items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE items ADD COLUMN trashed INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN notified INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE attachments ADD COLUMN data_url TEXT", []);
+        let _ = conn.execute("ALTER TABLE ai_metadata ADD COLUMN suggested_tags TEXT", []);
+
+        // 3. Buat indexes setelah kolom dipastikan ada
+        conn.execute_batch(MIGRATION_V1_INDEXES)?;
+
+        // Update versi skema
+        conn.pragma_update(None, "user_version", 1)?;
     }
     if version < 2 {
         conn.execute_batch(MIGRATION_V2)?;
-        conn.execute_batch("PRAGMA user_version = 2")?;
+        conn.pragma_update(None, "user_version", 2)?;
     }
 
     Ok(())
 }
 
-/// V1: Tabel inti + indexes
-const MIGRATION_V1: &str = r#"
+/// V1: Tabel inti
+const MIGRATION_V1_TABLES: &str = r#"
 CREATE TABLE IF NOT EXISTS items (
     id TEXT PRIMARY KEY NOT NULL,
     type TEXT NOT NULL,
@@ -107,8 +120,10 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
 );
+"#;
 
--- Indexes untuk performa
+/// V1: Indexes untuk performa
+const MIGRATION_V1_INDEXES: &str = r#"
 CREATE INDEX IF NOT EXISTS idx_items_type ON items(type);
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_items_deleted_at ON items(deleted_at);
@@ -121,49 +136,46 @@ CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
 CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_notified ON tasks(notified);
 CREATE INDEX IF NOT EXISTS idx_attachments_item ON attachments(item_id);
-
--- Migrasi kolom existing jika DB sudah ada (idempoten via IF NOT EXISTS tidak berlaku untuk kolom)
--- Gunakan IGNORE untuk kolom yang sudah ada
 "#;
 
-/// V2: FTS5 content-rowid mode + 3 trigger otomatis
+/// V2: FTS5 dengan item_id UNINDEXED (mendukung UUID) + 3 trigger otomatis
 const MIGRATION_V2: &str = r#"
--- Hapus FTS lama jika ada (skema berbeda)
+-- Hapus FTS lama jika ada
+DROP TRIGGER IF EXISTS items_ai;
+DROP TRIGGER IF EXISTS items_ad;
+DROP TRIGGER IF EXISTS items_au;
 DROP TABLE IF EXISTS items_fts;
 
--- FTS5 dengan content-rowid mode: rowid = items.id
+-- FTS5 dengan item_id UNINDEXED untuk menyimpan UUID
 CREATE VIRTUAL TABLE items_fts USING fts5(
+    item_id UNINDEXED,
     title,
     content,
-    content='items',
-    content_rowid='id',
     tokenize='porter unicode61 remove_diacritics 1'
 );
 
 -- Rebuild index dari data existing
-INSERT INTO items_fts(rowid, title, content)
+INSERT INTO items_fts(item_id, title, content)
 SELECT id, title, content FROM items;
 
--- Trigger AFTER INSERT: tambah ke FTS
+-- Trigger AFTER INSERT: tambah ke FTS otomatis
 CREATE TRIGGER IF NOT EXISTS items_ai
 AFTER INSERT ON items BEGIN
-    INSERT INTO items_fts(rowid, title, content)
+    INSERT INTO items_fts(item_id, title, content)
     VALUES (new.id, new.title, new.content);
 END;
 
--- Trigger AFTER DELETE: hapus dari FTS
+-- Trigger AFTER DELETE: hapus dari FTS otomatis
 CREATE TRIGGER IF NOT EXISTS items_ad
 AFTER DELETE ON items BEGIN
-    INSERT INTO items_fts(items_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
+    DELETE FROM items_fts WHERE item_id = old.id;
 END;
 
--- Trigger AFTER UPDATE: update FTS
+-- Trigger AFTER UPDATE: update FTS otomatis
 CREATE TRIGGER IF NOT EXISTS items_au
 AFTER UPDATE ON items BEGIN
-    INSERT INTO items_fts(items_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
-    INSERT INTO items_fts(rowid, title, content)
+    DELETE FROM items_fts WHERE item_id = old.id;
+    INSERT INTO items_fts(item_id, title, content)
     VALUES (new.id, new.title, new.content);
 END;
 "#;
