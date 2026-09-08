@@ -84,6 +84,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     toggleSelectItem(item.id);
   };
 
+  const thumbnail =
+    item.thumbnailUrl ||
+    item.attachments?.find(
+      (a) =>
+        a.mimeType?.startsWith('image/') ||
+        a.fileName?.match(/\.(png|jpe?g|webp|gif|svg)$/i)
+    )?.dataUrl ||
+    item.link?.previewImage;
+
   return (
     <div
       onClick={() => onSelect(item)}
@@ -113,10 +122,21 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             </button>
           )}
 
-          {/* 2. Type Icon */}
-          <div className="mt-0.5 p-1 rounded-md bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] shrink-0">
-            {getTypeIcon()}
-          </div>
+          {/* 2. Type Icon or Image Thumbnail */}
+          {thumbnail ? (
+            <div className="mt-0.5 w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-zinc-800 shrink-0 shadow-2xs">
+              <img
+                src={thumbnail}
+                alt={item.title}
+                loading="lazy"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              />
+            </div>
+          ) : (
+            <div className="mt-0.5 p-1 rounded-md bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] shrink-0">
+              {getTypeIcon()}
+            </div>
+          )}
 
           {/* 3. Main Content: Title, Priority, Snippets, Attachments */}
           <div className="flex-1 min-w-0">

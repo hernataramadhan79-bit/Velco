@@ -76,6 +76,7 @@ export interface Item {
   task?: TaskMetadata | null;
   link?: LinkMetadata | null;
   attachments?: Attachment[];
+  thumbnailUrl?: string | null;
   aiMetadata?: AIMetadata | null;
 }
 
@@ -165,6 +166,7 @@ export interface ItemSummary {
   link?: LinkMetadata | null;
   attachments?: Attachment[];
   attachmentsCount?: number;
+  thumbnailUrl?: string | null;
   aiMetadata?: AIMetadata | null;
 }
 

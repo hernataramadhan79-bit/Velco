@@ -134,6 +134,7 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
             task: None,
             link: None,
             attachments_count: 0,
+            thumbnail_url: None,
         },
         snippet: snippet_text,
         rank,

@@ -111,6 +111,7 @@ function mapToItemSummary(r: any): ItemSummary {
       createdAt: a.created_at ?? a.createdAt ?? '',
     })),
     attachmentsCount: r.attachments_count ?? (r.attachments ? r.attachments.length : 0),
+    thumbnailUrl: r.thumbnail_url ?? r.thumbnailUrl ?? null,
     aiMetadata: r.ai_metadata ?? r.aiMetadata,
   };
 }

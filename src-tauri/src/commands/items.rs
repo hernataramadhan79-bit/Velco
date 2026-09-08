@@ -30,6 +30,7 @@ pub struct ItemSummary {
     pub task: Option<TaskSubRecord>,
     pub link: Option<LinkSubRecord>,
     pub attachments_count: i64,
+    pub thumbnail_url: Option<String>,
 }
 
 /// Hasil pencarian dengan snippet dan ranking BM25
@@ -330,7 +331,11 @@ pub fn get_items_summary(
             ) as link_json,
             (
                 SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id
-            ) as attachments_count
+            ) as attachments_count,
+            COALESCE(
+                (SELECT att.data_url FROM attachments att WHERE att.item_id = i.id AND att.mime_type LIKE 'image/%' AND att.data_url IS NOT NULL LIMIT 1),
+                (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
+            ) as thumbnail_url
         FROM items i
         WHERE {}{}
         ORDER BY i.created_at DESC
@@ -347,6 +352,7 @@ pub fn get_items_summary(
         let task_json: Option<String> = row.get(10).ok();
         let link_json: Option<String> = row.get(11).ok();
         let attachments_count: i64 = row.get(12).unwrap_or(0);
+        let thumbnail_url: Option<String> = row.get(13).ok();
 
         let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
         let task: Option<TaskSubRecord> = task_json.and_then(|s| serde_json::from_str(&s).ok());
@@ -366,6 +372,7 @@ pub fn get_items_summary(
             task,
             link,
             attachments_count,
+            thumbnail_url,
         })
     }).map_err(|e| e.to_string())?;
 
