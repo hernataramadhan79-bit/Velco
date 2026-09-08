@@ -246,14 +246,25 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const activeMeta = getFileTypeMeta(activeFileName, activeAttachment?.mimeType);
 
   const resolvedPreviewUrl =
-    filePreview?.dataUrl || activeAttachment?.dataUrl || item.thumbnailUrl || item.link?.previewImage || null;
+    filePreview?.dataUrl && filePreview.dataUrl.trim() !== ''
+      ? filePreview.dataUrl
+      : activeAttachment?.dataUrl && activeAttachment.dataUrl.trim() !== ''
+      ? activeAttachment.dataUrl
+      : item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
+      ? item.thumbnailUrl
+      : item.link?.previewImage && item.link.previewImage.trim() !== ''
+      ? item.link.previewImage
+      : null;
   const activePreviewUrl = resolvedPreviewUrl;
 
   const isImage =
     activeMeta.category === 'image' ||
-    (activeAttachment && activeAttachment.mimeType.startsWith('image/')) ||
+    (activeAttachment &&
+      (activeAttachment.mimeType.startsWith('image/') ||
+        /\.(png|jpe?g|webp|gif|svg|bmp|ico|avif)$/i.test(activeAttachment.fileName))) ||
     item.type === 'image' ||
-    filePreview?.previewType === 'image';
+    filePreview?.previewType === 'image' ||
+    ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico', 'avif'].includes(rawExt);
 
   const isPdf =
     activeMeta.extension === 'PDF' ||

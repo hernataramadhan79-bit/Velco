@@ -349,7 +349,23 @@ pub fn get_items_summary(
                 SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id
             ) as attachments_count,
             COALESCE(
-                (SELECT att.data_url FROM attachments att WHERE att.item_id = i.id AND att.mime_type LIKE 'image/%' AND att.data_url IS NOT NULL LIMIT 1),
+                (
+                    SELECT att.data_url FROM attachments att 
+                    WHERE att.item_id = i.id 
+                      AND (
+                          att.mime_type LIKE 'image/%' 
+                          OR att.file_name LIKE '%.png' 
+                          OR att.file_name LIKE '%.jpg' 
+                          OR att.file_name LIKE '%.jpeg' 
+                          OR att.file_name LIKE '%.webp' 
+                          OR att.file_name LIKE '%.gif'
+                          OR att.file_name LIKE '%.svg'
+                          OR att.file_name LIKE '%.bmp'
+                      )
+                      AND att.data_url IS NOT NULL 
+                      AND att.data_url != '' 
+                    LIMIT 1
+                ),
                 (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
             ) as thumbnail_url
         FROM items i
@@ -698,8 +714,14 @@ pub fn create_item(
             let mut checksum = att.checksum.clone();
             let mut file_size = att.file_size;
 
+            let mut final_data_url = match &att.data_url {
+                Some(s) if s.trim().is_empty() => None,
+                Some(s) => Some(s.clone()),
+                None => None,
+            };
+
             // If data_url contains base64 data, decode and save to attachments folder on disk
-            if let Some(ref data_url) = att.data_url {
+            if let Some(ref data_url) = final_data_url {
                 if let Some(comma_pos) = data_url.find(',') {
                     let b64_str = &data_url[comma_pos + 1..];
                     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64_str) {
@@ -710,11 +732,35 @@ pub fn create_item(
                         }
                     }
                 }
+            } else {
+                // If data_url is missing/empty, but the file exists on disk and is an image:
+                let ext = std::path::Path::new(&att.file_name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let is_image = att.mime_type.starts_with("image/") || matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif" | "svg" | "bmp");
+                if is_image {
+                    let candidate = std::path::Path::new(&file_path);
+                    if candidate.is_file() {
+                        if let Ok(bytes) = std::fs::read(candidate) {
+                            if bytes.len() <= 15 * 1024 * 1024 {
+                                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                                let mime = if att.mime_type.starts_with("image/") {
+                                    att.mime_type.clone()
+                                } else {
+                                    format!("image/{}", if ext == "jpg" { "jpeg" } else { &ext })
+                                };
+                                final_data_url = Some(format!("data:{};base64,{}", mime, b64));
+                            }
+                        }
+                    }
+                }
             }
 
             conn.execute(
                 "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![att_id, id, att.file_name, file_path, att.mime_type, file_size, checksum, created_at, att.data_url],
+                params![att_id, id, att.file_name, file_path, att.mime_type, file_size, checksum, created_at, final_data_url],
             ).map_err(|e| e.to_string())?;
 
             saved_attachments.push(AttachmentSubRecord {
@@ -725,7 +771,7 @@ pub fn create_item(
                 file_size,
                 checksum,
                 created_at,
-                data_url: att.data_url.clone(),
+                data_url: final_data_url,
             });
         }
     }
@@ -1014,9 +1060,9 @@ pub fn import_files_from_paths(
             .save_attachment(&file_name, &file_bytes)
             .map_err(|e| format!("Failed to save attachment {}: {}", file_name, e))?;
 
-        // Data URL generation: images up to 5MB, PDF up to 15MB
-        let data_url = if (item_type == "image" && file_size <= 5 * 1024 * 1024)
-            || (extension == "pdf" && file_size <= 15 * 1024 * 1024)
+        // Data URL generation: images up to 20MB, PDF up to 20MB
+        let data_url = if (item_type == "image" && file_size <= 20 * 1024 * 1024)
+            || (extension == "pdf" && file_size <= 20 * 1024 * 1024)
         {
             let b64 = base64::engine::general_purpose::STANDARD.encode(&file_bytes);
             Some(format!("data:{};base64,{}", mime_type, b64))
@@ -1329,7 +1375,7 @@ pub fn get_attachment_preview(
 
     if is_pdf {
         preview_type = "pdf".to_string();
-        if data_url.is_none() {
+        if data_url.is_none() || data_url.as_deref() == Some("") {
             if let Some(bytes) = &found_bytes {
                 if bytes.len() <= 30 * 1024 * 1024 {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
@@ -1396,18 +1442,30 @@ pub fn get_attachment_preview(
         }
     } else if is_image {
         preview_type = "image".to_string();
-        if data_url.is_none() {
+        if data_url.is_none() || data_url.as_deref() == Some("") {
             if let Some(bytes) = &found_bytes {
-                if bytes.len() <= 15 * 1024 * 1024 {
+                if bytes.len() <= 20 * 1024 * 1024 {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-                    let url = format!("data:{};base64,{}", mime_type, b64);
+                    let safe_mime = if mime_type.starts_with("image/") {
+                        mime_type.clone()
+                    } else {
+                        format!("image/{}", if extension == "jpg" { "jpeg" } else { &extension })
+                    };
+                    let url = format!("data:{};base64,{}", safe_mime, b64);
+                    // Cache kembali ke DB jika <= 5MB agar list view & modal langsung punya thumbnail
+                    if bytes.len() <= 5 * 1024 * 1024 {
+                        let _ = conn.execute(
+                            "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
+                            params![url, id],
+                        );
+                    }
                     data_url = Some(url);
                 }
             }
         }
     } else if is_audio || is_video {
         preview_type = if is_audio { "audio".to_string() } else { "video".to_string() };
-        if data_url.is_none() {
+        if data_url.is_none() || data_url.as_deref() == Some("") {
             if let Some(bytes) = &found_bytes {
                 if bytes.len() <= 25 * 1024 * 1024 {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);

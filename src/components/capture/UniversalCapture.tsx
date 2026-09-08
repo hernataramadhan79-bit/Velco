@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { CreateItemInput, ItemType, PriorityLevel } from '../../types/item';
 import { DueDatePicker } from '../tasks/DueDatePicker';
-import { createImageThumbnail } from '../../utils/fileUtils';
+import { createImageThumbnail, inferMimeType, isImageFile } from '../../utils/fileUtils';
 
 interface UniversalCaptureProps {
   onCapture: (input: CreateItemInput) => Promise<any>;
@@ -33,7 +33,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
   const detectedType: ItemType = React.useMemo(() => {
     if (forcedType) return forcedType;
     if (attachedFiles.length > 0) {
-      if (attachedFiles.some((f) => f.type.startsWith('image/'))) return 'image';
+      if (attachedFiles.some((f) => isImageFile(f.name, f.type))) return 'image';
       return 'file';
     }
     const trimmed = text.trim();
@@ -60,19 +60,20 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
     for (const file of files) {
       let dataUrl: string | undefined = undefined;
       let textContent: string | undefined = undefined;
-      const isImg = file.type.startsWith('image/');
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const accurateMime = inferMimeType(file.name, file.type);
+      const isImg = isImageFile(file.name, accurateMime);
+      const isPdf = accurateMime === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const isText =
-        file.type.startsWith('text/') ||
-        file.type.includes('json') ||
-        file.type.includes('javascript') ||
+        accurateMime.startsWith('text/') ||
+        accurateMime.includes('json') ||
+        accurateMime.includes('javascript') ||
         /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|rs|html|css|xml|yaml|yml|sql|sh|bat|ini|env)$/i.test(
           file.name
         );
 
       if (isImg) {
-        dataUrl = await createImageThumbnail(file, 480, 0.8);
-      } else if (isPdf && file.size <= 15 * 1024 * 1024) {
+        dataUrl = await createImageThumbnail(file, 480, 0.82);
+      } else if (isPdf && file.size <= 20 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -85,7 +86,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
         } catch {
           /* fallback */
         }
-      } else if (file.size < 2 * 1024 * 1024) {
+      } else if (file.size < 5 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -99,7 +100,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
         {
           name: file.name,
           size: file.size,
-          type: file.type || 'application/octet-stream',
+          type: accurateMime,
           dataUrl,
           textContent,
         },
@@ -213,6 +214,14 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           : 'border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#141418] focus-within:border-blue-500/60 dark:focus-within:border-white/[0.18]'
       }`}
     >
+      {/* Visual Drag Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-blue-50/95 dark:bg-[#0f1424]/95 backdrop-blur-xs border-2 border-dashed border-blue-500 text-blue-600 dark:text-blue-400 pointer-events-none animate-in fade-in duration-150">
+          <Paperclip className="w-6 h-6 mb-1.5 animate-bounce stroke-[2]" />
+          <span className="text-xs font-semibold font-mono">Drop files or images here to attach</span>
+        </div>
+      )}
+
       <div className="p-3.5 pb-2">
         {/* Universal Capture Input Header */}
         <div className="flex items-center justify-between mb-1.5">
@@ -249,11 +258,11 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
                 key={idx}
                 className="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-50 dark:bg-[#101014] text-xs text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/[0.07]"
               >
-                {file.type.startsWith('image/') && file.dataUrl ? (
+                {(isImageFile(file.name, file.type) || file.type.startsWith('image/')) && file.dataUrl ? (
                   <img
                     src={file.dataUrl}
                     alt={file.name}
-                    className="w-4 h-4 object-cover rounded"
+                    className="w-5 h-5 object-cover rounded border border-slate-200 dark:border-white/[0.1]"
                   />
                 ) : (
                   <Paperclip className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-500" />

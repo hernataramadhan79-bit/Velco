@@ -47,7 +47,28 @@ pub fn search_items_v2(
                     '[]'
                 ) as tags_json,
                 '' as snippet_text,
-                0.0 as rank
+                0.0 as rank,
+                COALESCE(
+                    (
+                        SELECT att.data_url FROM attachments att 
+                        WHERE att.item_id = i.id 
+                          AND (
+                              att.mime_type LIKE 'image/%' 
+                              OR att.file_name LIKE '%.png' 
+                              OR att.file_name LIKE '%.jpg' 
+                              OR att.file_name LIKE '%.jpeg' 
+                              OR att.file_name LIKE '%.webp' 
+                              OR att.file_name LIKE '%.gif'
+                              OR att.file_name LIKE '%.svg'
+                              OR att.file_name LIKE '%.bmp'
+                          )
+                          AND att.data_url IS NOT NULL 
+                          AND att.data_url != '' 
+                        LIMIT 1
+                    ),
+                    (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
+                ) as thumbnail_url,
+                (SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id) as attachments_count
             FROM items i
             WHERE i.deleted_at IS NULL
             ORDER BY i.updated_at DESC
@@ -84,7 +105,28 @@ pub fn search_items_v2(
                 '[]'
             ) as tags_json,
             snippet(items_fts, 2, '<b>', '</b>', '...', 20) as snippet_text,
-            bm25(items_fts) as rank
+            bm25(items_fts) as rank,
+            COALESCE(
+                (
+                    SELECT att.data_url FROM attachments att 
+                    WHERE att.item_id = i.id 
+                      AND (
+                          att.mime_type LIKE 'image/%' 
+                          OR att.file_name LIKE '%.png' 
+                          OR att.file_name LIKE '%.jpg' 
+                          OR att.file_name LIKE '%.jpeg' 
+                          OR att.file_name LIKE '%.webp' 
+                          OR att.file_name LIKE '%.gif'
+                          OR att.file_name LIKE '%.svg'
+                          OR att.file_name LIKE '%.bmp'
+                      )
+                      AND att.data_url IS NOT NULL 
+                      AND att.data_url != '' 
+                    LIMIT 1
+                ),
+                (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
+            ) as thumbnail_url,
+            (SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id) as attachments_count
         FROM items_fts
         JOIN items i ON items_fts.item_id = i.id
         WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL
@@ -116,6 +158,8 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
     let tags_json: String = row.get(9).unwrap_or_else(|_| "[]".to_string());
     let snippet_text: String = row.get(10).unwrap_or_default();
     let rank: f64 = row.get(11).unwrap_or(0.0);
+    let thumbnail_url: Option<String> = row.get(12).ok();
+    let attachments_count: i64 = row.get(13).unwrap_or(0);
 
     let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
 
@@ -133,8 +177,8 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
             tags,
             task: None,
             link: None,
-            attachments_count: 0,
-            thumbnail_url: None,
+            attachments_count,
+            thumbnail_url,
         },
         snippet: snippet_text,
         rank,

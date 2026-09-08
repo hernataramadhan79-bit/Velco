@@ -84,14 +84,23 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     toggleSelectItem(item.id);
   };
 
-  const thumbnail =
-    item.thumbnailUrl ||
-    item.attachments?.find(
-      (a) =>
-        a.mimeType?.startsWith('image/') ||
-        a.fileName?.match(/\.(png|jpe?g|webp|gif|svg)$/i)
-    )?.dataUrl ||
-    item.link?.previewImage;
+  const [thumbError, setThumbError] = React.useState(false);
+
+  const rawThumbnail =
+    item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
+      ? item.thumbnailUrl
+      : item.attachments?.find(
+          (a) =>
+            a.dataUrl &&
+            a.dataUrl.trim() !== '' &&
+            (a.mimeType?.startsWith('image/') ||
+              a.fileName?.match(/\.(png|jpe?g|webp|gif|svg|bmp)$/i))
+        )?.dataUrl ||
+        (item.link?.previewImage && item.link.previewImage.trim() !== ''
+          ? item.link.previewImage
+          : null);
+
+  const thumbnail = thumbError ? null : rawThumbnail;
 
   return (
     <div
@@ -129,11 +138,12 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                 src={thumbnail}
                 alt={item.title}
                 loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                onError={() => setThumbError(true)}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               />
             </div>
           ) : (
-            <div className="mt-0.5 p-1 rounded-md bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] shrink-0">
+            <div className="mt-0.5 p-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] shrink-0">
               {getTypeIcon()}
             </div>
           )}

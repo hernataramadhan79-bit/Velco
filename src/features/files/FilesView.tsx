@@ -18,8 +18,15 @@ import { ItemSummary, CreateItemInput } from '../../types/item';
 import { EmptyState } from '../../components/common/EmptyState';
 import { FileGridCard } from './FileGridCard';
 import { FileListRow } from './FileListRow';
+import {
+  FileCategory,
+  getFileCategory,
+  extractSizeFromContent,
+  createImageThumbnail,
+  inferMimeType,
+  isImageFile,
+} from '../../utils/fileUtils';
 import { FileLightboxModal } from './FileLightboxModal';
-import { FileCategory, getFileCategory, extractSizeFromContent, createImageThumbnail } from '../../utils/fileUtils';
 import { useSelectionStore } from '../../stores/selectionStore';
 
 interface FilesViewProps {
@@ -159,19 +166,20 @@ export const FilesView: React.FC<FilesViewProps> = ({
     for (const file of filesArray) {
       let dataUrl: string | undefined = undefined;
       let textContent: string | undefined = undefined;
-      const isImage = file.type.startsWith('image/');
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const accurateMime = inferMimeType(file.name, file.type);
+      const isImage = isImageFile(file.name, accurateMime);
+      const isPdf = accurateMime === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const isText =
-        file.type.startsWith('text/') ||
-        file.type.includes('json') ||
-        file.type.includes('javascript') ||
+        accurateMime.startsWith('text/') ||
+        accurateMime.includes('json') ||
+        accurateMime.includes('javascript') ||
         /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|rs|html|css|xml|yaml|yml|sql|sh|bat|ini|env)$/i.test(
           file.name
         );
 
       if (isImage) {
-        dataUrl = await createImageThumbnail(file, 480, 0.8);
-      } else if (isPdf && file.size <= 15 * 1024 * 1024) {
+        dataUrl = await createImageThumbnail(file, 480, 0.82);
+      } else if (isPdf && file.size <= 20 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -184,7 +192,7 @@ export const FilesView: React.FC<FilesViewProps> = ({
         } catch {
           /* fallback */
         }
-      } else if (file.size < 2 * 1024 * 1024) {
+      } else if (file.size < 5 * 1024 * 1024) {
         dataUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string) || undefined);
@@ -195,7 +203,7 @@ export const FilesView: React.FC<FilesViewProps> = ({
 
       const content =
         textContent ||
-        `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${file.type}`;
+        `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${accurateMime}`;
 
       await onCapture({
         type: isImage ? 'image' : 'file',
@@ -206,7 +214,7 @@ export const FilesView: React.FC<FilesViewProps> = ({
             id: crypto.randomUUID(),
             fileName: file.name,
             filePath: `attachments/${file.name}`,
-            mimeType: file.type || 'application/octet-stream',
+            mimeType: accurateMime,
             fileSize: file.size,
             checksum: 'local',
             createdAt: new Date().toISOString(),

@@ -32,8 +32,13 @@ export const FileGridCard: React.FC<FileGridCardProps> = ({
   const selectedCount = useSelectionStore((state) => state.selectedIds.size);
   const hasAnySelection = selectedCount > 0;
 
+  const [imgError, setImgError] = React.useState(false);
   const meta = getFileTypeMeta(item.title);
-  const isImage = meta.category === 'image' && !!item.thumbnailUrl;
+  const thumbnail =
+    item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
+      ? item.thumbnailUrl
+      : item.attachments?.find((a) => a.dataUrl && a.dataUrl.trim() !== '')?.dataUrl || null;
+  const isImage = (meta.category === 'image' || item.type === 'image') && !!thumbnail && !imgError;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
 
   const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
@@ -74,9 +79,10 @@ export const FileGridCard: React.FC<FileGridCardProps> = ({
       <div className="relative w-full h-36 bg-slate-100 dark:bg-[#0e0e12] overflow-hidden flex items-center justify-center border-b border-slate-100 dark:border-white/[0.04]">
         {isImage ? (
           <img
-            src={item.thumbnailUrl!}
+            src={thumbnail!}
             alt={item.title}
             loading="lazy"
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (

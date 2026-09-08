@@ -163,71 +163,167 @@ export function extractSizeFromContent(content?: string): string | null {
 }
 
 /**
- * Creates a lightweight image thumbnail (Base64 JPEG) using an offscreen canvas.
- * Reduces multi-megabyte images to ~20-30 KB for snappy previewing and minimal SQLite payload.
+ * Infers accurate MIME type from filename extension if native file.type is missing or generic.
+ */
+export function inferMimeType(filename: string, existingMime?: string): string {
+  if (
+    existingMime &&
+    existingMime.trim() !== '' &&
+    existingMime !== 'application/octet-stream' &&
+    existingMime !== 'binary/octet-stream'
+  ) {
+    return existingMime;
+  }
+
+  const ext = getFileExtension(filename);
+  switch (ext) {
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    case 'gif': return 'image/gif';
+    case 'svg': return 'image/svg+xml';
+    case 'bmp': return 'image/bmp';
+    case 'ico': return 'image/x-icon';
+    case 'avif': return 'image/avif';
+    case 'pdf': return 'application/pdf';
+    case 'txt':
+    case 'log': return 'text/plain';
+    case 'md':
+    case 'markdown': return 'text/markdown';
+    case 'json': return 'application/json';
+    case 'csv': return 'text/csv';
+    case 'html': return 'text/html';
+    case 'css': return 'text/css';
+    case 'js':
+    case 'jsx': return 'text/javascript';
+    case 'ts':
+    case 'tsx': return 'text/typescript';
+    case 'zip': return 'application/zip';
+    case 'doc':
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls':
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'ppt':
+    case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'mp4': return 'video/mp4';
+    case 'webm': return 'video/webm';
+    default: return existingMime || 'application/octet-stream';
+  }
+}
+
+/**
+ * Checks whether a file is an image by MIME type or extension.
+ */
+export function isImageFile(filename: string, mimeType?: string): boolean {
+  const mime = (mimeType || '').toLowerCase();
+  if (mime.startsWith('image/')) return true;
+  const ext = getFileExtension(filename);
+  return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico', 'avif'].includes(ext);
+}
+
+/**
+ * Creates a lightweight image thumbnail (Base64 JPEG/PNG) using FileReader and an offscreen canvas.
+ * - Uses FileReader.readAsDataURL directly (never fails with CORS or blob restrictions in WebView2).
+ * - Offscreen canvas resizes large images to ~20-40 KB for snappy previewing and minimal SQLite payload.
+ * - Guaranteed fail-safe: always falls back to raw dataUrl if canvas, image decode or timeout occurs.
  */
 export async function createImageThumbnail(
   file: File,
   maxDimension = 480,
-  quality = 0.8
+  quality = 0.82
 ): Promise<string> {
-  return new Promise((resolve) => {
-    // If not an image or SVG/GIF, fallback to FileReader
-    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string) || '');
-      reader.onerror = () => resolve('');
-      reader.readAsDataURL(file);
-      return;
-    }
-
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      let { width, height } = img;
-
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height * maxDimension) / width);
-          width = maxDimension;
-        } else {
-          width = Math.round((width * maxDimension) / height);
-          height = maxDimension;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, width);
-      canvas.height = Math.max(1, height);
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string) || '');
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, width, height);
-
-      try {
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
-      } catch {
-        resolve('');
-      }
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve('');
-    };
-
-    img.src = objectUrl;
+  // Step 1: Read the file using FileReader (100% reliable in WebView2)
+  const rawDataUrl = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string) || '');
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
   });
+
+  if (!rawDataUrl) {
+    return '';
+  }
+
+  const ext = getFileExtension(file.name);
+  const isSvg = file.type.includes('svg') || ext === 'svg';
+  const isGif = file.type.includes('gif') || ext === 'gif';
+
+  // Return raw data URL immediately for SVGs, GIFs (preserve animation), or small files
+  if (isSvg || isGif || file.size < 80 * 1024) {
+    return rawDataUrl;
+  }
+
+  // Step 2: Attempt offscreen canvas resize for smaller SQLite footprint
+  try {
+    const resizedDataUrl = await new Promise<string>((resolve) => {
+      const img = new Image();
+
+      // Guard with timeout so decoding issues never hang the promise
+      const timer = setTimeout(() => {
+        resolve(rawDataUrl);
+      }, 2500);
+
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          let width = img.naturalWidth || img.width;
+          let height = img.naturalHeight || img.height;
+
+          if (!width || !height) {
+            return resolve(rawDataUrl);
+          }
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, width);
+          canvas.height = Math.max(1, height);
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return resolve(rawDataUrl);
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const targetMime = (file.type.includes('png') || ext === 'png') ? 'image/png' : 'image/jpeg';
+          const dataUrl = canvas.toDataURL(targetMime, quality);
+
+          if (dataUrl && dataUrl.length > 50) {
+            resolve(dataUrl);
+          } else {
+            resolve(rawDataUrl);
+          }
+        } catch {
+          resolve(rawDataUrl);
+        }
+      };
+
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve(rawDataUrl);
+      };
+
+      // Crucial: assign base64 rawDataUrl directly (no blob URL)
+      img.src = rawDataUrl;
+    });
+
+    return resizedDataUrl;
+  } catch {
+    return rawDataUrl;
+  }
 }
+

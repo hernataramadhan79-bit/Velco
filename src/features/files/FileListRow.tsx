@@ -30,8 +30,13 @@ export const FileListRow: React.FC<FileListRowProps> = ({
   const selectedCount = useSelectionStore((state) => state.selectedIds.size);
   const hasAnySelection = selectedCount > 0;
 
+  const [imgError, setImgError] = React.useState(false);
   const meta = getFileTypeMeta(item.title);
-  const isImage = meta.category === 'image' && !!item.thumbnailUrl;
+  const thumbnail =
+    item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
+      ? item.thumbnailUrl
+      : item.attachments?.find((a) => a.dataUrl && a.dataUrl.trim() !== '')?.dataUrl || null;
+  const isImage = (meta.category === 'image' || item.type === 'image') && !!thumbnail && !imgError;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
 
   const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
@@ -88,10 +93,11 @@ export const FileListRow: React.FC<FileListRowProps> = ({
         <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-slate-100 dark:bg-[#0e0e12] border border-slate-200 dark:border-white/[0.08] flex items-center justify-center shrink-0">
           {isImage ? (
             <img
-              src={item.thumbnailUrl!}
+              src={thumbnail!}
               alt={item.title}
               loading="lazy"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
             />
           ) : (
             <div
