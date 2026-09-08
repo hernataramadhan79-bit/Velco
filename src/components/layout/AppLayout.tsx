@@ -11,6 +11,7 @@ import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
 import { SelectionActionBar } from '../common/SelectionActionBar';
 import { ViewSkeleton } from '../common/ViewSkeleton';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import { reminderService } from '../../services/reminder/reminderService';
 import { isTaskOverdue } from '../../utils/dateUtils';
 import { db } from '../../services/database';
@@ -285,13 +286,15 @@ export const AppLayout: React.FC = () => {
   if (currentView === 'settings') {
     return (
       <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
-        <Suspense fallback={<ViewSkeleton />}>
-          <SettingsView
-            onBack={() => {
-              setCurrentView(previousViewRef.current);
-            }}
-          />
-        </Suspense>
+        <ErrorBoundary onReset={() => setCurrentView('inbox')}>
+          <Suspense fallback={<ViewSkeleton />}>
+            <SettingsView
+              onBack={() => {
+                setCurrentView(previousViewRef.current);
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
 
         <GlobalSearchModal
           isOpen={isSearchOpen}
@@ -363,8 +366,9 @@ export const AppLayout: React.FC = () => {
               : 'px-8 py-6'
           }`}
         >
-          <Suspense fallback={<ViewSkeleton />}>
-            <div className="view-enter" key={currentView}>
+          <ErrorBoundary onReset={() => refreshItems()}>
+            <Suspense fallback={<ViewSkeleton />}>
+              <div className="view-enter" key={currentView}>
               {currentView === 'inbox' && (
                 <InboxView
                   items={items}
@@ -480,7 +484,8 @@ export const AppLayout: React.FC = () => {
               )}
             </div>
           </Suspense>
-        </main>
+        </ErrorBoundary>
+      </main>
       </div>
 
       {/* Pane 3: The Foundry (Context Workstation) */}

@@ -164,6 +164,7 @@ export interface ItemSummary {
   task?: TaskMetadata | null;
   link?: LinkMetadata | null;
   attachments?: Attachment[];
+  attachmentsCount?: number;
   aiMetadata?: AIMetadata | null;
 }
 

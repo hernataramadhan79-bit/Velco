@@ -27,6 +27,9 @@ pub struct ItemSummary {
     pub created_at: String,
     pub updated_at: String,
     pub tags: Vec<TagMinimal>,
+    pub task: Option<TaskSubRecord>,
+    pub link: Option<LinkSubRecord>,
+    pub attachments_count: i64,
 }
 
 /// Hasil pencarian dengan snippet dan ranking BM25
@@ -285,7 +288,11 @@ pub fn get_items_summary(
     };
 
     let type_filter = if let Some(ref t) = filter_type {
-        format!(" AND i.type = '{}'", t.replace("'", "''"))
+        if t == "file" || t == "files" {
+            " AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))".to_string()
+        } else {
+            format!(" AND i.type = '{}'", t.replace("'", "''"))
+        }
     } else {
         String::new()
     };
@@ -294,14 +301,14 @@ pub fn get_items_summary(
         r#"
         SELECT
             i.id,
-            i.type,
-            i.title,
+            COALESCE(i.type, 'note'),
+            COALESCE(i.title, ''),
             COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
             COALESCE(i.pinned, i.favorite, 0) as pinned,
-            i.archived,
+            COALESCE(i.archived, 0) as archived,
             CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
-            i.created_at,
-            i.updated_at,
+            COALESCE(i.created_at, '') as created_at,
+            COALESCE(i.updated_at, '') as updated_at,
             COALESCE(
                 (
                     SELECT json_group_array(
@@ -312,7 +319,18 @@ pub fn get_items_summary(
                     WHERE it.item_id = i.id
                 ),
                 '[]'
-            ) as tags_json
+            ) as tags_json,
+            (
+                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', tk.completed, 'completed_at', tk.completed_at)
+                FROM tasks tk WHERE tk.item_id = i.id
+            ) as task_json,
+            (
+                SELECT json_object('url', lk.url, 'domain', lk.domain, 'page_title', lk.page_title, 'preview_image', lk.preview_image)
+                FROM links lk WHERE lk.item_id = i.id
+            ) as link_json,
+            (
+                SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id
+            ) as attachments_count
         FROM items i
         WHERE {}{}
         ORDER BY i.created_at DESC
@@ -326,8 +344,13 @@ pub fn get_items_summary(
         let archived_val: i64 = row.get(5)?;
         let trashed_val: i64 = row.get(6)?;
         let tags_json: String = row.get(9).unwrap_or_else(|_| "[]".to_string());
+        let task_json: Option<String> = row.get(10).ok();
+        let link_json: Option<String> = row.get(11).ok();
+        let attachments_count: i64 = row.get(12).unwrap_or(0);
 
         let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
+        let task: Option<TaskSubRecord> = task_json.and_then(|s| serde_json::from_str(&s).ok());
+        let link: Option<LinkSubRecord> = link_json.and_then(|s| serde_json::from_str(&s).ok());
 
         Ok(ItemSummary {
             id: row.get(0)?,
@@ -340,6 +363,9 @@ pub fn get_items_summary(
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
             tags,
+            task,
+            link,
+            attachments_count,
         })
     }).map_err(|e| e.to_string())?;
 
@@ -398,7 +424,7 @@ pub fn get_item_counts(db: State<'_, Database>) -> Result<ItemCountsRecord, Stri
 
     let files: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND (type = 'file' OR type = 'image')",
+            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND (type = 'file' OR type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = items.id))",
             [],
             |r| r.get(0),
         )
@@ -465,8 +491,12 @@ pub fn get_items(
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(ref t) = filter_type {
-        sql.push_str(" AND type = ?");
-        query_params.push(Box::new(t.clone()));
+        if t == "file" || t == "files" {
+            sql.push_str(" AND (type = 'file' OR type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = items.id))");
+        } else {
+            sql.push_str(" AND type = ?");
+            query_params.push(Box::new(t.clone()));
+        }
     }
 
     sql.push_str(" ORDER BY created_at DESC");

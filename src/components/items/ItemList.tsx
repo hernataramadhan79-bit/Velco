@@ -105,52 +105,20 @@ export const ItemList: React.FC<ItemListProps> = ({
     );
   };
 
-  // Virtualizer for flat list
-  const parentRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 80, // estimated height of ItemCard
-    overscan: 5,
-  });
-
   // Flat list
   if (!groupByDate) {
     return (
-      <div ref={parentRef} className="w-full min-w-0" style={{ height: '100%', overflow: 'auto' }}>
-        {renderSelectionBar()}
-        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const item = items[virtualRow.index];
-            return (
-              <div
-                key={item.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <div className="pb-2">
-                  <ItemCard
-                    item={item as Item}
-                    onSelect={onSelect as any}
-                    onToggleTask={onToggleTask}
-                    onToggleFavorite={onToggleFavorite}
-                    onTrash={onTrash}
-                    onRestore={onRestore}
-                    onPermanentDelete={onPermanentDelete}
-                    isTrashView={isTrashView}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <FlatVirtualList
+        items={items}
+        renderSelectionBar={renderSelectionBar}
+        onSelect={onSelect}
+        onToggleTask={onToggleTask}
+        onToggleFavorite={onToggleFavorite}
+        onTrash={onTrash}
+        onRestore={onRestore}
+        onPermanentDelete={onPermanentDelete}
+        isTrashView={isTrashView}
+      />
     );
   }
 
@@ -188,7 +156,8 @@ export const ItemList: React.FC<ItemListProps> = ({
   ];
 
   items.forEach((item) => {
-    const itemTime = new Date(item.createdAt).getTime();
+    if (!item) return;
+    const itemTime = item.createdAt ? new Date(item.createdAt).getTime() : NaN;
     if (isNaN(itemTime)) {
       grouped[3].items.push(item);
     } else if (itemTime >= startOfToday) {
@@ -234,24 +203,97 @@ export const ItemList: React.FC<ItemListProps> = ({
             {/* Accordion Content */}
             {!isCollapsed && (
               <div className="space-y-2 w-full min-w-0">
-                {group.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item as Item}
-                    onSelect={onSelect as any}
-                    onToggleTask={onToggleTask}
-                    onToggleFavorite={onToggleFavorite}
-                    onTrash={onTrash}
-                    onRestore={onRestore}
-                    onPermanentDelete={onPermanentDelete}
-                    isTrashView={isTrashView}
-                  />
-                ))}
+                {group.items.map((item) => {
+                  if (!item) return null;
+                  return (
+                    <ItemCard
+                      key={item.id}
+                      item={item as Item}
+                      onSelect={onSelect as any}
+                      onToggleTask={onToggleTask}
+                      onToggleFavorite={onToggleFavorite}
+                      onTrash={onTrash}
+                      onRestore={onRestore}
+                      onPermanentDelete={onPermanentDelete}
+                      isTrashView={isTrashView}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+};
+
+interface FlatVirtualListProps {
+  items: (Item | ItemSummary)[];
+  renderSelectionBar: () => React.ReactNode;
+  onSelect: (item: any) => void;
+  onToggleTask?: (itemId: string, completed: boolean) => void;
+  onToggleFavorite?: (itemId: string) => void;
+  onTrash?: (itemId: string) => void;
+  onRestore?: (itemId: string) => void;
+  onPermanentDelete?: (itemId: string) => void;
+  isTrashView?: boolean;
+}
+
+const FlatVirtualList: React.FC<FlatVirtualListProps> = ({
+  items,
+  renderSelectionBar,
+  onSelect,
+  onToggleTask,
+  onToggleFavorite,
+  onTrash,
+  onRestore,
+  onPermanentDelete,
+  isTrashView,
+}) => {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80,
+    overscan: 5,
+  });
+
+  return (
+    <div ref={parentRef} className="w-full min-w-0" style={{ height: '100%', overflow: 'auto' }}>
+      {renderSelectionBar()}
+      <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const item = items[virtualRow.index];
+          if (!item) return null;
+          return (
+            <div
+              key={item.id}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <div className="pb-2">
+                <ItemCard
+                  item={item as Item}
+                  onSelect={onSelect as any}
+                  onToggleTask={onToggleTask}
+                  onToggleFavorite={onToggleFavorite}
+                  onTrash={onTrash}
+                  onRestore={onRestore}
+                  onPermanentDelete={onPermanentDelete}
+                  isTrashView={isTrashView}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

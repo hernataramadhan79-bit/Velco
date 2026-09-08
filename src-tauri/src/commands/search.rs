@@ -32,12 +32,15 @@ pub fn search_items_v2(
         // Jika query kosong, kembalikan 50 item terbaru
         let sql = r#"
             SELECT
-                i.id, i.type, i.title,
+                i.id,
+                COALESCE(i.type, 'note') as type,
+                COALESCE(i.title, '') as title,
                 COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
                 COALESCE(i.pinned, i.favorite, 0) as pinned,
-                i.archived,
+                COALESCE(i.archived, 0) as archived,
                 CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
-                i.created_at, i.updated_at,
+                COALESCE(i.created_at, '') as created_at,
+                COALESCE(i.updated_at, '') as updated_at,
                 COALESCE(
                     (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                      FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
@@ -66,12 +69,15 @@ pub fn search_items_v2(
     // Pencarian FTS5 dengan BM25 ranking dan snippet
     let sql = r#"
         SELECT
-            i.id, i.type, i.title,
+            i.id,
+            COALESCE(i.type, 'note') as type,
+            COALESCE(i.title, '') as title,
             COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
             COALESCE(i.pinned, i.favorite, 0) as pinned,
-            i.archived,
+            COALESCE(i.archived, 0) as archived,
             CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
-            i.created_at, i.updated_at,
+            COALESCE(i.created_at, '') as created_at,
+            COALESCE(i.updated_at, '') as updated_at,
             COALESCE(
                 (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
                  FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
@@ -125,6 +131,9 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
             tags,
+            task: None,
+            link: None,
+            attachments_count: 0,
         },
         snippet: snippet_text,
         rank,
