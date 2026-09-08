@@ -110,7 +110,7 @@ pub fn import_folder_as_notes(
     let source_dir = PathBuf::from(&folder_path);
 
     if !source_dir.is_dir() {
-        return Err(format!("Folder tidak ditemukan: {}", folder_path));
+        return Err(format!("Folder not found: {}", folder_path));
     }
 
     let entries = fs::read_dir(&source_dir).map_err(|e| e.to_string())?;
@@ -272,11 +272,11 @@ pub fn open_attachment_in_os(
                 "SELECT file_name, file_path, data_url FROM attachments WHERE item_id = ?1 LIMIT 1",
                 params![attachment_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            ).map_err(|e| format!("Lampiran tidak ditemukan: {}", e))?
+            ).map_err(|e| format!("Attachment not found: {}", e))?
         }
     };
 
-    // 1. Cek apakah ada file fisik di disk
+    // 1. Check if physical file exists on disk
     let candidate_paths = [
         std::path::PathBuf::from(&file_path),
         storage.attachments_dir().join(&file_path),
@@ -290,7 +290,7 @@ pub fn open_attachment_in_os(
                 std::process::Command::new("cmd")
                     .args(["/C", "start", "", &p.to_string_lossy()])
                     .spawn()
-                    .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                    .map_err(|e| format!("Failed to open file: {}", e))?;
                 return Ok(());
             }
             #[cfg(not(target_os = "windows"))]
@@ -300,7 +300,7 @@ pub fn open_attachment_in_os(
         }
     }
 
-    // Scan folder attachments jika ada prefix UUID
+    // Scan attachments folder in case of UUID prefix
     if let Ok(entries) = std::fs::read_dir(storage.attachments_dir()) {
         for entry in entries.flatten() {
             let p = entry.path();
@@ -312,7 +312,7 @@ pub fn open_attachment_in_os(
                         std::process::Command::new("cmd")
                             .args(["/C", "start", "", &p.to_string_lossy()])
                             .spawn()
-                            .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                            .map_err(|e| format!("Failed to open file: {}", e))?;
                         return Ok(());
                     }
                 }
@@ -320,7 +320,7 @@ pub fn open_attachment_in_os(
         }
     }
 
-    // 2. Jika tidak ada di disk tapi ada data_url base64, simpan sementara ke cache lalu buka
+    // 2. If not on disk but has base64 data_url, write to temporary cache and launch
     if let Some(ref d_url) = data_url {
         if let Some(comma_pos) = d_url.find(',') {
             let b64 = &d_url[comma_pos + 1..];
@@ -336,13 +336,13 @@ pub fn open_attachment_in_os(
                     std::process::Command::new("cmd")
                         .args(["/C", "start", "", &cache_path.to_string_lossy()])
                         .spawn()
-                        .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                        .map_err(|e| format!("Failed to open file: {}", e))?;
                     return Ok(());
                 }
             }
         }
     }
 
-    Err("Berkas fisik tidak ditemukan di sistem".to_string())
+    Err("Physical file not found on system".to_string())
 }
 

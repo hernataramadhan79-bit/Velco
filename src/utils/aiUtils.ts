@@ -3,51 +3,51 @@ import { LlmProviderConfig } from '../types/ai';
 import { z, ZodSchema } from 'zod';
 
 /**
- * Parser defensif untuk respons AI yang mungkin mengandung teks non-JSON.
- * 1. Ekstrak blok JSON pertama menggunakan regex
- * 2. Bersihkan trailing comma dan karakter bermasalah
- * 3. Validasi struktur dengan Zod schema
+ * Defensive parser for AI responses that may contain non-JSON markdown text.
+ * 1. Extract first JSON block using regex
+ * 2. Sanitize trailing commas and problematic characters
+ * 3. Validate structure with Zod schema
  */
 export function extractValidJson<T>(raw: string, schema: ZodSchema<T>): T {
   if (!raw || typeof raw !== 'string') {
-    throw new Error('Input tidak valid: bukan string');
+    throw new Error('Invalid input: not a string');
   }
 
-  // Cari blok JSON pertama: {} atau []
+  // Find first JSON block: {} or []
   const objectMatch = raw.match(/\{[\s\S]*\}/);
   const arrayMatch = raw.match(/\[[\s\S]*\]/);
 
   let jsonStr: string | null = null;
 
   if (objectMatch && arrayMatch) {
-    // Ambil yang muncul lebih awal
+    // Pick the one that appears earlier
     jsonStr = objectMatch.index! <= arrayMatch.index! ? objectMatch[0] : arrayMatch[0];
   } else {
     jsonStr = objectMatch?.[0] ?? arrayMatch?.[0] ?? null;
   }
 
   if (!jsonStr) {
-    throw new Error('Tidak ditemukan blok JSON valid dalam respons AI');
+    throw new Error('No valid JSON block found in AI response');
   }
 
-  // Bersihkan trailing comma sebelum } atau ]
+  // Clean trailing commas before } or ]
   jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
 
-  // Bersihkan newline di dalam string literal (hanya yang di antara tanda kutip)
+  // Escape unescaped newlines inside string literals
   jsonStr = jsonStr.replace(/"([^"]*?)\n([^"]*?)"/g, (_m, p1, p2) => `"${p1}\\n${p2}"`);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonStr);
   } catch (e) {
-    throw new Error(`Gagal parse JSON: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Validasi dengan Zod
+  // Validate with Zod
   const result = schema.safeParse(parsed);
   if (!result.success) {
     const issues = result.error.issues.map((i) => i.message).join(', ');
-    throw new Error(`Struktur JSON tidak sesuai schema: ${issues}`);
+    throw new Error(`JSON structure does not match schema: ${issues}`);
   }
 
   return result.data;
