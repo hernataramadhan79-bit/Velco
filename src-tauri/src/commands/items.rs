@@ -6,6 +6,37 @@ use base64::Engine;
 use crate::database::Database;
 use crate::filesystem::StorageManager;
 
+/// Tag ringkas untuk list view
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TagMinimal {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+/// Item ringkas untuk list view — hanya 120 char pertama content
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ItemSummary {
+    pub id: String,
+    pub r#type: String,
+    pub title: String,
+    pub excerpt: String, // 120 char pertama content
+    pub pinned: bool,
+    pub archived: bool,
+    pub trashed: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub tags: Vec<TagMinimal>,
+}
+
+/// Hasil pencarian dengan snippet dan ranking BM25
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchResult {
+    pub item: ItemSummary,
+    pub snippet: String,
+    pub rank: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AttachmentSubRecord {
     pub id: String,
@@ -228,6 +259,100 @@ pub fn fetch_item_by_id(conn: &rusqlite::Connection, id: &str) -> Result<ItemRec
 
 #[tauri::command]
 pub fn get_item(db: State<'_, Database>, id: String) -> Result<ItemRecord, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    fetch_item_by_id(&conn, &id)
+}
+
+/// Ambil daftar item ringkas (ItemSummary) dengan tags via JSON aggregation — 1 round-trip
+#[tauri::command]
+pub fn get_items_summary(
+    db: State<'_, Database>,
+    filter_type: Option<String>,
+    include_trash: Option<bool>,
+    include_archived: Option<bool>,
+) -> Result<Vec<ItemSummary>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let show_trash = include_trash.unwrap_or(false);
+    let show_archived = include_archived.unwrap_or(false);
+
+    let where_clause = if show_trash {
+        "i.deleted_at IS NOT NULL".to_string()
+    } else if show_archived {
+        "i.deleted_at IS NULL AND i.archived = 1".to_string()
+    } else {
+        "i.deleted_at IS NULL AND i.archived = 0".to_string()
+    };
+
+    let type_filter = if let Some(ref t) = filter_type {
+        format!(" AND i.type = '{}'", t.replace("'", "''"))
+    } else {
+        String::new()
+    };
+
+    let sql = format!(
+        r#"
+        SELECT
+            i.id,
+            i.type,
+            i.title,
+            COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
+            COALESCE(i.pinned, i.favorite, 0) as pinned,
+            i.archived,
+            CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
+            i.created_at,
+            i.updated_at,
+            COALESCE(
+                (
+                    SELECT json_group_array(
+                        json_object('id', t.id, 'name', t.name, 'color', t.color)
+                    )
+                    FROM tags t
+                    JOIN item_tags it ON t.id = it.tag_id
+                    WHERE it.item_id = i.id
+                ),
+                '[]'
+            ) as tags_json
+        FROM items i
+        WHERE {}{}
+        ORDER BY i.created_at DESC
+        "#,
+        where_clause, type_filter
+    );
+
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt.query_map([], |row| {
+        let pinned_val: i64 = row.get(4)?;
+        let archived_val: i64 = row.get(5)?;
+        let trashed_val: i64 = row.get(6)?;
+        let tags_json: String = row.get(9).unwrap_or_else(|_| "[]".to_string());
+
+        let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
+
+        Ok(ItemSummary {
+            id: row.get(0)?,
+            r#type: row.get(1)?,
+            title: row.get(2)?,
+            excerpt: row.get(3)?,
+            pinned: pinned_val != 0,
+            archived: archived_val != 0,
+            trashed: trashed_val != 0,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            tags,
+        })
+    }).map_err(|e| e.to_string())?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(results)
+}
+
+/// Ambil detail penuh item (full content) — dipanggil saat item diklik
+#[tauri::command]
+pub fn get_item_detail(db: State<'_, Database>, id: String) -> Result<ItemRecord, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     fetch_item_by_id(&conn, &id)
 }
@@ -494,11 +619,6 @@ pub fn create_item(
         params![id, payload.r#type, payload.title, content, source, now, now],
     ).map_err(|e| e.to_string())?;
 
-    // Insert FTS
-    conn.execute(
-        "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
-        params![id, payload.title, content],
-    ).ok();
 
     if let Some(task) = &payload.task {
         conn.execute(
@@ -637,15 +757,6 @@ pub fn update_item(db: State<'_, Database>, payload: UpdateItemPayload) -> Resul
             .map_err(|e| e.to_string())?;
     }
 
-    // Refresh FTS index if title or content was modified
-    if payload.title.is_some() || payload.content.is_some() {
-        conn.execute("DELETE FROM items_fts WHERE item_id = ?1", params![payload.id]).ok();
-        conn.execute(
-            "INSERT INTO items_fts (item_id, title, content) SELECT id, title, content FROM items WHERE id = ?1",
-            params![payload.id],
-        )
-        .ok();
-    }
 
     // Update task
     if let Some(task) = &payload.task {
@@ -760,7 +871,6 @@ pub fn delete_item_permanent(db: State<'_, Database>, id: String) -> Result<(), 
         }
     }
 
-    conn.execute("DELETE FROM items_fts WHERE item_id = ?1", params![id]).ok();
     conn.execute("DELETE FROM items WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -782,11 +892,6 @@ pub fn empty_trash(db: State<'_, Database>) -> Result<usize, String> {
         }
     }
 
-    conn.execute(
-        "DELETE FROM items_fts WHERE item_id IN (SELECT id FROM items WHERE deleted_at IS NOT NULL)",
-        [],
-    )
-    .ok();
     let count = conn
         .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
         .map_err(|e| e.to_string())?;

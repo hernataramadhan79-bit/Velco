@@ -21,6 +21,19 @@
         "resizable": true,
         "fullscreen": false,
         "dragDropEnabled": true
+      },
+      {
+        "label": "spotlight",
+        "url": "/?window=spotlight",
+        "width": 640,
+        "height": 200,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "focus": false
       }
     ],
     "security": {

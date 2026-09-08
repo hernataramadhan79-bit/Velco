@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Item } from '../../types/item';
+import React, { useState, useRef } from 'react';
+import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from './ItemCard';
 import { Inbox, ChevronDown, ChevronRight } from 'lucide-react';
 import { useSelectionStore } from '../../stores/selectionStore';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 interface ItemListProps {
-  items: Item[];
-  onSelect: (item: Item) => void;
+  items: (Item | ItemSummary)[];
+  onSelect: (item: any) => void;
   onToggleTask?: (itemId: string, completed: boolean) => void;
   onToggleFavorite?: (itemId: string) => void;
   onTrash?: (itemId: string) => void;
@@ -104,24 +105,51 @@ export const ItemList: React.FC<ItemListProps> = ({
     );
   };
 
+  // Virtualizer for flat list
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80, // estimated height of ItemCard
+    overscan: 5,
+  });
+
   // Flat list
   if (!groupByDate) {
     return (
-      <div className="space-y-2 w-full min-w-0">
+      <div ref={parentRef} className="w-full min-w-0" style={{ height: '100%', overflow: 'auto' }}>
         {renderSelectionBar()}
-        {items.map((item) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            onSelect={onSelect}
-            onToggleTask={onToggleTask}
-            onToggleFavorite={onToggleFavorite}
-            onTrash={onTrash}
-            onRestore={onRestore}
-            onPermanentDelete={onPermanentDelete}
-            isTrashView={isTrashView}
-          />
-        ))}
+        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const item = items[virtualRow.index];
+            return (
+              <div
+                key={item.id}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <div className="pb-2">
+                  <ItemCard
+                    item={item as Item}
+                    onSelect={onSelect as any}
+                    onToggleTask={onToggleTask}
+                    onToggleFavorite={onToggleFavorite}
+                    onTrash={onTrash}
+                    onRestore={onRestore}
+                    onPermanentDelete={onPermanentDelete}
+                    isTrashView={isTrashView}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -135,7 +163,7 @@ export const ItemList: React.FC<ItemListProps> = ({
   const grouped: {
     key: string;
     title: string;
-    items: Item[];
+    items: (Item | ItemSummary)[];
   }[] = [
     {
       key: 'today',
@@ -209,8 +237,8 @@ export const ItemList: React.FC<ItemListProps> = ({
                 {group.items.map((item) => (
                   <ItemCard
                     key={item.id}
-                    item={item}
-                    onSelect={onSelect}
+                    item={item as Item}
+                    onSelect={onSelect as any}
                     onToggleTask={onToggleTask}
                     onToggleFavorite={onToggleFavorite}
                     onTrash={onTrash}

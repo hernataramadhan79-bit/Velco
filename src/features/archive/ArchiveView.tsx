@@ -1,12 +1,12 @@
 import React from 'react';
-import { Item } from '../../types/item';
+import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Archive } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface ArchiveViewProps {
-  items: Item[];
-  onSelect: (item: Item) => void;
+  items: ItemSummary[];
+  onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
   onToggleArchive?: (itemId: string) => void;

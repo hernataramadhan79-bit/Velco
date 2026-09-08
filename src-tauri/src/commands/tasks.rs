@@ -30,3 +30,19 @@ pub fn toggle_task_complete(
 
     Ok(())
 }
+
+/// Reset flag notified agar task bisa kembali mengirim notifikasi
+/// (dipanggil frontend saat user mengubah due_date)
+#[tauri::command]
+pub fn reset_task_notified(
+    db: State<'_, Database>,
+    item_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE tasks SET notified = 0 WHERE item_id = ?1",
+        params![item_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}

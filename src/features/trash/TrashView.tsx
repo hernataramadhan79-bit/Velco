@@ -1,12 +1,12 @@
 import React from 'react';
-import { Item } from '../../types/item';
+import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface TrashViewProps {
-  items: Item[];
-  onSelect: (item: Item) => void;
+  items: ItemSummary[];
+  onSelect: (item: ItemSummary) => void;
   onRestore: (itemId: string) => void;
   onPermanentDelete: (itemId: string) => void;
   onEmptyTrash: () => void;

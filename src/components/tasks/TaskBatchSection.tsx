@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Item, TaskBatchSource } from '../../types/item';
+import { Item, ItemSummary, TaskBatchSource } from '../../types/item';
 import { ItemCard } from '../items/ItemCard';
 import {
   Sparkles,
@@ -14,8 +14,8 @@ import { useItemStore } from '../../stores/itemStore';
 
 interface TaskBatchSectionProps {
   meta: TaskBatchSource;
-  tasks: Item[];
-  onSelect: (item: Item) => void;
+  tasks: ItemSummary[];
+  onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;

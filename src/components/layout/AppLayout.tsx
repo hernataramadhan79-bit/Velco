@@ -150,8 +150,7 @@ export const AppLayout: React.FC = () => {
   const refreshCounts = useItemStore((s) => s.refreshCounts);
   const notify = useItemStore((s) => s.notify);
 
-  // Computed
-  const selectedItem = items.find((i) => i.id === selectedItemId) || null;
+  const selectedItem = useItemStore((s) => s.activeItemDetail);
 
   // Tag store
   const tagStore = useTagStore();

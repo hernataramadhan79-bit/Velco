@@ -272,4 +272,77 @@ export class TauriDbAdapter implements DatabaseAdapter {
     const rawItems: any[] = await tauriInvoke('import_files_from_paths', { paths });
     return rawItems.map((r) => this.mapItemRecord(r));
   }
+
+  async getItemsSummary(options?: {
+    type?: string;
+    includeTrash?: boolean;
+    includeArchived?: boolean;
+  }): Promise<import('../../types/item').ItemSummary[]> {
+    const rawItems: any[] = await tauriInvoke('get_items_summary', {
+      filterType: options?.type ?? null,
+      includeTrash: options?.includeTrash ?? false,
+      includeArchived: options?.includeArchived ?? false,
+    });
+    return (rawItems ?? []).map((r) => ({
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      excerpt: r.excerpt ?? '',
+      pinned: !!r.pinned,
+      archived: !!r.archived,
+      trashed: !!r.trashed,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      tags: (r.tags ?? []).map((t: any) => ({ id: t.id, name: t.name, color: t.color ?? '#3b82f6' })),
+    }));
+  }
+
+  async getItemDetail(id: string): Promise<import('../../types/item').Item | null> {
+    try {
+      const res: any = await tauriInvoke('get_item_detail', { id });
+      return this.mapItemRecord(res);
+    } catch {
+      return null;
+    }
+  }
+
+  async searchItemsV2(query: string): Promise<import('../../types/item').SearchResult[]> {
+    const rawResults: any[] = await tauriInvoke('search_items_v2', { query });
+    return (rawResults ?? []).map((r) => ({
+      item: {
+        id: r.item.id,
+        type: r.item.type,
+        title: r.item.title,
+        excerpt: r.item.excerpt ?? '',
+        pinned: !!r.item.pinned,
+        archived: !!r.item.archived,
+        trashed: !!r.item.trashed,
+        createdAt: r.item.created_at,
+        updatedAt: r.item.updated_at,
+        tags: (r.item.tags ?? []).map((t: any) => ({ id: t.id, name: t.name, color: t.color ?? '#3b82f6' })),
+      },
+      snippet: r.snippet ?? '',
+      rank: r.rank ?? 0,
+    }));
+  }
+
+  async exportNotes(folderPath: string, itemIds?: string[]): Promise<number> {
+    return tauriInvoke<number>('export_notes_to_folder', { folderPath, itemIds });
+  }
+
+  async importFolder(folderPath: string): Promise<{ imported: number; skipped: number; errors: string[] }> {
+    return tauriInvoke('import_folder_as_notes', { folderPath });
+  }
+
+  async scanOrphanFiles(): Promise<string[]> {
+    return tauriInvoke<string[]>('scan_orphan_files');
+  }
+
+  async cleanupOrphanFiles(): Promise<number> {
+    return tauriInvoke<number>('cleanup_orphan_files');
+  }
+
+  async resetTaskNotified(itemId: string): Promise<void> {
+    await tauriInvoke('reset_task_notified', { itemId });
+  }
 }

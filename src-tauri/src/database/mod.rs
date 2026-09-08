@@ -11,20 +11,33 @@ pub struct Database {
 impl Database {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let conn = Connection::open(path)?;
-        conn.execute("PRAGMA foreign_keys = ON;", [])
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(format!("foreign_keys failed: {}", e).into()))?;
-        
-        let _mode: String = conn.query_row("PRAGMA journal_mode = WAL;", [], |r| r.get(0))
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(format!("journal_mode failed: {}", e).into()))?;
 
-        conn.execute_batch(schema::INITIAL_SCHEMA)
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(format!("schema failed: {}", e).into()))?;
+        // Konfigurasi PRAGMA untuk performa dan ketahanan
+        conn.execute_batch("
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA busy_timeout = 5000;
+            PRAGMA foreign_keys = ON;
+            PRAGMA cache_size = -64000;
+            PRAGMA temp_store = MEMORY;
+            PRAGMA mmap_size = 268435456;
+        ").map_err(|e| rusqlite::Error::ToSqlConversionFailure(
+            format!("PRAGMA setup failed: {}", e).into()
+        ))?;
 
-        // Migration: add data_url to attachments if not present
-        conn.execute("ALTER TABLE attachments ADD COLUMN data_url TEXT;", []).ok();
+        // Jalankan migrasi berbasis user_version
+        schema::run_migrations(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(
+                format!("Migration failed: {}", e).into()
+            ))?;
 
-        // Migration: add suggested_tags to ai_metadata if not present
-        conn.execute("ALTER TABLE ai_metadata ADD COLUMN suggested_tags TEXT;", []).ok();
+        // Migrasi kolom legacy (idempoten — error diabaikan jika kolom sudah ada)
+        let _ = conn.execute("ALTER TABLE items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE items ADD COLUMN trashed INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN notified INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE attachments ADD COLUMN data_url TEXT", []);
+        let _ = conn.execute("ALTER TABLE ai_metadata ADD COLUMN suggested_tags TEXT", []);
+        let _ = conn.execute_batch("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
 
         Ok(Self {
             conn: Mutex::new(conn),

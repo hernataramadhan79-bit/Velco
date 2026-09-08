@@ -607,7 +607,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                   (item) =>
                     !contextSearch.trim() ||
                     item.title.toLowerCase().includes(contextSearch.toLowerCase()) ||
-                    item.content.toLowerCase().includes(contextSearch.toLowerCase())
+                    (item.excerpt ?? '').toLowerCase().includes(contextSearch.toLowerCase())
                 )
                 .slice(0, 8)
                 .map((item) => {

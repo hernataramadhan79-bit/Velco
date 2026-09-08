@@ -10,7 +10,7 @@ import {
   Inbox,
   HelpCircle,
 } from 'lucide-react';
-import { Item } from '../../types/item';
+import { Item, ItemSummary } from '../../types/item';
 
 export type InboxCategoryFilter =
   | 'all'
@@ -23,7 +23,7 @@ export type InboxCategoryFilter =
 interface InboxDropdownFilterProps {
   currentFilter: InboxCategoryFilter;
   onSelectFilter: (filter: InboxCategoryFilter) => void;
-  items: Item[];
+  items: (Item | ItemSummary)[];
 }
 
 export const InboxDropdownFilter: React.FC<InboxDropdownFilterProps> = ({

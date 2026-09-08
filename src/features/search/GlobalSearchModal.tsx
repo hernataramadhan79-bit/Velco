@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, FileText, CheckSquare, Link2, Folder, Star, ArrowRight, Loader2 } from 'lucide-react';
 import { Item, ItemType } from '../../types/item';
 import { db } from '../../services/database';
+import { useFocusTrap } from '../../components/common/useFocusTrap';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -21,7 +22,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(modalContainerRef, isOpen, onClose);
 
   const search = useCallback(async (q: string) => {
     setIsLoading(true);
@@ -114,6 +118,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
   return (
     <div
+      ref={modalContainerRef}
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"

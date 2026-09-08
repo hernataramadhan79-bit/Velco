@@ -135,3 +135,44 @@ export function formatTaskBatchSource(meta: TaskBatchSource): string {
   return JSON.stringify(meta);
 }
 
+/** Tag ringkas untuk list view */
+export interface TagMinimal {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/** Item ringkas untuk list view — hanya 120 char pertama content */
+export interface ItemSummary {
+  id: string;
+  type: ItemType;
+  title: string;
+  excerpt: string;
+  pinned: boolean;
+  archived: boolean;
+  trashed: boolean;
+  createdAt: string;
+  updatedAt: string;
+  tags: TagMinimal[];
+
+  // Optional compatibility fields for list views and item operations
+  content?: string;
+  source?: string;
+  status?: ItemStatus;
+  favorite?: boolean;
+  deletedAt?: string | null;
+  task?: TaskMetadata | null;
+  link?: LinkMetadata | null;
+  attachments?: Attachment[];
+  aiMetadata?: AIMetadata | null;
+}
+
+/** Full item detail — dimuat saat item diklik */
+export type ItemDetail = Item;
+
+/** Hasil pencarian dengan snippet dan ranking BM25 */
+export interface SearchResult {
+  item: ItemSummary;
+  snippet: string;
+  rank: number;
+}

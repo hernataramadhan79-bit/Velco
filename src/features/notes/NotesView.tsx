@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Item, CreateItemInput } from '../../types/item';
+import { Item, ItemSummary, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Plus, FileText } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface NotesViewProps {
-  notes: Item[];
+  notes: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
-  onSelect: (item: Item) => void;
+  onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
 }

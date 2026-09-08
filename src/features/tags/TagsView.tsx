@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { Tag, Item } from '../../types/item';
+import { Tag, Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Tag as TagIcon, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface TagsViewProps {
   tags: Tag[];
-  items: Item[];
+  items: ItemSummary[];
   selectedTagId: string | null;
   onSelectTag: (tagId: string | null) => void;
   onAddTag: (name: string, color?: string) => Promise<Tag>;
   onRemoveTag: (tagId: string) => Promise<void>;
-  onSelect: (item: Item) => void;
+  onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;

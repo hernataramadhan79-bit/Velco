@@ -1,5 +1,72 @@
 import { AppSettings } from '../types/settings';
 import { LlmProviderConfig } from '../types/ai';
+import { z, ZodSchema } from 'zod';
+
+/**
+ * Parser defensif untuk respons AI yang mungkin mengandung teks non-JSON.
+ * 1. Ekstrak blok JSON pertama menggunakan regex
+ * 2. Bersihkan trailing comma dan karakter bermasalah
+ * 3. Validasi struktur dengan Zod schema
+ */
+export function extractValidJson<T>(raw: string, schema: ZodSchema<T>): T {
+  if (!raw || typeof raw !== 'string') {
+    throw new Error('Input tidak valid: bukan string');
+  }
+
+  // Cari blok JSON pertama: {} atau []
+  const objectMatch = raw.match(/\{[\s\S]*\}/);
+  const arrayMatch = raw.match(/\[[\s\S]*\]/);
+
+  let jsonStr: string | null = null;
+
+  if (objectMatch && arrayMatch) {
+    // Ambil yang muncul lebih awal
+    jsonStr = objectMatch.index! <= arrayMatch.index! ? objectMatch[0] : arrayMatch[0];
+  } else {
+    jsonStr = objectMatch?.[0] ?? arrayMatch?.[0] ?? null;
+  }
+
+  if (!jsonStr) {
+    throw new Error('Tidak ditemukan blok JSON valid dalam respons AI');
+  }
+
+  // Bersihkan trailing comma sebelum } atau ]
+  jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+
+  // Bersihkan newline di dalam string literal (hanya yang di antara tanda kutip)
+  jsonStr = jsonStr.replace(/"([^"]*?)\n([^"]*?)"/g, (_m, p1, p2) => `"${p1}\\n${p2}"`);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error(`Gagal parse JSON: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Validasi dengan Zod
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => i.message).join(', ');
+    throw new Error(`Struktur JSON tidak sesuai schema: ${issues}`);
+  }
+
+  return result.data;
+}
+
+/** Zod schema untuk ExtractedTask dari AI */
+export const ExtractedTaskSchema = z.object({
+  title: z.string().default(''),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  due_date: z.string().nullable().optional(),
+});
+
+/** Zod schema untuk RecipeOutput dari AI */
+export const RecipeOutputSchema = z.object({
+  summary: z.string().nullable().optional(),
+  tags: z.array(z.string()).default([]),
+  extracted_tasks: z.array(ExtractedTaskSchema).default([]),
+  markdown_content: z.string().nullable().optional(),
+});
 
 /**
  * Derives the active LlmProviderConfig from AppSettings.

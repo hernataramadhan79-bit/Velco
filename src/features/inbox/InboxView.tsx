@@ -7,12 +7,12 @@ import {
   InboxDropdownFilter,
   InboxCategoryFilter,
 } from '../../components/inbox/InboxDropdownFilter';
-import { Item, CreateItemInput } from '../../types/item';
+import { Item, ItemSummary, CreateItemInput } from '../../types/item';
 
 interface InboxViewProps {
-  items: Item[];
+  items: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
-  onSelect: (item: Item) => void;
+  onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;

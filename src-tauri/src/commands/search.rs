@@ -1,27 +1,153 @@
 use rusqlite::params;
 use tauri::State;
 
-use crate::commands::items::ItemRecord;
+use crate::commands::items::{ItemSummary, SearchResult, TagMinimal};
 use crate::database::Database;
 
+/// Sanitasi query FTS5: hilangkan karakter berbahaya, pertahankan alphanumeric
+fn sanitize_fts_query(query: &str) -> String {
+    let tokens: Vec<String> = query
+        .split_whitespace()
+        .filter_map(|w| {
+            let clean: String = w
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+                .collect();
+            if clean.len() >= 2 { Some(format!("\"{}\"", clean)) } else { None }
+        })
+        .collect();
+    tokens.join(" ")
+}
+
+/// Pencarian menggunakan FTS5 MATCH + BM25 ranking + snippet()
 #[tauri::command]
-pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<ItemRecord>, String> {
+pub fn search_items_v2(
+    db: State<'_, Database>,
+    query: String,
+) -> Result<Vec<SearchResult>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let trimmed = query.trim();
 
-    // 1. If query is empty, return up to 50 most recent items
+    if trimmed.is_empty() {
+        // Jika query kosong, kembalikan 50 item terbaru
+        let sql = r#"
+            SELECT
+                i.id, i.type, i.title,
+                COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
+                COALESCE(i.pinned, i.favorite, 0) as pinned,
+                i.archived,
+                CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
+                i.created_at, i.updated_at,
+                COALESCE(
+                    (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
+                     FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
+                    '[]'
+                ) as tags_json,
+                '' as snippet_text,
+                0.0 as rank
+            FROM items i
+            WHERE i.deleted_at IS NULL
+            ORDER BY i.updated_at DESC
+            LIMIT 50
+        "#;
+
+        let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |row| map_search_row(row)).map_err(|e| e.to_string())?;
+        let mut results = Vec::new();
+        for r in rows { results.push(r.map_err(|e| e.to_string())?); }
+        return Ok(results);
+    }
+
+    let fts_query = sanitize_fts_query(trimmed);
+    if fts_query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Pencarian FTS5 dengan BM25 ranking dan snippet
+    let sql = r#"
+        SELECT
+            i.id, i.type, i.title,
+            COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
+            COALESCE(i.pinned, i.favorite, 0) as pinned,
+            i.archived,
+            CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
+            i.created_at, i.updated_at,
+            COALESCE(
+                (SELECT json_group_array(json_object('id', t.id, 'name', t.name, 'color', t.color))
+                 FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
+                '[]'
+            ) as tags_json,
+            snippet(items_fts, 1, '<b>', '</b>', '...', 20) as snippet_text,
+            bm25(items_fts) as rank
+        FROM items_fts
+        JOIN items i ON items_fts.rowid = i.id
+        WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL
+        ORDER BY bm25(items_fts)
+        LIMIT 50
+    "#;
+
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![fts_query], |row| map_search_row(row))
+        .map_err(|e| e.to_string())?;
+
+    let mut results = Vec::new();
+    for r in rows {
+        match r {
+            Ok(sr) => results.push(sr),
+            Err(_) => continue, // skip baris bermasalah
+        }
+    }
+
+    Ok(results)
+}
+
+/// Helper: map baris query ke SearchResult
+fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
+    let pinned_val: i64 = row.get(4)?;
+    let archived_val: i64 = row.get(5)?;
+    let trashed_val: i64 = row.get(6)?;
+    let tags_json: String = row.get(9).unwrap_or_else(|_| "[]".to_string());
+    let snippet_text: String = row.get(10).unwrap_or_default();
+    let rank: f64 = row.get(11).unwrap_or(0.0);
+
+    let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
+
+    Ok(SearchResult {
+        item: ItemSummary {
+            id: row.get(0)?,
+            r#type: row.get(1)?,
+            title: row.get(2)?,
+            excerpt: row.get(3)?,
+            pinned: pinned_val != 0,
+            archived: archived_val != 0,
+            trashed: trashed_val != 0,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            tags,
+        },
+        snippet: snippet_text,
+        rank,
+    })
+}
+
+/// Command lama — dipertahankan untuk backward compatibility
+#[tauri::command]
+pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate::commands::items::ItemRecord>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let trimmed = query.trim();
+
     if trimmed.is_empty() {
         let mut stmt = conn
-            .prepare(
-                "SELECT id FROM items WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 50",
-            )
+            .prepare("SELECT id FROM items WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 50")
             .map_err(|e| e.to_string())?;
-        let id_rows = stmt
+        let ids: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|e| e.to_string())?;
-
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
         let mut results = Vec::new();
-        for id in id_rows.flatten() {
+        for id in ids {
             if let Ok(item) = crate::commands::items::fetch_item_by_id(&conn, &id) {
                 results.push(item);
             }
@@ -29,96 +155,25 @@ pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<ItemRe
         return Ok(results);
     }
 
+    let fts_query = sanitize_fts_query(trimmed);
+    if fts_query.is_empty() {
+        return Ok(vec![]);
+    }
+
     let mut item_ids: Vec<String> = Vec::new();
-
-    // 2. Sanitize query tokens for FTS5 (strip control characters and quotes)
-    let clean_tokens: Vec<String> = trimmed
-        .split_whitespace()
-        .map(|w| {
-            w.chars()
-                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
-                .collect::<String>()
-        })
-        .filter(|w| !w.is_empty())
-        .collect();
-
-    if !clean_tokens.is_empty() {
-        let fts_query = clean_tokens
-            .iter()
-            .map(|t| format!("\"{}\"*", t))
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        let fts_res = conn.prepare(
-            r#"
-            SELECT i.id
-            FROM items_fts f
-            JOIN items i ON f.item_id = i.id
-            WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL
-            ORDER BY rank
-            LIMIT 50
-            "#,
-        );
-
-        if let Ok(mut stmt) = fts_res {
-            if let Ok(rows) = stmt.query_map(params![fts_query], |row| row.get::<_, String>(0)) {
-                for id in rows.flatten() {
-                    if !item_ids.contains(&id) {
-                        item_ids.push(id);
-                    }
-                }
-            }
-        }
-    }
-
-    // 3. Search matching tags (e.g. searching for a tag name directly)
-    let tag_like = format!("%{}%", trimmed);
-    if let Ok(mut tag_stmt) = conn.prepare(
-        r#"
-        SELECT DISTINCT it.item_id
-        FROM tags t
-        JOIN item_tags it ON t.id = it.tag_id
-        JOIN items i ON it.item_id = i.id
-        WHERE i.deleted_at IS NULL AND (t.name LIKE ?1 OR t.name = ?2)
-        LIMIT 20
-        "#,
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT i.id FROM items_fts JOIN items i ON items_fts.rowid = i.id WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL ORDER BY bm25(items_fts) LIMIT 50"
     ) {
-        if let Ok(tag_rows) = tag_stmt.query_map(params![tag_like, trimmed], |row| row.get::<_, String>(0)) {
-            for id in tag_rows.flatten() {
-                if !item_ids.contains(&id) {
-                    item_ids.push(id);
-                }
-            }
-        }
-    }
-
-    // 4. Fallback LIKE search if FTS produced few or no results
-    if item_ids.len() < 10 {
-        let like_param = format!("%{}%", trimmed);
-        if let Ok(mut like_stmt) = conn.prepare(
-            r#"
-            SELECT id FROM items
-            WHERE deleted_at IS NULL AND (title LIKE ?1 OR content LIKE ?1)
-            ORDER BY updated_at DESC
-            LIMIT 50
-            "#,
-        ) {
-            if let Ok(like_rows) = like_stmt.query_map(params![like_param], |row| row.get::<_, String>(0)) {
-                for id in like_rows.flatten() {
-                    if !item_ids.contains(&id) {
-                        item_ids.push(id);
-                    }
-                }
-            }
+        if let Ok(rows) = stmt.query_map(params![fts_query], |row| row.get::<_, String>(0)) {
+            item_ids = rows.filter_map(|r| r.ok()).collect();
         }
     }
 
     let mut results = Vec::new();
-    for id in item_ids.into_iter().take(50) {
+    for id in item_ids {
         if let Ok(item) = crate::commands::items::fetch_item_by_id(&conn, &id) {
             results.push(item);
         }
     }
-
     Ok(results)
 }

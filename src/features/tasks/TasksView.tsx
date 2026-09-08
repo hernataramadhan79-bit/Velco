@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Item, CreateItemInput, PriorityLevel, parseTaskBatchSource, TaskBatchSource } from '../../types/item';
+import { Item, ItemSummary, CreateItemInput, PriorityLevel, parseTaskBatchSource, TaskBatchSource } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { TaskBatchSection } from '../../components/tasks/TaskBatchSection';
 import { Plus, CheckSquare, Bell, CheckCircle2 } from 'lucide-react';
@@ -9,9 +9,9 @@ import { reminderService } from '../../services/reminder/reminderService';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface TasksViewProps {
-  tasks: Item[];
+  tasks: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
-  onSelect: (item: Item) => void;
+  onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
@@ -89,11 +89,11 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
   // Group filtered tasks into multi-task AI batches and clean standalone tasks
   const { batchGroups, standaloneTasks } = useMemo(() => {
-    const rawBatchMap = new Map<string, { meta: TaskBatchSource; tasks: Item[] }>();
-    const standalone: Item[] = [];
+    const rawBatchMap = new Map<string, { meta: TaskBatchSource; tasks: ItemSummary[] }>();
+    const standalone: ItemSummary[] = [];
 
     for (const task of filteredTasks) {
-      const parsed = parseTaskBatchSource(task.source);
+      const parsed = parseTaskBatchSource((task as any).source ?? '');
       if (parsed && parsed.batchId) {
         const existing = rawBatchMap.get(parsed.batchId);
         if (existing) {
@@ -108,7 +108,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
     // Only promote to a Batch Section if the batch has >= 2 tasks
     // If only 1 task was generated or exists, keep it in standalone to avoid visual noise/clutter!
-    const batches: { meta: TaskBatchSource; tasks: Item[] }[] = [];
+    const batches: { meta: TaskBatchSource; tasks: ItemSummary[] }[] = [];
 
     rawBatchMap.forEach((group) => {
       if (group.tasks.length >= 2) {

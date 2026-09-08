@@ -18,14 +18,14 @@ import {
   RotateCcw,
   Bot,
 } from 'lucide-react';
-import { Item } from '../../types/item';
+import { Item, ItemSummary } from '../../types/item';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { formatTaskDueDate } from '../../utils/dateUtils';
 
 interface ItemCardProps {
-  item: Item;
-  onSelect: (item: Item) => void;
+  item: Item | ItemSummary;
+  onSelect: (item: any) => void;
   onToggleTask?: (itemId: string, completed: boolean) => void;
   onToggleFavorite?: (itemId: string) => void;
   onToggleArchive?: (itemId: string) => void;
@@ -158,9 +158,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             </div>
 
             {/* Snippet / preview */}
-            {item.content && item.content !== item.title && (
+            {(item.content || (item as any).excerpt) && (item.content || (item as any).excerpt) !== item.title && (
               <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
-                {item.content.replace(/^[#*-]\s+/gm, '')}
+                {(item.content || (item as any).excerpt).replace(/^[#*-]\s+/gm, '')}
               </p>
             )}
 
@@ -290,9 +290,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                       onToggleFavorite(item.id);
                     }}
                     className="p-1 rounded text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-amber-400 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
-                    title={item.favorite ? 'Unfavorite' : 'Favorite'}
+                    title={(item as any).favorite || (item as ItemSummary).pinned ? 'Unfavorite' : 'Favorite'}
                   >
-                    <Star className={`w-3.5 h-3.5 ${item.favorite ? 'fill-amber-400 text-amber-500' : ''}`} />
+                    <Star className={`w-3.5 h-3.5 ${(item as any).favorite || (item as ItemSummary).pinned ? 'fill-amber-400 text-amber-500' : ''}`} />
                   </button>
                 )}
 

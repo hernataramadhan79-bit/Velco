@@ -7,6 +7,19 @@ interface MarkdownViewerProps {
   className?: string;
 }
 
+function sanitizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    // Hanya izinkan protocol http, https, file
+    if (!['http:', 'https:', 'file:'].includes(u.protocol)) {
+      return '#';
+    }
+    return url;
+  } catch {
+    return '#';
+  }
+}
+
 interface TableData {
   headers: string[];
   alignments: ('left' | 'center' | 'right')[];
@@ -508,7 +521,7 @@ function formatInline(text: string, depth = 0): React.ReactNode {
       elements.push(
         <a
           key={match.index}
-          href={linkUrl}
+          href={sanitizeUrl(linkUrl)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => {
@@ -529,7 +542,7 @@ function formatInline(text: string, depth = 0): React.ReactNode {
       elements.push(
         <a
           key={match.index}
-          href={url}
+          href={sanitizeUrl(url)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => {

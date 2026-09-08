@@ -8,10 +8,10 @@ import {
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useItemStore } from '../../stores/itemStore';
-import { Item } from '../../types/item';
+import { Item, ItemSummary } from '../../types/item';
 
 interface SelectionActionBarProps {
-  items: Item[];
+  items: ItemSummary[];
   onOpenFoundry?: () => void;
   onFocusChat?: () => void;
 }

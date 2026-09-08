@@ -10,6 +10,7 @@ interface ChatState {
   messages: ChatMessage[];
   isGenerating: boolean;
   activeRequestId: string | null;
+  estimatedTokenCount: number;
   sendMessage: (
     prompt: string,
     stagedItems: StagedItem[],
@@ -28,6 +29,7 @@ export const useChatStore = create<ChatState>()(
       messages: [],
       isGenerating: false,
       activeRequestId: null,
+      estimatedTokenCount: 0,
 
       sendMessage: async (prompt: string, stagedItems: StagedItem[], providerConfig: LlmProviderConfig) => {
         const trimmed = prompt.trim();
@@ -157,7 +159,8 @@ export const useChatStore = create<ChatState>()(
             activeUnlisten();
             activeUnlisten = null;
           }
-          set({ isGenerating: false, activeRequestId: null });
+          const totalChars = get().messages.reduce((sum, m) => sum + m.content.length, 0);
+          set({ isGenerating: false, activeRequestId: null, estimatedTokenCount: Math.round(totalChars / 4) });
         }
       },
 
@@ -180,13 +183,18 @@ export const useChatStore = create<ChatState>()(
           activeUnlisten();
           activeUnlisten = null;
         }
-        set({ messages: [], isGenerating: false, activeRequestId: null });
+        set({ messages: [], isGenerating: false, activeRequestId: null, estimatedTokenCount: 0 });
       },
 
       deleteMessage: (id: string) => {
-        set((state) => ({
-          messages: state.messages.filter((m) => m.id !== id),
-        }));
+        set((state) => {
+          const newMessages = state.messages.filter((m) => m.id !== id);
+          const totalChars = newMessages.reduce((sum, m) => sum + m.content.length, 0);
+          return {
+            messages: newMessages,
+            estimatedTokenCount: Math.round(totalChars / 4),
+          };
+        });
       },
     }),
     {
