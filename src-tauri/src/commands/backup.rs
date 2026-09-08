@@ -49,8 +49,8 @@ pub fn import_backup(db: State<'_, Database>, json_data: String) -> Result<usize
     for item in payload.items {
         tx.execute(
             r#"
-            INSERT OR REPLACE INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            INSERT OR REPLACE INTO items (id, type, title, content, source, status, favorite, pinned, archived, created_at, updated_at, deleted_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11)
             "#,
             params![
                 item.id,

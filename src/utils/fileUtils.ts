@@ -161,3 +161,73 @@ export function extractSizeFromContent(content?: string): string | null {
   const match = content.match(/Size:\s*([0-9.]+\s*[KMGT]?B)/i);
   return match ? match[1] : null;
 }
+
+/**
+ * Creates a lightweight image thumbnail (Base64 JPEG) using an offscreen canvas.
+ * Reduces multi-megabyte images to ~20-30 KB for snappy previewing and minimal SQLite payload.
+ */
+export async function createImageThumbnail(
+  file: File,
+  maxDimension = 480,
+  quality = 0.8
+): Promise<string> {
+  return new Promise((resolve) => {
+    // If not an image or SVG/GIF, fallback to FileReader
+    if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string) || '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+
+      try {
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      } catch {
+        resolve('');
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve('');
+    };
+
+    img.src = objectUrl;
+  });
+}

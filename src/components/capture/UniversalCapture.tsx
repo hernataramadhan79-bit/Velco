@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { CreateItemInput, ItemType, PriorityLevel } from '../../types/item';
 import { DueDatePicker } from '../tasks/DueDatePicker';
+import { createImageThumbnail } from '../../utils/fileUtils';
 
 interface UniversalCaptureProps {
   onCapture: (input: CreateItemInput) => Promise<any>;
@@ -55,22 +56,30 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
     processFiles(files);
   };
 
-  const processFiles = (files: File[]) => {
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setAttachedFiles((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            size: file.size,
-            type: file.type || 'application/octet-stream',
-            dataUrl: reader.result as string,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
+  const processFiles = async (files: File[]) => {
+    for (const file of files) {
+      let dataUrl: string | undefined = undefined;
+      if (file.type.startsWith('image/')) {
+        dataUrl = await createImageThumbnail(file, 480, 0.8);
+      } else if (file.size < 500 * 1024) {
+        dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string) || undefined);
+          reader.onerror = () => resolve(undefined);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setAttachedFiles((prev) => [
+        ...prev,
+        {
+          name: file.name,
+          size: file.size,
+          type: file.type || 'application/octet-stream',
+          dataUrl,
+        },
+      ]);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {

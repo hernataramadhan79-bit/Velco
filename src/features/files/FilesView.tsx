@@ -19,7 +19,7 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { FileGridCard } from './FileGridCard';
 import { FileListRow } from './FileListRow';
 import { FileLightboxModal } from './FileLightboxModal';
-import { FileCategory, getFileCategory, extractSizeFromContent } from '../../utils/fileUtils';
+import { FileCategory, getFileCategory, extractSizeFromContent, createImageThumbnail } from '../../utils/fileUtils';
 import { useSelectionStore } from '../../stores/selectionStore';
 
 interface FilesViewProps {
@@ -154,30 +154,41 @@ export const FilesView: React.FC<FilesViewProps> = ({
     }
   };
 
-  const handleFiles = (fileList: FileList) => {
-    Array.from(fileList).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        onCapture({
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-          title: file.name,
-          content: `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${file.type}`,
-          attachments: [
-            {
-              id: crypto.randomUUID(),
-              fileName: file.name,
-              filePath: `attachments/${file.name}`,
-              mimeType: file.type || 'application/octet-stream',
-              fileSize: file.size,
-              checksum: 'local',
-              createdAt: new Date().toISOString(),
-              dataUrl: reader.result as string,
-            },
-          ],
+  const handleFiles = async (fileList: FileList) => {
+    const filesArray = Array.from(fileList);
+    for (const file of filesArray) {
+      let dataUrl: string | undefined = undefined;
+      const isImage = file.type.startsWith('image/');
+
+      if (isImage) {
+        dataUrl = await createImageThumbnail(file, 480, 0.8);
+      } else if (file.size < 500 * 1024) {
+        dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string) || undefined);
+          reader.onerror = () => resolve(undefined);
+          reader.readAsDataURL(file);
         });
-      };
-      reader.readAsDataURL(file);
-    });
+      }
+
+      await onCapture({
+        type: isImage ? 'image' : 'file',
+        title: file.name,
+        content: `File: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\nType: ${file.type}`,
+        attachments: [
+          {
+            id: crypto.randomUUID(),
+            fileName: file.name,
+            filePath: `attachments/${file.name}`,
+            mimeType: file.type || 'application/octet-stream',
+            fileSize: file.size,
+            checksum: 'local',
+            createdAt: new Date().toISOString(),
+            dataUrl,
+          },
+        ],
+      });
+    }
   };
 
   return (

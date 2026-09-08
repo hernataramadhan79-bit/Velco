@@ -305,7 +305,7 @@ pub fn get_items_summary(
             COALESCE(i.type, 'note'),
             COALESCE(i.title, ''),
             COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
-            COALESCE(i.pinned, i.favorite, 0) as pinned,
+            CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END as pinned,
             COALESCE(i.archived, 0) as archived,
             CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
             COALESCE(i.created_at, '') as created_at,
@@ -777,7 +777,7 @@ pub fn update_item(db: State<'_, Database>, payload: UpdateItemPayload) -> Resul
     }
     if let Some(favorite) = payload.favorite {
         conn.execute(
-            "UPDATE items SET favorite = ?1, updated_at = ?2 WHERE id = ?3",
+            "UPDATE items SET favorite = ?1, pinned = ?1, updated_at = ?2 WHERE id = ?3",
             params![if favorite { 1 } else { 0 }, now, payload.id],
         )
         .map_err(|e| e.to_string())?;

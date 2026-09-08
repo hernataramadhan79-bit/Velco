@@ -9,7 +9,17 @@ use std::time::Duration;
 
 pub fn run() {
     let storage = StorageManager::new(None);
-    let db = Database::new(storage.db_path()).expect("Failed to initialize SQLite database");
+    let db_path = storage.db_path();
+    let db = match Database::new(&db_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("Failed to initialize database at {:?}: {}. Attempting recovery...", db_path, e);
+            let backup_name = format!("velco_corrupted_{}.db", chrono::Utc::now().timestamp());
+            let backup_path = storage.database_dir().join(backup_name);
+            let _ = std::fs::rename(&db_path, &backup_path);
+            Database::new(&db_path).expect("Failed to initialize fresh SQLite database after recovery")
+        }
+    };
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -121,44 +131,57 @@ fn check_and_send_reminders(app: &tauri::AppHandle) {
         None => return,
     };
 
-    let conn = match db.conn.lock() {
-        Ok(c) => c,
-        Err(_) => return,
+    // 1. Ambil tasks yang due dan update notified = 1, lalu LEPASKAN db lock secepatnya
+    let tasks: Vec<(String, String, String, String, String, String)> = {
+        let conn = match db.conn.lock() {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        // Query task yang due, belum selesai, belum dinotifikasi
+        let sql = r#"
+            SELECT t.id, t.item_id, i.title, i.content, t.due_date, t.priority
+            FROM tasks t
+            JOIN items i ON t.item_id = i.id
+            WHERE t.due_date <= datetime('now', 'localtime')
+              AND t.completed = 0
+              AND t.notified = 0
+              AND i.deleted_at IS NULL
+            LIMIT 10
+        "#;
+
+        let mut stmt = match conn.prepare(sql) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+
+        let rows: Vec<(String, String, String, String, String, String)> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0).unwrap_or_default(),
+                    row.get::<_, String>(1).unwrap_or_default(),
+                    row.get::<_, String>(2).unwrap_or_default(),
+                    row.get::<_, String>(3).unwrap_or_default(),
+                    row.get::<_, String>(4).unwrap_or_default(),
+                    row.get::<_, String>(5).unwrap_or_else(|_| "medium".to_string()),
+                ))
+            })
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            .unwrap_or_default();
+
+        for (task_id, ..) in &rows {
+            let _ = conn.execute(
+                "UPDATE tasks SET notified = 1 WHERE id = ?1",
+                rusqlite::params![task_id],
+            );
+        }
+
+        rows
+        // lock db.conn dilepaskan di sini
     };
 
-    // Query task yang due, belum selesai, belum dinotifikasi
-    let sql = r#"
-        SELECT t.id, t.item_id, i.title, i.content, t.due_date, t.priority
-        FROM tasks t
-        JOIN items i ON t.item_id = i.id
-        WHERE t.due_date <= datetime('now', 'localtime')
-          AND t.completed = 0
-          AND t.notified = 0
-          AND i.deleted_at IS NULL
-        LIMIT 10
-    "#;
-
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    let tasks: Vec<(String, String, String, String, String, String)> = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0).unwrap_or_default(),
-                row.get::<_, String>(1).unwrap_or_default(),
-                row.get::<_, String>(2).unwrap_or_default(),
-                row.get::<_, String>(3).unwrap_or_default(),
-                row.get::<_, String>(4).unwrap_or_default(),
-                row.get::<_, String>(5).unwrap_or_else(|_| "medium".to_string()),
-            ))
-        })
-        .map(|rows| rows.filter_map(|r| r.ok()).collect())
-        .unwrap_or_default();
-
-    for (task_id, item_id, title, content, due_date, priority) in tasks {
-        // Kirim notifikasi OS via tauri-plugin-notification
+    // 2. Kirim notifikasi desktop OS DI LUAR lock database agar tidak memblokir IPC UI
+    for (_task_id, _item_id, title, content, due_date, priority) in tasks {
         let priority_label = match priority.as_str() {
             "high" | "urgent" => "🔴 ",
             "medium" => "🟡 ",
@@ -176,13 +199,5 @@ fn check_and_send_reminders(app: &tauri::AppHandle) {
             .title(&notif_title)
             .body(&notif_body)
             .show();
-
-        // Update notified = 1
-        let _ = conn.execute(
-            "UPDATE tasks SET notified = 1 WHERE id = ?1",
-            rusqlite::params![task_id],
-        );
-
-        let _ = item_id; // suppress unused warning
     }
 }
