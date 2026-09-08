@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Item, Tag, PriorityLevel } from '../../types/item';
+import React, { useState, useMemo } from 'react';
+import { Item, Tag, PriorityLevel, Attachment } from '../../types/item';
 import { Modal } from '../common/Modal';
 import { ItemTagsEditor } from './ItemTagsEditor';
 import { Badge } from '../common/Badge';
@@ -17,6 +17,18 @@ import {
   Loader2,
   ArrowLeft,
   RotateCcw,
+  Download,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
+  Info,
+  FileText,
+  Music,
+  Video,
+  Copy,
+  Check,
+  Calendar,
+  HardDrive,
 } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
 import { aiService } from '../../services/ai';
@@ -36,6 +48,13 @@ import {
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { TagRecommendationBar } from './TagRecommendationBar';
 import { getProviderDisplayName } from '../../utils/aiUtils';
+import {
+  formatFileSize,
+  getFileTypeMeta,
+  getFileCategory,
+  extractSizeFromContent,
+} from '../../utils/fileUtils';
+import { FileLightboxModal } from '../../features/files/FileLightboxModal';
 
 interface ItemDetailModalProps {
   item: Item | null;
@@ -79,7 +98,75 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [activeAiAction, setActiveAiAction] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'content' | 'ai' | 'attachments'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'specs' | 'ai' | 'attachments'>('content');
+  const [selectedAttachmentIdx, setSelectedAttachmentIdx] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+
+  const hasFiles =
+    item.type === 'file' ||
+    item.type === 'image' ||
+    (item.attachments && item.attachments.length > 0);
+
+  const activeAttachment: Attachment | undefined =
+    item.attachments && item.attachments.length > 0
+      ? item.attachments[Math.min(selectedAttachmentIdx, item.attachments.length - 1)]
+      : undefined;
+
+  const activePreviewUrl =
+    activeAttachment?.dataUrl || item.thumbnailUrl || item.link?.previewImage || null;
+
+  const activeFileName = activeAttachment?.fileName || item.title;
+  const activeMeta = getFileTypeMeta(activeFileName, activeAttachment?.mimeType);
+
+  const isImage =
+    activeMeta.category === 'image' ||
+    (activeAttachment && activeAttachment.mimeType.startsWith('image/')) ||
+    item.type === 'image';
+
+  const isPdf =
+    activeMeta.extension === 'PDF' ||
+    (activeAttachment && activeAttachment.mimeType.includes('pdf'));
+
+  const isVideo =
+    activeMeta.category === 'media' &&
+    ((activeAttachment && activeAttachment.mimeType.startsWith('video/')) ||
+      ['mp4', 'webm', 'mov', 'mkv'].includes(activeMeta.extension.toLowerCase()));
+
+  const isAudio =
+    activeMeta.category === 'media' &&
+    ((activeAttachment && activeAttachment.mimeType.startsWith('audio/')) ||
+      ['mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(activeMeta.extension.toLowerCase()));
+
+  const lightboxItem = useMemo(
+    () => ({
+      id: item.id,
+      type: item.type,
+      title: activeAttachment?.fileName || item.title,
+      excerpt: item.content,
+      pinned: item.favorite,
+      archived: item.archived,
+      trashed: !!item.deletedAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      tags: item.tags,
+      thumbnailUrl: activePreviewUrl,
+    }),
+    [item, activeAttachment, activePreviewUrl]
+  );
+
+  const handleDownloadAttachment = (att?: Attachment) => {
+    const target = att || activeAttachment;
+    const url = target?.dataUrl || item.thumbnailUrl;
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = target?.fileName || item.title || 'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const [chatMessages, setChatMessages] = useState<
     { role: 'user' | 'assistant'; content: string; time: string }[]
   >([]);
@@ -374,23 +461,61 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl">
-      <div className="space-y-4">
-        {/* Top Navigation & Actions Bar */}
-        <div className="flex items-center justify-between pb-3 -mt-1 border-b border-slate-200 dark:border-white/[0.08]">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shadow-2xs"
-            title="Back to workspace (Esc)"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back</span>
-            <kbd className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400 font-mono">
-              Esc
-            </kbd>
-          </button>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        maxWidth="4xl"
+        bodyClassName="p-5 sm:p-7 space-y-5"
+      >
+        {/* ── Top Header & Actions Bar ── */}
+        <div className="flex items-center justify-between pb-3.5 border-b border-slate-200 dark:border-white/[0.08]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shadow-2xs"
+              title="Back to workspace (Esc)"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+              <kbd className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400 font-mono">
+                Esc
+              </kbd>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide uppercase border ${
+                  hasFiles
+                    ? `${activeMeta.badgeBg} ${activeMeta.badgeText} ${activeMeta.badgeBorder}`
+                    : 'bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-white/[0.08]'
+                }`}
+              >
+                {hasFiles ? activeMeta.extension : item.type}
+              </span>
+              <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono hidden sm:inline-block">
+                Created{' '}
+                {new Date(item.createdAt).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
+          </div>
 
           <div className="flex items-center gap-1.5">
+            {hasFiles && activePreviewUrl && (
+              <button
+                type="button"
+                onClick={() => handleDownloadAttachment()}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Download file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            )}
+
             {item.deletedAt ? (
               <>
                 <button
@@ -432,7 +557,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                   }`}
                   title="Favorite"
                 >
-                  <Star className="w-4 h-4" />
+                  <Star className={`w-4 h-4 ${item.favorite ? 'fill-current' : ''}`} />
                 </button>
                 <button
                   type="button"
@@ -452,7 +577,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     onTrash(item.id);
                     onClose();
                   }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                   title="Trash"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -462,25 +587,194 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           </div>
         </div>
 
-        {/* Title bar */}
-        <div className="flex items-start justify-between gap-4 pb-1">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Badge variant="default">{item.type}</Badge>
-              <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
-                Created {new Date(item.createdAt).toLocaleString()}
-              </span>
+        {/* ── File Preview Hero Stage (Shown prominently when item is or has files) ── */}
+        {hasFiles && (
+          <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/[0.1] bg-slate-900/[0.03] dark:bg-black/40 shadow-xs">
+            {/* Stage Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-white/[0.08] bg-white/80 dark:bg-[#141418]/80 backdrop-blur-md">
+              <div className="flex items-center gap-2 min-w-0 pr-2">
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${activeMeta.badgeBg} ${activeMeta.badgeText} ${activeMeta.badgeBorder}`}
+                >
+                  {activeMeta.extension}
+                </span>
+                <span className="text-xs font-semibold text-slate-800 dark:text-zinc-200 truncate">
+                  {activeFileName}
+                </span>
+                {activeAttachment?.fileSize ? (
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono shrink-0">
+                    • {formatFileSize(activeAttachment.fileSize)}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isImage && (
+                  <button
+                    type="button"
+                    onClick={() => setIsZoomed((z) => !z)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                    title={isZoomed ? 'Fit to frame' : 'Zoom 100%'}
+                  >
+                    {isZoomed ? <ZoomOut className="w-3.5 h-3.5" /> : <ZoomIn className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+
+                {isImage && (
+                  <button
+                    type="button"
+                    onClick={() => setIsLightboxOpen(true)}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                    title="Fullscreen Lightbox"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {activePreviewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAttachment()}
+                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                    title="Download file"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Stage Body */}
+            <div
+              className={`relative flex items-center justify-center min-h-[220px] max-h-[460px] overflow-auto p-4 ${
+                isImage ? (isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in') : ''
+              }`}
+            >
+              {isImage && activePreviewUrl ? (
+                <img
+                  src={activePreviewUrl}
+                  alt={activeFileName}
+                  onClick={() => setIsLightboxOpen(true)}
+                  className={`transition-all duration-200 select-none rounded-xl shadow-sm ${
+                    isZoomed
+                      ? 'max-w-none object-none'
+                      : 'max-w-full max-h-[420px] object-contain'
+                  }`}
+                />
+              ) : isPdf && activePreviewUrl ? (
+                <iframe
+                  src={activePreviewUrl}
+                  title={activeFileName}
+                  className="w-full h-[420px] rounded-xl border-0 shadow-inner bg-white"
+                />
+              ) : isVideo && activePreviewUrl ? (
+                <video
+                  src={activePreviewUrl}
+                  controls
+                  className="w-full max-h-[420px] rounded-xl bg-black shadow-md"
+                />
+              ) : isAudio && activePreviewUrl ? (
+                <div className="w-full max-w-md p-6 flex flex-col items-center gap-4 bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <Music className="w-7 h-7" />
+                  </div>
+                  <div className="text-center">
+                    <h4 className="font-semibold text-slate-800 dark:text-zinc-200 text-sm">
+                      {activeFileName}
+                    </h4>
+                    <span className="text-xs text-slate-400 dark:text-zinc-500 font-mono">
+                      {formatFileSize(activeAttachment?.fileSize)} • Audio File
+                    </span>
+                  </div>
+                  <audio src={activePreviewUrl} controls className="w-full" />
+                </div>
+              ) : (
+                /* Fallback Document Card */
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <div
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 shadow-sm ${activeMeta.iconBg} ${activeMeta.iconColor}`}
+                  >
+                    <FileText className="w-8 h-8 stroke-[1.5]" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-zinc-200 mb-1 max-w-md truncate">
+                    {activeFileName}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mb-4">
+                    {formatFileSize(activeAttachment?.fileSize)} • {activeMeta.category.toUpperCase()} •{' '}
+                    {activeAttachment?.mimeType || 'Standard file'}
+                  </p>
+                  {activePreviewUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadAttachment()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download File</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Multiple Attachments Thumbnail Selector Strip */}
+            {item.attachments && item.attachments.length > 1 && (
+              <div className="flex items-center gap-2 p-2.5 border-t border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#101014]/70 overflow-x-auto">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 dark:text-zinc-500 px-1 shrink-0">
+                  Files ({item.attachments.length}):
+                </span>
+                {item.attachments.map((att, idx) => {
+                  const isImg =
+                    att.mimeType.startsWith('image/') ||
+                    att.fileName.match(/\.(png|jpe?g|webp|gif|svg)$/i);
+                  const isSelected = selectedAttachmentIdx === idx;
+                  return (
+                    <button
+                      key={att.id || idx}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAttachmentIdx(idx);
+                        setIsZoomed(false);
+                      }}
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-all shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold ring-1 ring-blue-500/20 shadow-xs'
+                          : 'border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#141418] text-slate-600 dark:text-zinc-400 hover:border-slate-300 dark:hover:border-white/[0.14]'
+                      }`}
+                    >
+                      {isImg && att.dataUrl ? (
+                        <img
+                          src={att.dataUrl}
+                          alt={att.fileName}
+                          className="w-4 h-4 object-cover rounded"
+                        />
+                      ) : (
+                        <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                      <span className="max-w-[120px] truncate">{att.fileName}</span>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {formatFileSize(att.fileSize)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Title Bar ── */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
             {isEditing ? (
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-2.5 py-1 text-base font-bold rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.1] text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full px-3 py-1.5 text-base font-bold rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.1] text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 dark:text-zinc-100 tracking-tight">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-zinc-100 tracking-tight leading-snug break-words">
                 {item.title}
               </h2>
             )}
@@ -488,23 +782,23 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
           <button
             onClick={() => (isEditing ? handleSaveEdit() : setIsEditing(true))}
-            className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shrink-0"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer shrink-0"
           >
-            {isEditing ? 'Done' : 'Edit'}
+            {isEditing ? 'Done' : 'Edit Title'}
           </button>
         </div>
 
-        {/* Task row if task */}
-        {item.type === 'task' && item.task && (
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs">
-            <label className="flex items-center gap-2 font-semibold cursor-pointer text-slate-800 dark:text-zinc-200">
+        {/* ── Task Settings Bar (Clean, uncluttered single-row editor if task) ── */}
+        {item.type === 'task' && (
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 font-semibold cursor-pointer text-slate-800 dark:text-zinc-200 text-xs">
               <input
                 type="checkbox"
-                checked={item.task.completed}
+                checked={item.task?.completed || false}
                 onChange={(e) =>
                   onUpdate(item.id, {
                     task: {
-                      ...item.task!,
+                      ...(item.task || { priority: 'medium' }),
                       completed: e.target.checked,
                       completedAt: e.target.checked ? new Date().toISOString() : null,
                     },
@@ -512,87 +806,12 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 }
                 className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-zinc-700 bg-white dark:bg-[#141418]"
               />
-              <span className={item.task.completed ? 'line-through text-slate-400 dark:text-zinc-500' : ''}>
-                {item.task.completed ? 'Completed' : 'Pending Task'}
+              <span className={item.task?.completed ? 'line-through text-slate-400 dark:text-zinc-500' : ''}>
+                {item.task?.completed ? 'Task Completed' : 'Pending Task'}
               </span>
             </label>
 
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400">Priority:</span>
-              {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() =>
-                    onUpdate(item.id, { task: { ...item.task!, priority: p } })
-                  }
-                  className={`px-2 py-0.5 rounded capitalize font-medium cursor-pointer ${
-                    item.task?.priority === p
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Link preview row if link */}
-        {item.type === 'link' && item.link && (
-          <div className="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 flex items-center justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-blue-900 dark:text-blue-200 truncate">
-                {item.link.pageTitle || item.link.url}
-              </div>
-              <div className="text-[11px] text-blue-600 dark:text-blue-400 font-mono truncate">
-                {item.link.url}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => openExternalUrl(item.link!.url)}
-              className="ml-3 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium flex items-center gap-1 shrink-0 cursor-pointer"
-            >
-              <span>Open</span>
-              <ExternalLink className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
-        {/* Task Details Editor (Priority & Due Date & Reminder) */}
-        {item.type === 'task' && (
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                Task Settings
-              </label>
-              <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-slate-400 text-[11px]">Status:</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdate(item.id, {
-                      task: {
-                        ...(item.task || { priority: 'medium' }),
-                        completed: !item.task?.completed,
-                        completedAt: !item.task?.completed ? new Date().toISOString() : null,
-                      },
-                    })
-                  }
-                  className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                    item.task?.completed
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
-                  }`}
-                >
-                  {item.task?.completed ? 'Completed' : 'Pending'}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200 dark:border-white/[0.08]">
-              {/* Priority Selector */}
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-slate-400 dark:text-zinc-500 text-[11px]">Priority:</span>
                 {(['low', 'medium', 'high', 'urgent'] as PriorityLevel[]).map((p) => {
@@ -621,7 +840,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 })}
               </div>
 
-              {/* Due Date & Reminder */}
               <DueDatePicker
                 taskId={item.id}
                 value={item.task?.dueDate || ''}
@@ -638,7 +856,29 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           </div>
         )}
 
-        {/* AI Tag Recommendations Bar */}
+        {/* ── Link Preview Row (if link) ── */}
+        {item.type === 'link' && item.link && (
+          <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-blue-900 dark:text-blue-200 truncate">
+                {item.link.pageTitle || item.link.url}
+              </div>
+              <div className="text-[11px] text-blue-600 dark:text-blue-400 font-mono truncate">
+                {item.link.url}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => openExternalUrl(item.link!.url)}
+              className="ml-3 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
+            >
+              <span>Open in Browser</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {/* ── AI Tag Recommendations Bar ── */}
         {isTagRecOpen && tagRecommendations.length > 0 && (
           <TagRecommendationBar
             recommendations={tagRecommendations}
@@ -647,24 +887,8 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           />
         )}
 
-        {/* Tags Editor */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-              Tags
-            </label>
-            {settings.aiEnabled && !isTagRecOpen && (
-              <button
-                type="button"
-                onClick={() => runAiAction('tags')}
-                disabled={isAiLoading}
-                className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>AI Suggest Tags</span>
-              </button>
-            )}
-          </div>
+        {/* ── Tags Editor Bar ── */}
+        <div className="flex flex-wrap items-center gap-2 pt-0.5">
           <ItemTagsEditor
             itemTags={item.tags || []}
             allTags={allTags}
@@ -679,127 +903,100 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
             }}
             onCreateTag={onCreateTag}
           />
+          {settings.aiEnabled && !isTagRecOpen && (
+            <button
+              type="button"
+              onClick={() => runAiAction('tags')}
+              disabled={isAiLoading}
+              className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50 py-1 px-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>AI Suggest Tags</span>
+            </button>
+          )}
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/[0.08] pt-2 text-xs">
+        {/* ── Navigation Tabs ── */}
+        <div className="flex items-center gap-3 border-b border-slate-200 dark:border-white/[0.08] pt-2 text-xs">
           <button
             onClick={() => setActiveTab('content')}
-            className={`pb-2 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
+            className={`pb-2.5 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
               activeTab === 'content'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
-            Content & Notes
+            {hasFiles ? 'Notes & Description' : 'Content & Notes'}
           </button>
+          {hasFiles && (
+            <button
+              onClick={() => setActiveTab('specs')}
+              className={`pb-2.5 px-1 font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+                activeTab === 'specs'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>File Details</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('ai')}
-            className={`pb-2 px-1 font-semibold border-b-2 flex items-center gap-1 transition-colors cursor-pointer ${
+            className={`pb-2.5 px-1 font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === 'ai'
                 ? 'border-purple-600 text-purple-600 dark:text-purple-400'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Actions & Chat</span>
+            <span>AI Assistant & Chat</span>
             {item.aiMetadata?.summary && (
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
             )}
           </button>
-          {item.attachments && item.attachments.length > 0 && (
+          {item.attachments && item.attachments.length > 1 && (
             <button
               onClick={() => setActiveTab('attachments')}
-              className={`pb-2 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
+              className={`pb-2.5 px-1 font-semibold border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'attachments'
                   ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                   : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200'
               }`}
             >
-              Attachments ({item.attachments.length})
+              All Attachments ({item.attachments.length})
             </button>
           )}
         </div>
 
-        {/* Tab 1: Content */}
+        {/* ── Tab 1: Content & Notes ── */}
         {activeTab === 'content' && (
           <div className="space-y-4">
-            {/* Visual Attachment Previews if any */}
-            {item.attachments && item.attachments.length > 0 && (
-              <div className="space-y-3">
-                {item.attachments.map((att) => {
-                  const isImage =
-                    att.mimeType.startsWith('image/') ||
-                    att.fileName.match(/\.(png|jpe?g|webp|gif|svg)$/i);
-
-                  if (isImage && att.dataUrl) {
-                    return (
-                      <div
-                        key={att.id}
-                        className="rounded-xl overflow-hidden border border-slate-200 dark:border-white/[0.07] bg-slate-100 dark:bg-[#101014] p-1 shadow-xs"
-                      >
-                        <img
-                          src={att.dataUrl}
-                          alt={att.fileName}
-                          className="w-full max-h-[380px] object-contain rounded-xl"
-                        />
-                        <div className="p-2 flex items-center justify-between text-xs text-slate-500 dark:text-zinc-400">
-                          <span className="font-medium truncate">{att.fileName}</span>
-                          <span className="font-mono text-[10px]">
-                            {(att.fileSize / 1024).toFixed(1)} KB
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={att.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-                          <Paperclip className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-slate-900 dark:text-zinc-100">
-                            {att.fileName}
-                          </div>
-                          <div className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
-                            {(att.fileSize / 1024).toFixed(1)} KB • {att.mimeType}
-                          </div>
-                        </div>
-                      </div>
-                      {att.dataUrl && (
-                        <a
-                          href={att.dataUrl}
-                          download={att.fileName}
-                          className="px-3 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] text-slate-800 dark:text-zinc-200 text-xs font-semibold transition-colors"
-                        >
-                          Download
-                        </a>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
             {isEditing ? (
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                rows={10}
+                rows={8}
                 className="w-full p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.08] text-sm text-slate-900 dark:text-zinc-100 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Markdown content..."
+                placeholder="Markdown notes or description..."
               />
+            ) : item.content ? (
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-[#101014]/60 border border-slate-200/80 dark:border-white/[0.06] min-h-[90px] text-sm text-slate-800 dark:text-zinc-200 leading-relaxed">
+                <MarkdownViewer content={item.content} />
+              </div>
             ) : (
-              item.content ? (
-                <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-[#101014]/60 border border-slate-200/80 dark:border-white/[0.06] min-h-[100px] text-sm text-slate-800 dark:text-zinc-200 leading-relaxed">
-                  <MarkdownViewer content={item.content} />
-                </div>
-              ) : null
+              <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-white/[0.08] text-center bg-slate-50/30 dark:bg-white/[0.02]">
+                <p className="text-xs text-slate-400 dark:text-zinc-500 mb-2">
+                  No additional notes or description yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Add Notes
+                </button>
+              </div>
             )}
 
             <div className="flex items-center justify-between pt-1">
@@ -816,14 +1013,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       setContent(item.content);
                       setIsEditing(false);
                     }}
-                    className="px-3 py-1 text-xs rounded-lg text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-white/[0.06]"
+                    className="px-3 py-1.5 text-xs rounded-lg text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-white/[0.06] cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handleSaveEdit}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-xs cursor-pointer"
                   >
                     Save Changes
                   </button>
@@ -835,23 +1032,93 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       type="button"
                       onClick={() => runAiAction('extract_tasks')}
                       disabled={isAiLoading}
-                      className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                       title="Extract discrete tasks from this note using AI"
                     >
                       <ListTodo className="w-3.5 h-3.5" />
                       <span>Extract Tasks</span>
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
-                  >
-                    Edit Note
-                  </button>
+                  {item.content && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
+                    >
+                      Edit Notes
+                    </button>
+                  )}
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── Tab 2: File Specs & Details (Shown when file item) ── */}
+        {activeTab === 'specs' && hasFiles && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">File Name</span>
+                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 break-all">
+                  {activeFileName}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">Extension & Category</span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${activeMeta.badgeBg} ${activeMeta.badgeText} ${activeMeta.badgeBorder}`}>
+                    {activeMeta.extension}
+                  </span>
+                  <span className="text-xs text-slate-700 dark:text-zinc-300 capitalize">
+                    {activeMeta.category}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">File Size</span>
+                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 font-mono">
+                  {formatFileSize(activeAttachment?.fileSize)}
+                  {activeAttachment?.fileSize ? ` (${activeAttachment.fileSize.toLocaleString()} bytes)` : ''}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">MIME Type</span>
+                <p className="text-xs font-semibold text-slate-800 dark:text-zinc-200 font-mono">
+                  {activeAttachment?.mimeType || 'application/octet-stream'}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">Storage Path</span>
+                <p className="text-xs font-mono text-slate-600 dark:text-zinc-400 break-all">
+                  {activeAttachment?.filePath || `attachments/${activeFileName}`}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-400 dark:text-zinc-500">Date Added</span>
+                <p className="text-xs font-mono text-slate-600 dark:text-zinc-400">
+                  {new Date(activeAttachment?.createdAt || item.createdAt).toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            {activePreviewUrl && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadAttachment()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download {activeFileName}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1102,18 +1369,26 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
             ))}
           </div>
         )}
-      </div>
-    </Modal>
+      </Modal>
 
-    {/* Structured Task Extraction Review Dialog */}
-    <TaskExtractionModal
-      isOpen={isExtractionModalOpen}
-      onClose={() => setIsExtractionModalOpen(false)}
-      tasks={extractedTasks}
-      sourceTitle={item.title}
-      onConfirm={handleConfirmExtractedTasks}
-    />
-  </>
+      {/* Structured Task Extraction Review Dialog */}
+      <TaskExtractionModal
+        isOpen={isExtractionModalOpen}
+        onClose={() => setIsExtractionModalOpen(false)}
+        tasks={extractedTasks}
+        sourceTitle={item.title}
+        onConfirm={handleConfirmExtractedTasks}
+      />
+
+      {/* Lightbox Viewer */}
+      {isLightboxOpen && (
+        <FileLightboxModal
+          isOpen={isLightboxOpen}
+          item={lightboxItem}
+          onClose={() => setIsLightboxOpen(false)}
+        />
+      )}
+    </>
   );
 };
 

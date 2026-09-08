@@ -109,9 +109,10 @@ function mapToItemSummary(r: any): ItemSummary {
       fileSize: a.file_size ?? a.fileSize ?? 0,
       checksum: a.checksum ?? '',
       createdAt: a.created_at ?? a.createdAt ?? '',
+      dataUrl: a.data_url ?? a.dataUrl,
     })),
     attachmentsCount: r.attachments_count ?? (r.attachments ? r.attachments.length : 0),
-    thumbnailUrl: r.thumbnail_url ?? r.thumbnailUrl ?? null,
+    thumbnailUrl: r.thumbnail_url ?? r.attachments?.[0]?.data_url ?? r.thumbnailUrl ?? null,
     aiMetadata: r.ai_metadata ?? r.aiMetadata,
   };
 }
@@ -209,7 +210,9 @@ export const useItemStore = create<ItemState>()((set, get) => ({
           id: a.id, itemId: raw.id, fileName: a.file_name,
           filePath: a.file_path, mimeType: a.mime_type,
           fileSize: a.file_size, checksum: a.checksum, createdAt: a.created_at,
+          dataUrl: a.data_url ?? a.dataUrl,
         })),
+        thumbnailUrl: raw.thumbnail_url ?? raw.attachments?.[0]?.data_url ?? raw.link?.preview_image ?? null,
         aiMetadata: raw.ai_metadata ? {
           id: raw.ai_metadata.id, itemId: raw.id,
           provider: raw.ai_metadata.provider, model: raw.ai_metadata.model,
