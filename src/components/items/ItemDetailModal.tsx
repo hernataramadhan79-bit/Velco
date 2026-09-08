@@ -219,6 +219,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [copiedPreviewText, setCopiedPreviewText] = useState(false);
   const [textPreviewMode, setTextPreviewMode] = useState<'formatted' | 'raw'>('formatted');
+  const notify = useItemStore((s) => s.notify);
 
   const activeAttachment: Attachment | undefined =
     item.attachments && item.attachments.length > 0
@@ -308,6 +309,55 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const isCode =
     filePreview?.previewType === 'code' ||
     ['js', 'jsx', 'ts', 'tsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'toml', 'ini', 'env', 'sql', 'sh', 'bash', 'bat', 'ps1', 'json'].includes(rawExt);
+
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPdf || !resolvedPreviewUrl) {
+      setPdfBlobUrl(null);
+      return;
+    }
+
+    if (resolvedPreviewUrl.startsWith('blob:') || resolvedPreviewUrl.startsWith('http')) {
+      setPdfBlobUrl(resolvedPreviewUrl);
+      return;
+    }
+
+    if (resolvedPreviewUrl.startsWith('data:application/pdf')) {
+      try {
+        const commaIdx = resolvedPreviewUrl.indexOf(',');
+        const base64Str = commaIdx !== -1 ? resolvedPreviewUrl.slice(commaIdx + 1) : resolvedPreviewUrl;
+        const binaryStr = atob(base64Str);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setPdfBlobUrl(url);
+
+        return () => {
+          URL.revokeObjectURL(url);
+        };
+      } catch (err) {
+        console.warn('Failed to convert base64 to PDF blob:', err);
+        setPdfBlobUrl(null);
+      }
+    }
+  }, [isPdf, resolvedPreviewUrl]);
+
+  const handleOpenInSystemViewer = async () => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const attachmentId = activeAttachment?.id || item.id;
+      await invoke('open_attachment_in_os', { attachmentId });
+      notify('Membuka dokumen di aplikasi sistem...', 'info');
+    } catch (err) {
+      console.error('Failed to open file in system viewer:', err);
+      notify('Gagal membuka di aplikasi sistem: ' + String(err), 'error');
+    }
+  };
 
   const rawAttachmentText = useMemo(() => {
     if (filePreview?.textContent) return filePreview.textContent;
@@ -452,7 +502,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
   const [tagRecommendations, setTagRecommendations] = useState<TagRecommendation[]>([]);
   const [isTagRecOpen, setIsTagRecOpen] = useState(false);
-  const notify = useItemStore((s) => s.notify);
 
   const handleConfirmExtractedTasks = async (tasksToCreate: StructuredTaskItem[]) => {
     const batchId = crypto.randomUUID();
@@ -967,13 +1016,13 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       : 'max-w-full max-h-[440px] object-contain'
                   }`}
                 />
-              ) : isPdf && resolvedPreviewUrl ? (
+              ) : isPdf && (resolvedPreviewUrl || pdfBlobUrl) ? (
                 <div className="w-full h-[460px] flex flex-col rounded-xl overflow-hidden bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-white/[0.08] shadow-inner">
                   <div className="flex items-center justify-between px-3.5 py-2 bg-slate-200/80 dark:bg-white/[0.06] border-b border-slate-300 dark:border-white/[0.08] text-xs shrink-0">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-red-500" />
-                        <span>Interactive PDF Preview</span>
+                        <span>Dokumen PDF</span>
                       </span>
                       {activeAttachment?.fileSize ? (
                         <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono">
@@ -984,6 +1033,15 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        onClick={handleOpenInSystemViewer}
+                        className="px-2.5 py-1 rounded text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        title="Buka PDF di aplikasi pembaca bawaan sistem (Adobe Acrobat, Edge, Chrome, dll)"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Buka di Aplikasi Bawaan</span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDownloadAttachment()}
                         className="px-2.5 py-1 rounded text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/40 transition-colors flex items-center gap-1 cursor-pointer"
                       >
@@ -992,11 +1050,41 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       </button>
                     </div>
                   </div>
-                  <iframe
-                    src={resolvedPreviewUrl}
-                    title={activeFileName}
-                    className="w-full flex-1 border-0 bg-white"
-                  />
+                  <object
+                    data={pdfBlobUrl || resolvedPreviewUrl || undefined}
+                    type="application/pdf"
+                    className="w-full flex-1 border-0 bg-white dark:bg-zinc-950"
+                  >
+                    <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-zinc-900/60 h-full">
+                      <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-950/50 flex items-center justify-center text-red-500 mb-3">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-zinc-200 mb-1">
+                        Pratinjau Dokumen PDF
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 mb-4 max-w-sm">
+                        Buka dokumen langsung di aplikasi pembaca PDF bawaan sistem Anda untuk kenyamanan dan fitur interaktif penuh.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleOpenInSystemViewer}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Buka di Aplikasi Bawaan</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadAttachment()}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-700 dark:text-zinc-200 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Unduh PDF</span>
+                        </button>
+                      </div>
+                    </div>
+                  </object>
                 </div>
               ) : isVideo && resolvedPreviewUrl ? (
                 <video
@@ -1135,16 +1223,26 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     {formatFileSize(activeAttachment?.fileSize)} • {activeMeta.category.toUpperCase()} •{' '}
                     {activeAttachment?.mimeType || 'Standard file'}
                   </p>
-                  {resolvedPreviewUrl && (
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleDownloadAttachment()}
+                      onClick={handleOpenInSystemViewer}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download File</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Buka di Aplikasi Bawaan</span>
                     </button>
-                  )}
+                    {resolvedPreviewUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAttachment()}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-700 dark:text-zinc-200 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download File</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

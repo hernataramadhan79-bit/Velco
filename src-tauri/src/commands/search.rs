@@ -4,7 +4,7 @@ use tauri::State;
 use crate::commands::items::{ItemSummary, SearchResult, TagMinimal};
 use crate::database::Database;
 
-/// Sanitasi query FTS5: hilangkan karakter berbahaya, pertahankan alphanumeric
+/// Sanitasi query FTS5: mendukung wildcard prefix (*) untuk inisial & pengetikan cepat
 fn sanitize_fts_query(query: &str) -> String {
     let tokens: Vec<String> = query
         .split_whitespace()
@@ -13,13 +13,17 @@ fn sanitize_fts_query(query: &str) -> String {
                 .chars()
                 .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
                 .collect();
-            if clean.len() >= 2 { Some(format!("\"{}\"", clean)) } else { None }
+            if !clean.is_empty() {
+                Some(format!("{}*", clean))
+            } else {
+                None
+            }
         })
         .collect();
     tokens.join(" ")
 }
 
-/// Pencarian menggunakan FTS5 MATCH + BM25 ranking + snippet()
+/// Pencarian super cepat menggunakan Inisial, Prefix, Substring, dan FTS5 Ranking
 #[tauri::command]
 pub fn search_items_v2(
     db: State<'_, Database>,
@@ -83,11 +87,11 @@ pub fn search_items_v2(
     }
 
     let fts_query = sanitize_fts_query(trimmed);
-    if fts_query.is_empty() {
-        return Ok(vec![]);
-    }
+    let exact_query = trimmed.to_string();
+    let prefix_pattern = format!("{}%", trimmed);
+    let substring_pattern = format!("%{}%", trimmed);
 
-    // Pencarian FTS5 dengan BM25 ranking dan snippet
+    // Pencarian hybrid FTS5 + Prefix Title + Substring Matcher
     let sql = r#"
         SELECT
             i.id,
@@ -104,8 +108,34 @@ pub fn search_items_v2(
                  FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = i.id),
                 '[]'
             ) as tags_json,
-            snippet(items_fts, 2, '<b>', '</b>', '...', 20) as snippet_text,
-            bm25(items_fts) as rank,
+            COALESCE(
+                (
+                    SELECT snippet(items_fts, 2, '<b>', '</b>', '...', 20)
+                    FROM items_fts
+                    WHERE items_fts.item_id = i.id AND ?1 != '' AND items_fts MATCH ?1
+                    LIMIT 1
+                ),
+                ''
+            ) as snippet_text,
+            (
+                CASE
+                    -- Rank 0: Judul persis sama
+                    WHEN LOWER(i.title) = LOWER(?2) THEN 0.0
+                    -- Rank 1: Judul diawali inisial / kata pencarian (misal "d" -> "deepseek...")
+                    WHEN LOWER(i.title) LIKE LOWER(?3) THEN 1.0
+                    -- Rank 2: Nama file lampiran diawali inisial pencarian
+                    WHEN EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?3)) THEN 2.0
+                    -- Rank 3: Judul mengandung kata pencarian
+                    WHEN LOWER(i.title) LIKE LOWER(?4) THEN 3.0
+                    -- Rank 4: Nama file lampiran mengandung kata pencarian
+                    WHEN EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?4)) THEN 4.0
+                    -- Rank 5: Konten diawali kata pencarian
+                    WHEN LOWER(i.content) LIKE LOWER(?3) THEN 5.0
+                    -- Rank 6: Konten mengandung kata pencarian
+                    WHEN LOWER(i.content) LIKE LOWER(?4) THEN 6.0
+                    ELSE 7.0
+                END
+            ) as rank,
             COALESCE(
                 (
                     SELECT att.data_url FROM attachments att 
@@ -127,23 +157,34 @@ pub fn search_items_v2(
                 (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
             ) as thumbnail_url,
             (SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id) as attachments_count
-        FROM items_fts
-        JOIN items i ON items_fts.item_id = i.id
-        WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL
-        ORDER BY bm25(items_fts)
+        FROM items i
+        WHERE i.deleted_at IS NULL
+          AND (
+              (?1 != '' AND i.id IN (SELECT item_id FROM items_fts WHERE items_fts MATCH ?1))
+              OR LOWER(i.title) LIKE LOWER(?4)
+              OR LOWER(i.content) LIKE LOWER(?4)
+              OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?4))
+          )
+        ORDER BY
+            rank ASC,
+            CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 0 ELSE 1 END ASC,
+            i.updated_at DESC
         LIMIT 50
     "#;
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![fts_query], |row| map_search_row(row))
+        .query_map(
+            params![fts_query, exact_query, prefix_pattern, substring_pattern],
+            |row| map_search_row(row),
+        )
         .map_err(|e| e.to_string())?;
 
     let mut results = Vec::new();
     for r in rows {
         match r {
             Ok(sr) => results.push(sr),
-            Err(_) => continue, // skip baris bermasalah
+            Err(_) => continue,
         }
     }
 
@@ -185,7 +226,7 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
     })
 }
 
-/// Command lama — dipertahankan untuk backward compatibility
+/// Command lama — dipertahankan untuk backward compatibility dengan prefix matching
 #[tauri::command]
 pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate::commands::items::ItemRecord>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -210,15 +251,36 @@ pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate:
     }
 
     let fts_query = sanitize_fts_query(trimmed);
-    if fts_query.is_empty() {
-        return Ok(vec![]);
-    }
+    let exact_query = trimmed.to_string();
+    let prefix_pattern = format!("{}%", trimmed);
+    let substring_pattern = format!("%{}%", trimmed);
+
+    let sql = r#"
+        SELECT i.id
+        FROM items i
+        WHERE i.deleted_at IS NULL
+          AND (
+              (?1 != '' AND i.id IN (SELECT item_id FROM items_fts WHERE items_fts MATCH ?1))
+              OR LOWER(i.title) LIKE LOWER(?4)
+              OR LOWER(i.content) LIKE LOWER(?4)
+              OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?4))
+          )
+        ORDER BY
+            CASE
+                WHEN LOWER(i.title) = LOWER(?2) THEN 0
+                WHEN LOWER(i.title) LIKE LOWER(?3) THEN 1
+                WHEN EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?3)) THEN 2
+                WHEN LOWER(i.title) LIKE LOWER(?4) THEN 3
+                ELSE 4
+            END,
+            CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 0 ELSE 1 END ASC,
+            i.updated_at DESC
+        LIMIT 50
+    "#;
 
     let mut item_ids: Vec<String> = Vec::new();
-    if let Ok(mut stmt) = conn.prepare(
-        "SELECT i.id FROM items_fts JOIN items i ON items_fts.item_id = i.id WHERE items_fts MATCH ?1 AND i.deleted_at IS NULL ORDER BY bm25(items_fts) LIMIT 50"
-    ) {
-        if let Ok(rows) = stmt.query_map(params![fts_query], |row| row.get::<_, String>(0)) {
+    if let Ok(mut stmt) = conn.prepare(sql) {
+        if let Ok(rows) = stmt.query_map(params![fts_query, exact_query, prefix_pattern, substring_pattern], |row| row.get::<_, String>(0)) {
             item_ids = rows.filter_map(|r| r.ok()).collect();
         }
     }

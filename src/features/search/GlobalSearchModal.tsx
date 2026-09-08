@@ -24,19 +24,27 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
+  const latestQueryRef = useRef(query);
 
   useFocusTrap(modalContainerRef, isOpen, onClose);
 
   const search = useCallback(async (q: string) => {
+    latestQueryRef.current = q;
     setIsLoading(true);
     try {
       const items = await db.search(q);
-      setResults(items);
-      setSelectedIndex(0);
+      if (latestQueryRef.current === q) {
+        setResults(items);
+        setSelectedIndex(0);
+      }
     } catch (err) {
-      console.error('Search error:', err);
+      if (latestQueryRef.current === q) {
+        console.error('Search error:', err);
+      }
     } finally {
-      setIsLoading(false);
+      if (latestQueryRef.current === q) {
+        setIsLoading(false);
+      }
     }
   }, []);
 

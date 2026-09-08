@@ -123,6 +123,29 @@ export const FilesView: React.FC<FilesViewProps> = ({
 
     // Sorting
     list.sort((a, b) => {
+      // If search query is present, prioritize prefix/initial matches so results pop up instantly
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const aTitle = (a.title || '').toLowerCase();
+        const bTitle = (b.title || '').toLowerCase();
+
+        // 1. Exact title match
+        const aExact = aTitle === q;
+        const bExact = bTitle === q;
+        if (aExact !== bExact) return aExact ? -1 : 1;
+
+        // 2. Title starts with search query (prefix/initials, e.g. "a" -> "Analisis...")
+        const aStarts = aTitle.startsWith(q);
+        const bStarts = bTitle.startsWith(q);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+
+        // 3. Word boundary starts with query (e.g. "b" -> "Analisis_Bitcoin")
+        const wordRegex = new RegExp(`(^|[\\s_\\-.])${q.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}`, 'i');
+        const aWordStarts = wordRegex.test(a.title || '');
+        const bWordStarts = wordRegex.test(b.title || '');
+        if (aWordStarts !== bWordStarts) return aWordStarts ? -1 : 1;
+      }
+
       switch (sortBy) {
         case 'date-asc':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();

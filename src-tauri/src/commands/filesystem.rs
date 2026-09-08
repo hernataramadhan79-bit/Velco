@@ -248,3 +248,101 @@ fn parse_frontmatter(content: &str) -> (std::collections::HashMap<String, String
         (map, content.to_string())
     }
 }
+
+/// Buka berkas lampiran langsung di aplikasi bawaan sistem operasi (Windows default app, e.g. Adobe Acrobat / Edge)
+#[tauri::command]
+pub fn open_attachment_in_os(
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    attachment_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let query_res: rusqlite::Result<(String, String, Option<String>)> = conn
+        .query_row(
+            "SELECT file_name, file_path, data_url FROM attachments WHERE id = ?1 LIMIT 1",
+            params![attachment_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        );
+
+    let (file_name, file_path, data_url) = match query_res {
+        Ok(t) => t,
+        Err(_) => {
+            conn.query_row(
+                "SELECT file_name, file_path, data_url FROM attachments WHERE item_id = ?1 LIMIT 1",
+                params![attachment_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            ).map_err(|e| format!("Lampiran tidak ditemukan: {}", e))?
+        }
+    };
+
+    // 1. Cek apakah ada file fisik di disk
+    let candidate_paths = [
+        std::path::PathBuf::from(&file_path),
+        storage.attachments_dir().join(&file_path),
+        storage.attachments_dir().join(&file_name),
+    ];
+
+    for p in &candidate_paths {
+        if p.is_file() {
+            #[cfg(target_os = "windows")]
+            {
+                std::process::Command::new("cmd")
+                    .args(["/C", "start", "", &p.to_string_lossy()])
+                    .spawn()
+                    .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                return Ok(());
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                return Ok(());
+            }
+        }
+    }
+
+    // Scan folder attachments jika ada prefix UUID
+    if let Ok(entries) = std::fs::read_dir(storage.attachments_dir()) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() {
+                let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if fname.ends_with(&format!("_{}", file_name)) || fname == file_name {
+                    #[cfg(target_os = "windows")]
+                    {
+                        std::process::Command::new("cmd")
+                            .args(["/C", "start", "", &p.to_string_lossy()])
+                            .spawn()
+                            .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Jika tidak ada di disk tapi ada data_url base64, simpan sementara ke cache lalu buka
+    if let Some(ref d_url) = data_url {
+        if let Some(comma_pos) = d_url.find(',') {
+            let b64 = &d_url[comma_pos + 1..];
+            use base64::Engine;
+            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                let cache_dir = storage.cache_dir();
+                let _ = std::fs::create_dir_all(&cache_dir);
+                let cache_path = cache_dir.join(&file_name);
+                let _ = std::fs::write(&cache_path, bytes);
+
+                #[cfg(target_os = "windows")]
+                {
+                    std::process::Command::new("cmd")
+                        .args(["/C", "start", "", &cache_path.to_string_lossy()])
+                        .spawn()
+                        .map_err(|e| format!("Gagal membuka berkas: {}", e))?;
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Err("Berkas fisik tidak ditemukan di sistem".to_string())
+}
+

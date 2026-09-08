@@ -104,6 +104,7 @@ pub fn run() {
             commands::filesystem::import_folder_as_notes,
             commands::filesystem::scan_orphan_files,
             commands::filesystem::cleanup_orphan_files,
+            commands::filesystem::open_attachment_in_os,
             // Backup
             commands::backup::export_backup,
             commands::backup::import_backup,

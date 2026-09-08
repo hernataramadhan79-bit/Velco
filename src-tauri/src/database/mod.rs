@@ -27,6 +27,10 @@ impl Database {
                 format!("Migration failed: {}", e).into()
             ))?;
 
+        // Index tambahan untuk pencarian inisial & prefix cepat
+        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_items_title ON items(title)", []);
+        let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_name ON attachments(file_name)", []);
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
