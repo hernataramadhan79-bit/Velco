@@ -189,9 +189,25 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   onCreateTag,
 }) => {
   const { settings, updateSettings } = useSettings();
+  const hasFiles =
+    item.type === 'file' ||
+    item.type === 'image' ||
+    Boolean(item.attachments && item.attachments.length > 0);
+
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(item.title);
-  const [content, setContent] = useState(item.content);
+  const [content, setContent] = useState(() => {
+    if (
+      hasFiles &&
+      item.content &&
+      (/^File:\s*.+/i.test(item.content.trim()) ||
+        item.content.trim() === item.title.trim() ||
+        item.type === 'file')
+    ) {
+      return '';
+    }
+    return item.content || '';
+  });
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [activeAiAction, setActiveAiAction] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -203,11 +219,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [copiedPreviewText, setCopiedPreviewText] = useState(false);
   const [textPreviewMode, setTextPreviewMode] = useState<'formatted' | 'raw'>('formatted');
-
-  const hasFiles =
-    item.type === 'file' ||
-    item.type === 'image' ||
-    (item.attachments && item.attachments.length > 0);
 
   const activeAttachment: Attachment | undefined =
     item.attachments && item.attachments.length > 0
@@ -298,18 +309,89 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     filePreview?.previewType === 'code' ||
     ['js', 'jsx', 'ts', 'tsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp', 'html', 'css', 'scss', 'xml', 'yaml', 'yml', 'toml', 'ini', 'env', 'sql', 'sh', 'bash', 'bat', 'ps1', 'json'].includes(rawExt);
 
+  const rawAttachmentText = useMemo(() => {
+    if (filePreview?.textContent) return filePreview.textContent;
+    if (activeAttachment?.dataUrl?.startsWith('data:text/')) {
+      try {
+        return decodeURIComponent(escape(atob(activeAttachment.dataUrl.split(',')[1] || '')));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }, [filePreview?.textContent, activeAttachment?.dataUrl]);
+
+  const isAutoFileContent = useMemo(() => {
+    if (!hasFiles || !item.content) return false;
+    const trimmed = item.content.trim();
+    if (!trimmed) return true;
+
+    // 1. Auto-generated file metadata header (e.g. "File: xxx\nSize: ...")
+    if (/^File:\s*.+/i.test(trimmed)) return true;
+
+    // 2. Exact match with file text content from preview or attachment
+    if (rawAttachmentText && trimmed === rawAttachmentText.trim()) return true;
+    if (filePreview?.textContent && trimmed === filePreview.textContent.trim()) return true;
+
+    // 3. Exact match with active attachment filename or item title
+    if (
+      activeAttachment?.fileName &&
+      (trimmed === activeAttachment.fileName.trim() ||
+        trimmed === `File: ${activeAttachment.fileName.trim()}`)
+    ) {
+      return true;
+    }
+    if (trimmed === item.title.trim() && (trimmed.includes('.') || hasFiles)) {
+      return true;
+    }
+
+    // 4. If rawAttachmentText is available and trimmed !== rawAttachmentText, this is user-created notes!
+    if (rawAttachmentText && trimmed !== rawAttachmentText.trim()) {
+      return false;
+    }
+
+    // 5. If file preview is still loading or rawAttachmentText is not loaded yet,
+    // but the item is a file item whose content matches known file formats and not user notes
+    if (
+      item.type === 'file' &&
+      (isCode || isMarkdown || isCsv || isDocx || rawExt) &&
+      !trimmed.startsWith('# Notes')
+    ) {
+      return true;
+    }
+
+    return false;
+  }, [
+    hasFiles,
+    item.content,
+    item.title,
+    item.type,
+    rawAttachmentText,
+    filePreview?.textContent,
+    activeAttachment?.fileName,
+    isCode,
+    isMarkdown,
+    isCsv,
+    isDocx,
+    rawExt,
+  ]);
+
+  const displayedNotes = hasFiles && isAutoFileContent ? '' : (item.content || '');
+
   const resolvedTextContent =
-    filePreview?.textContent ||
-    (activeAttachment?.dataUrl?.startsWith('data:text/')
-      ? (() => {
-          try {
-            return decodeURIComponent(escape(atob(activeAttachment.dataUrl.split(',')[1] || '')));
-          } catch {
-            return null;
-          }
-        })()
-      : null) ||
-    (item.content && item.content.trim() && !item.content.startsWith('File: ') ? item.content : null);
+    rawAttachmentText ||
+    (!hasFiles
+      ? item.content
+      : item.content && item.content.trim() && !item.content.startsWith('File: ')
+      ? item.content
+      : null);
+
+  // Synchronize content state when displayedNotes changes and not editing
+  useEffect(() => {
+    if (!isEditing) {
+      setContent(displayedNotes);
+    }
+  }, [displayedNotes, isEditing]);
 
   const isTextLike =
     !isImage &&
@@ -336,7 +418,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       id: item.id,
       type: item.type,
       title: activeAttachment?.fileName || item.title,
-      excerpt: item.content,
+      excerpt: displayedNotes || item.content,
       pinned: item.favorite,
       archived: item.archived,
       trashed: !!item.deletedAt,
@@ -345,7 +427,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       tags: item.tags,
       thumbnailUrl: resolvedPreviewUrl,
     }),
-    [item, activeAttachment, resolvedPreviewUrl]
+    [item, activeAttachment, displayedNotes, resolvedPreviewUrl]
   );
 
   const handleDownloadAttachment = (att?: Attachment) => {
@@ -481,7 +563,17 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       setAiError('AI is currently disabled in settings.');
       return;
     }
-    const textToProcess = `${item.title}\n\n${item.content}`;
+    const textToProcess = hasFiles
+      ? [
+          item.title,
+          displayedNotes ? `Notes:\n${displayedNotes}` : '',
+          resolvedTextContent
+            ? `File Preview:\n${resolvedTextContent.length > 3000 ? resolvedTextContent.slice(0, 3000) + '...' : resolvedTextContent}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      : `${item.title}\n\n${item.content}`;
     if (!textToProcess.trim()) {
       setAiError('Item has no content to process.');
       return;
@@ -621,7 +713,19 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         );
       }
 
-      const prompt = `Context:\n${item.title}\n\n${item.content}\n\n${chatMessages
+      const itemContext = hasFiles
+        ? [
+            item.title,
+            displayedNotes ? `Notes:\n${displayedNotes}` : '',
+            resolvedTextContent
+              ? `File Preview:\n${resolvedTextContent.length > 2000 ? resolvedTextContent.slice(0, 2000) + '...' : resolvedTextContent}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        : `${item.title}\n\n${item.content}`;
+
+      const prompt = `Context:\n${itemContext}\n\n${chatMessages
         .map((m) => `${m.role}: ${m.content}`)
         .join('\n')}\nuser: ${userMsg}\nassistant:`;
 
@@ -645,10 +749,14 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   };
 
   const handleSaveEdit = async () => {
-    await onUpdate(item.id, {
-      title: title.trim() || 'Untitled',
-      content,
-    });
+    const trimmedTitle = title.trim() || 'Untitled';
+    const updates: Partial<Item> = {
+      title: trimmedTitle,
+    };
+    if (!hasFiles || !isAutoFileContent || content.trim() !== '') {
+      updates.content = content.trim();
+    }
+    await onUpdate(item.id, updates);
     setIsEditing(false);
   };
 
@@ -1300,13 +1408,18 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                rows={8}
-                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.08] text-sm text-slate-900 dark:text-zinc-100 font-mono leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Markdown notes or description..."
+                rows={7}
+                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-300 dark:border-white/[0.08] text-sm text-slate-900 dark:text-zinc-100 font-sans leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder={
+                  hasFiles
+                    ? 'Add custom notes, context, or description for this file...'
+                    : 'Markdown notes or description...'
+                }
+                autoFocus
               />
-            ) : item.content ? (
-              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-[#101014]/60 border border-slate-200/80 dark:border-white/[0.06] min-h-[90px] text-sm text-slate-800 dark:text-zinc-200 leading-relaxed">
-                <MarkdownViewer content={item.content} />
+            ) : displayedNotes ? (
+              <div className="p-4 rounded-xl bg-slate-50/50 dark:bg-[#101014]/60 border border-slate-200/80 dark:border-white/[0.06] min-h-[70px] text-sm text-slate-800 dark:text-zinc-200 leading-relaxed">
+                <MarkdownViewer content={displayedNotes} />
               </div>
             ) : (
               <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-white/[0.08] text-center bg-slate-50/30 dark:bg-white/[0.02]">
@@ -1315,7 +1428,10 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 </p>
                 <button
                   type="button"
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setContent('');
+                    setIsEditing(true);
+                  }}
                   className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Add Notes
@@ -1325,7 +1441,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
             <div className="flex items-center justify-between pt-1">
               <div className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">
-                {item.content ? `${item.content.split(/\s+/).filter(Boolean).length} words` : '0 words'}
+                {displayedNotes ? `${displayedNotes.split(/\s+/).filter(Boolean).length} words` : '0 words'}
               </div>
 
               {isEditing ? (
@@ -1334,7 +1450,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                     type="button"
                     onClick={() => {
                       setTitle(item.title);
-                      setContent(item.content);
+                      setContent(displayedNotes);
                       setIsEditing(false);
                     }}
                     className="px-3 py-1.5 text-xs rounded-lg text-slate-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:bg-white/[0.06] cursor-pointer"
@@ -1351,7 +1467,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  {settings.aiEnabled && item.content?.trim() && item.type !== 'task' && (
+                  {settings.aiEnabled && displayedNotes.trim() && item.type !== 'task' && (
                     <button
                       type="button"
                       onClick={() => runAiAction('extract_tasks')}
@@ -1363,10 +1479,13 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       <span>Extract Tasks</span>
                     </button>
                   )}
-                  {item.content && (
+                  {displayedNotes && (
                     <button
                       type="button"
-                      onClick={() => setIsEditing(true)}
+                      onClick={() => {
+                        setContent(displayedNotes);
+                        setIsEditing(true);
+                      }}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.12] text-slate-700 dark:text-zinc-200 border border-slate-200 dark:border-white/[0.08] transition-colors cursor-pointer"
                     >
                       Edit Notes
