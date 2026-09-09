@@ -198,7 +198,8 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Revoke tertunda agar download besar tidak abort
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
     onNotify?.(`Capsule "${activeCapsule.name}.vctx" exported successfully!`, 'success');
   };
 

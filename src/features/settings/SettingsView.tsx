@@ -348,19 +348,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   }, [settings.aiProvider, settings.aiEnabled, activeSection, fetchLiveModels]);
 
   const handleExportBackup = async () => {
+    let url: string | null = null;
     try {
       const jsonStr = await db.exportBackup();
       const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `velco_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
       setBackupMessage('Backup exported successfully.');
       setTimeout(() => setBackupMessage(null), 4000);
     } catch (err: any) {
       setBackupMessage(`Export failed: ${err.message}`);
+    } finally {
+      // Revoke tertunda: revoke sinkron tepat setelah click() bisa abort download besar.
+      if (url) setTimeout(() => URL.revokeObjectURL(url as string), 5000);
     }
   };
 

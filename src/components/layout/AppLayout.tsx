@@ -184,6 +184,12 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     refreshItems();
     refreshCounts();
+    // Load tags global (zustand store — sebelumnya hook lokal tanpa fetch global)
+    try {
+      useTagStore.getState().refreshTags();
+    } catch {
+      /* ignore */
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keep overdue count accurate ──────────────────────────
@@ -221,6 +227,7 @@ export const AppLayout: React.FC = () => {
     if (!isTauri) return;
 
     let unlisten: (() => void) | undefined;
+    let cancelled = false;
     try {
       getCurrentWindow()
         .onDragDropEvent((event) => {
@@ -237,7 +244,12 @@ export const AppLayout: React.FC = () => {
           }
         })
         .then((fn) => {
-          unlisten = fn;
+          if (cancelled) {
+            // Unmount terjadi sebelum promise resolve — langsung lepas agar tidak bocor
+            fn();
+          } else {
+            unlisten = fn;
+          }
         })
         .catch((err) => {
           console.warn('Failed to bind Tauri drag drop listener:', err);
@@ -247,18 +259,23 @@ export const AppLayout: React.FC = () => {
     }
 
     return () => {
+      cancelled = true;
       if (unlisten) unlisten();
     };
   }, []);
 
   // ── Auto-open The Foundry when items are staged ──────────
+  // Jangan setState saat render (StrictMode double-render bisa auto-open 2x).
   const [prevStagedCount, setPrevStagedCount] = useState(stagedCount);
-  if (stagedCount !== prevStagedCount) {
-    setPrevStagedCount(stagedCount);
-    if (stagedCount > prevStagedCount && stagedCount > 0) {
-      setIsFoundryOpen(true);
+  useEffect(() => {
+    if (stagedCount !== prevStagedCount) {
+      setPrevStagedCount(stagedCount);
+      if (stagedCount > prevStagedCount && stagedCount > 0) {
+        setIsFoundryOpen(true);
+      }
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stagedCount]);
 
   // ── Global Keyboard Shortcuts ────────────────────────────
   useEffect(() => {
@@ -360,15 +377,22 @@ export const AppLayout: React.FC = () => {
 
         {/* Scrollable View Content */}
         <main
-          className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${
-            currentView === 'bridge'
-              ? 'p-0 flex flex-col'
-              : 'px-8 py-6'
+          className={`flex-1 min-h-0 ${
+            currentView === 'bridge' || currentView === 'playground'
+              ? 'p-0 flex flex-col overflow-hidden'
+              : 'overflow-y-auto overflow-x-hidden px-8 py-6'
           }`}
         >
           <ErrorBoundary onReset={() => refreshItems()}>
             <Suspense fallback={<ViewSkeleton />}>
-              <div className="view-enter" key={currentView}>
+              <div
+                className={`view-enter ${
+                  currentView === 'bridge' || currentView === 'playground'
+                    ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden'
+                    : ''
+                }`}
+                key={currentView}
+              >
               {currentView === 'inbox' && (
                 <InboxView
                   items={items}

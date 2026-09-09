@@ -265,14 +265,14 @@ export const TasksView: React.FC<TasksViewProps> = ({
           onClick={handleQuickTestNotification}
           disabled={isTesting}
           className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#141418] dark:hover:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-zinc-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
-          title="Uji coba banner notifikasi Windows, nada bel, dan notifikasi in-app"
+          title="Test Windows notification banner, audio chime, and in-app alerts"
         >
           {testFeedback ? (
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           ) : (
             <Bell className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           )}
-          <span>{isTesting ? 'Menguji...' : testFeedback || 'Tes Notifikasi & Audio'}</span>
+          <span>{isTesting ? 'Testing...' : testFeedback || 'Test Notification & Audio'}</span>
         </button>
       </div>
 

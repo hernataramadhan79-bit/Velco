@@ -1,6 +1,28 @@
+import { z } from 'zod';
 import { aiService } from './index';
 import { PriorityLevel, Tag } from '../../types/item';
 import { getSettings } from '../../stores/settingsStore';
+
+/** Batas aman agar LLM tidak membanjiri UI/DB dengan ratusan task. */
+export const MAX_EXTRACTED_TASKS = 50;
+export const MAX_TAG_RECOMMENDATIONS = 10;
+
+const LlmTaskSchema = z.object({
+  title: z.union([z.string(), z.number()]).optional(),
+  name: z.union([z.string(), z.number()]).optional(),
+  task: z.union([z.string(), z.number()]).optional(),
+  priority: z.string().optional(),
+  dueDate: z.string().optional(),
+  due_date: z.string().optional(),
+  description: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const LlmTagSchema = z.object({
+  name: z.union([z.string(), z.number()]).optional(),
+  tag: z.union([z.string(), z.number()]).optional(),
+  category: z.union([z.string(), z.number()]).optional(),
+  reason: z.union([z.string(), z.number()]).optional(),
+});
 
 export interface StructuredTaskItem {
   id: string;
@@ -165,18 +187,21 @@ export function detectDueDate(text: string): string | null {
 /**
  * Multi-strategy JSON array extractor from raw LLM output.
  * Handles markdown fences, reasoning tags, object wrappers, and repair of common syntax defects.
+ * Selalu dibatasi `maxItems` agar output raksasa tidak membanjiri memori.
  */
-export function extractJsonArray<T = any>(raw: string): T[] | null {
+export function extractJsonArray<T = any>(raw: string, maxItems = MAX_EXTRACTED_TASKS): T[] | null {
   const clean = stripReasoningAndFences(raw);
   if (!clean) return null;
+
+  const cap = <T,>(arr: T[]): T[] => (arr.length > maxItems ? arr.slice(0, maxItems) : arr);
 
   // Strategy A: Direct parse
   try {
     const direct = JSON.parse(clean);
-    if (Array.isArray(direct)) return direct;
+    if (Array.isArray(direct)) return cap(direct);
     if (direct && typeof direct === 'object') {
       const arrayProp = Object.values(direct).find((v) => Array.isArray(v));
-      if (Array.isArray(arrayProp)) return arrayProp as T[];
+      if (Array.isArray(arrayProp)) return cap(arrayProp as T[]);
     }
   } catch {
     // Continue to next strategy
@@ -186,6 +211,8 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
   const firstBracket = clean.indexOf('[');
   const lastBracket = clean.lastIndexOf(']');
   if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
+    // Tolak payload raksasa (>500KB) agar tidak OOM
+    if (lastBracket - firstBracket > 500_000) return null;
     let arrayStr = clean.slice(firstBracket, lastBracket + 1);
 
     // Repair common trailing commas: `[..., ]` or `{..., }`
@@ -193,7 +220,7 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
 
     try {
       const parsed = JSON.parse(arrayStr);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return cap(parsed);
     } catch {
       // Continue to next strategy
     }
@@ -207,7 +234,7 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
     try {
       const cleanedSub = wrapperMatch[1].replace(/,\s*([\]}])/g, '$1');
       const parsed = JSON.parse(cleanedSub);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return cap(parsed);
     } catch {
       // Continue to next strategy
     }
@@ -218,6 +245,7 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
   const recovered: any[] = [];
   let m: RegExpExecArray | null;
   while ((m = objectRegex.exec(clean)) !== null) {
+    if (recovered.length >= maxItems) break;
     try {
       const repaired = m[0].replace(/,\s*([\]}])/g, '$1');
       const obj = JSON.parse(repaired);
@@ -230,7 +258,7 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
   }
 
   if (recovered.length > 0) {
-    return recovered;
+    return cap(recovered);
   }
 
   return null;
@@ -240,8 +268,8 @@ export function extractJsonArray<T = any>(raw: string): T[] | null {
  * Intelligent bullet/list parser that cleanly separates Title and Description
  * without contaminating titles with markdown formatting or conversational filler.
  */
-export function parseMarkdownTasks(raw: string): StructuredTaskItem[] {
-  const clean = stripReasoningAndFences(raw);
+export function parseMarkdownTasks(raw: string, maxItems = MAX_EXTRACTED_TASKS): StructuredTaskItem[] {
+  const clean = stripReasoningAndFences(raw).slice(0, 200_000);
   const lines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
   const tasks: StructuredTaskItem[] = [];
 
@@ -303,6 +331,7 @@ export function parseMarkdownTasks(raw: string): StructuredTaskItem[] {
       cleanDesc = cleanDesc.slice(0, 247) + '...';
     }
 
+    if (tasks.length >= maxItems) break;
     tasks.push({
       id: crypto.randomUUID(),
       title,
@@ -452,21 +481,26 @@ ${content}`;
 
   try {
     const raw = await aiService.generateCompletion(prompt, model, baseUrl, apiKey);
-    const parsedArray = extractJsonArray<any>(raw);
+    const parsedArray = extractJsonArray<unknown>(raw, MAX_EXTRACTED_TASKS);
 
     if (parsedArray && parsedArray.length > 0) {
       const validTasks: StructuredTaskItem[] = [];
 
-      for (const item of parsedArray) {
-        if (!item) continue;
-        const rawTitle = String(item.title || item.name || item.task || '').trim();
+      for (const rawItem of parsedArray) {
+        if (validTasks.length >= MAX_EXTRACTED_TASKS) break;
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        // Validasi bentuk via zod — tolak {title: 12345, priority: "super-high"} dkk.
+        const parsed = LlmTaskSchema.safeParse(rawItem);
+        if (!parsed.success) continue;
+        const item = parsed.data;
+        const rawTitle = String(item.title ?? item.name ?? item.task ?? '').trim();
         const title = sanitizeTitle(rawTitle);
         if (!title || title.length < 2) continue;
 
         let priority: PriorityLevel = 'medium';
-        const p = String(item.priority || '').toLowerCase();
+        const p = String((rawItem as any).priority || '').toLowerCase();
         if (p === 'urgent' || p === 'high' || p === 'low' || p === 'medium') {
-          priority = p;
+          priority = p as PriorityLevel;
         } else {
           priority = detectPriority(`${title} ${item.description || ''}`);
         }
@@ -480,12 +514,17 @@ ${content}`;
           dueDate = detectDueDate(`${title} ${item.description || ''}`);
         }
 
+        const descRaw = item.description != null ? String(item.description) : '';
+        const description = descRaw
+          ? descRaw.replace(/[`*_]/g, '').trim().slice(0, 500) || undefined
+          : undefined;
+
         validTasks.push({
           id: crypto.randomUUID(),
           title,
           priority,
           dueDate,
-          description: item.description ? String(item.description).replace(/[`*_]/g, '').trim() : undefined,
+          description,
           selected: true,
         });
       }
@@ -544,22 +583,26 @@ ${content}`;
   if (getSettings().aiEnabled) {
     try {
       const raw = await aiService.generateCompletion(prompt, model, baseUrl, apiKey);
-      const parsedArray = extractJsonArray<any>(raw);
+      const parsedArray = extractJsonArray<unknown>(raw, MAX_TAG_RECOMMENDATIONS);
 
       if (parsedArray && parsedArray.length > 0) {
         const validRecs: TagRecommendation[] = [];
 
-        parsedArray.forEach((item, index) => {
-          if (!item) return;
-          const cleanName = sanitizeTitle(String(item.name || item.tag || '')).replace(/^#/, '');
+        parsedArray.forEach((rawItem, index) => {
+          if (validRecs.length >= MAX_TAG_RECOMMENDATIONS) return;
+          if (!rawItem || typeof rawItem !== 'object') return;
+          const zp = LlmTagSchema.safeParse(rawItem);
+          if (!zp.success) return;
+          const item = zp.data;
+          const cleanName = sanitizeTitle(String(item.name || item.tag || '')).replace(/^#/, '').slice(0, 30);
           if (!cleanName || cleanName.length < 2) return;
 
           const existing = existingMap.get(cleanName.toLowerCase());
 
           validRecs.push({
             name: existing ? existing.name : cleanName,
-            category: String(item.category || 'Topic').trim(),
-            reason: String(item.reason || 'Relevant to note context').trim(),
+            category: String(item.category || 'Topic').trim().slice(0, 30),
+            reason: String(item.reason || 'Relevant to note context').trim().slice(0, 100),
             isExisting: Boolean(existing),
             existingTagId: existing?.id,
             color: existing?.color,

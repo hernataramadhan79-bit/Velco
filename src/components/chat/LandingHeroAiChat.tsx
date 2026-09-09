@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Square,
   Trash2,
@@ -9,8 +9,6 @@ import {
   FileText,
   Layers,
   AlertCircle,
-  Cpu,
-  Globe,
   Settings as SettingsIcon,
   Loader2,
   ListTodo,
@@ -31,7 +29,7 @@ import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useSettings } from '../../stores/settingsStore';
 import { useItemStore } from '../../stores/itemStore';
-import { formatTaskBatchSource } from '../../types/item';
+import { formatTaskBatchSource, Item } from '../../types/item';
 import {
   StructuredTaskItem,
   extractStructuredTasks,
@@ -41,7 +39,7 @@ import {
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { MarkdownViewer } from '../common/MarkdownViewer';
 import { db } from '../../services/database';
-import { getProviderDisplayName, getLlmProviderConfig } from '../../utils/aiUtils';
+import { getLlmProviderConfig } from '../../utils/aiUtils';
 
 interface LandingHeroAiChatProps {
   onArtifactCreated?: (msg: string) => void;
@@ -89,7 +87,6 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     clearChatContext,
     totalChatTokens,
   } = useContextStore();
-  const { items: allDbItems } = useItemStore();
   const { settings, updateSettings } = useSettings();
 
   const [prompt, setPrompt] = useState('');
@@ -102,6 +99,8 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const [extractBatchTitle, setExtractBatchTitle] = useState<string>('');
   const [isContextPickerOpen, setIsContextPickerOpen] = useState(false);
   const [contextSearch, setContextSearch] = useState('');
+  const [workspaceItems, setWorkspaceItems] = useState<Item[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [showParameters, setShowParameters] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
 
@@ -109,8 +108,30 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const providerInfo = getProviderDisplayName(settings);
   const chatTokens = totalChatTokens();
+
+  // Load all workspace items directly from SQLite
+  const loadWorkspaceItems = useCallback(async () => {
+    setIsLoadingItems(true);
+    try {
+      const items = await db.getItems({ includeTrash: false, includeArchived: false });
+      setWorkspaceItems(items);
+    } catch (err) {
+      console.error('Failed to load workspace items for context:', err);
+    } finally {
+      setIsLoadingItems(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWorkspaceItems();
+  }, [loadWorkspaceItems]);
+
+  useEffect(() => {
+    if (isContextPickerOpen) {
+      void loadWorkspaceItems();
+    }
+  }, [isContextPickerOpen, loadWorkspaceItems]);
 
   // Auto-scroll chat to latest message on update
   useEffect(() => {
@@ -278,28 +299,9 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
       {/* Top Model Parameter & Telemetry Bar */}
       <div className="px-3.5 py-2 bg-slate-50 dark:bg-[#101014] border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 min-w-0">
-          {settings.aiEnabled ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] text-[11px] font-mono text-slate-700 dark:text-zinc-300">
-              {providerInfo.isLocal ? (
-                <Cpu className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              ) : (
-                <Globe className="w-3 h-3 text-blue-600 dark:text-blue-400 shrink-0" />
-              )}
-              <span className="truncate max-w-[160px] sm:max-w-[220px]">
-                {providerInfo.providerName} &bull; {providerInfo.modelName}
-              </span>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => updateSettings({ aiEnabled: true })}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-[11px] font-mono text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
-              title="AI is currently disabled. Click to turn ON."
-            >
-              <ShieldAlert className="w-3 h-3 text-amber-500 shrink-0" />
-              <span>AI Disabled (Click to Turn On)</span>
-            </button>
-          )}
+          <span className="font-semibold text-slate-800 dark:text-zinc-200 text-xs">
+            Chat Canvas
+          </span>
 
           {chatContextItems.length > 0 && (
             <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300 font-mono text-[10px]">
@@ -581,13 +583,21 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
               <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-700 dark:text-zinc-300">
                 <Paperclip className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                 <span>Attach Items to AI Context</span>
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500">
+                  ({workspaceItems.length} available)
+                </span>
               </div>
-              <button
-                onClick={() => setIsContextPickerOpen(false)}
-                className="p-0.5 text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 rounded cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1">
+                {isLoadingItems && (
+                  <Loader2 className="w-3 h-3 text-blue-500 animate-spin mr-1" />
+                )}
+                <button
+                  onClick={() => setIsContextPickerOpen(false)}
+                  className="p-0.5 text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 rounded cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
 
             <div className="relative mb-2">
@@ -596,20 +606,23 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                 type="text"
                 value={contextSearch}
                 onChange={(e) => setContextSearch(e.target.value)}
-                placeholder="Filter items..."
+                placeholder="Search notes, tasks, files, links..."
                 className="w-full bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] rounded-md pl-7 pr-2.5 py-1 text-xs text-slate-900 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-slate-400 dark:focus:border-white/[0.2]"
               />
             </div>
 
-            <div className="max-h-44 overflow-y-auto space-y-1">
-              {allDbItems
-                .filter(
-                  (item) =>
-                    !contextSearch.trim() ||
-                    (item.title || '').toLowerCase().includes(contextSearch.toLowerCase()) ||
-                    (item.excerpt ?? '').toLowerCase().includes(contextSearch.toLowerCase())
-                )
-                .slice(0, 8)
+            <div className="max-h-60 overflow-y-auto space-y-1">
+              {workspaceItems
+                .filter((item) => {
+                  if (!contextSearch.trim()) return true;
+                  const q = contextSearch.toLowerCase();
+                  return (
+                    (item.title || '').toLowerCase().includes(q) ||
+                    (item.content || '').toLowerCase().includes(q) ||
+                    (item.tags || []).some((t) => t.name.toLowerCase().includes(q)) ||
+                    item.link?.url?.toLowerCase().includes(q)
+                  );
+                })
                 .map((item) => {
                   const isAttached = chatContextItems.some((c) => c.id === item.id);
                   return (
@@ -622,14 +635,16 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                           addChatContextItem(itemToStagedItem(item));
                         }
                       }}
-                      className={`w-full flex items-center justify-between px-2 py-1 rounded text-xs transition-colors cursor-pointer ${
+                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                         isAttached
                           ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20'
                           : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                       }`}
                     >
-                      <span className="truncate max-w-[280px]">{item.title || 'Untitled'}</span>
-                      <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-600 uppercase">{item.type}</span>
+                      <span className="truncate max-w-[280px] font-medium">{item.title || 'Untitled'}</span>
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-600 uppercase shrink-0">
+                        {isAttached ? 'Attached' : item.type}
+                      </span>
                     </button>
                   );
                 })}

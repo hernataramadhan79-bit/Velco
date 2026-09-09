@@ -1,6 +1,6 @@
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Emitter, State};
 use base64::Engine;
 
 use crate::database::Database;
@@ -304,14 +304,16 @@ pub fn get_items_summary(
         "i.deleted_at IS NULL AND i.archived = 0".to_string()
     };
 
-    let type_filter = if let Some(ref t) = filter_type {
-        if t == "file" || t == "files" {
-            " AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))".to_string()
-        } else {
-            format!(" AND i.type = '{}'", t.replace("'", "''"))
-        }
-    } else {
-        String::new()
+    // Allowlist tipe item — tolak nilai asing (hindari SQL injection via interpolasi).
+    const ALLOWED_TYPES: &[&str] = &["note", "task", "link", "file", "image"];
+    let (type_filter_sql, type_param): (String, Option<String>) = match filter_type.as_deref() {
+        Some("file") | Some("files") => (
+            " AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))".to_string(),
+            None,
+        ),
+        Some(t) if ALLOWED_TYPES.contains(&t) => (" AND i.type = ?".to_string(), Some(t.to_string())),
+        Some(_) => (" AND 1=0".to_string(), None), // tipe tak dikenal → kosong, bukan error
+        None => (String::new(), None),
     };
 
     let sql = format!(
@@ -371,12 +373,12 @@ pub fn get_items_summary(
         FROM items i
         WHERE {}{}
         ORDER BY i.created_at DESC
+        LIMIT 500
         "#,
-        where_clause, type_filter
+        where_clause, type_filter_sql
     );
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt.query_map([], |row| {
+    fn map_summary_row(row: &rusqlite::Row) -> rusqlite::Result<ItemSummary> {
         let pinned_val: i64 = row.get(4)?;
         let archived_val: i64 = row.get(5)?;
         let trashed_val: i64 = row.get(6)?;
@@ -385,11 +387,11 @@ pub fn get_items_summary(
         let link_json: Option<String> = row.get(11).ok();
         let attachments_count: i64 = row.get(12).unwrap_or(0);
         let thumbnail_url: Option<String> = row.get(13).ok();
-
         let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
-        let task: Option<TaskSubRecord> = task_json.and_then(|s| serde_json::from_str(&s).ok());
-        let link: Option<LinkSubRecord> = link_json.and_then(|s| serde_json::from_str(&s).ok());
-
+        let task: Option<TaskSubRecord> =
+            task_json.and_then(|s| serde_json::from_str(&s).ok());
+        let link: Option<LinkSubRecord> =
+            link_json.and_then(|s| serde_json::from_str(&s).ok());
         Ok(ItemSummary {
             id: row.get(0)?,
             r#type: row.get(1)?,
@@ -406,11 +408,25 @@ pub fn get_items_summary(
             attachments_count,
             thumbnail_url,
         })
-    }).map_err(|e| e.to_string())?;
+    }
 
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    // Bind param tipe bila ada (hindari format! interpolasi)
     let mut results = Vec::new();
-    for row in rows {
-        results.push(row.map_err(|e| e.to_string())?);
+    if let Some(t) = type_param {
+        let rows = stmt
+            .query_map(rusqlite::params![t], map_summary_row)
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            results.push(row.map_err(|e| e.to_string())?);
+        }
+    } else {
+        let rows = stmt
+            .query_map([], map_summary_row)
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            results.push(row.map_err(|e| e.to_string())?);
+        }
     }
     Ok(results)
 }
@@ -515,30 +531,76 @@ pub fn get_items(
 
     let show_trash = include_trash.unwrap_or(false);
     let show_archived = include_archived.unwrap_or(false);
-    let mut sql = "SELECT id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at FROM items WHERE ".to_string();
+    let mut sql = r#"
+        SELECT
+            i.id,
+            COALESCE(i.type, 'note'),
+            COALESCE(i.title, ''),
+            COALESCE(i.content, ''),
+            COALESCE(i.source, 'direct'),
+            COALESCE(i.status, 'inbox'),
+            CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END as favorite,
+            COALESCE(i.archived, 0) as archived,
+            COALESCE(i.created_at, '') as created_at,
+            COALESCE(i.updated_at, '') as updated_at,
+            i.deleted_at,
+            COALESCE(
+                (
+                    SELECT json_group_array(
+                        json_object('id', t.id, 'name', t.name, 'color', t.color)
+                    )
+                    FROM tags t
+                    JOIN item_tags it ON t.id = it.tag_id
+                    WHERE it.item_id = i.id
+                ),
+                '[]'
+            ) as tags_json,
+            (
+                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', tk.completed, 'completed_at', tk.completed_at)
+                FROM tasks tk WHERE tk.item_id = i.id
+            ) as task_json,
+            (
+                SELECT json_object('url', lk.url, 'domain', lk.domain, 'page_title', lk.page_title, 'preview_image', lk.preview_image)
+                FROM links lk WHERE lk.item_id = i.id
+            ) as link_json,
+            COALESCE(
+                (
+                    SELECT json_group_array(
+                        json_object('id', a.id, 'file_name', a.file_name, 'file_path', a.file_path, 'mime_type', a.mime_type, 'file_size', a.file_size, 'checksum', a.checksum, 'created_at', a.created_at, 'data_url', a.data_url)
+                    )
+                    FROM attachments a WHERE a.item_id = i.id
+                ),
+                '[]'
+            ) as attachments_json,
+            (
+                SELECT json_object('id', ai.id, 'item_id', ai.item_id, 'provider', ai.provider, 'model', ai.model, 'summary', ai.summary, 'classification', ai.classification, 'confidence', ai.confidence, 'suggested_tags', CASE WHEN json_valid(ai.suggested_tags) = 1 THEN json(ai.suggested_tags) ELSE NULL END, 'processed_at', ai.processed_at)
+                FROM ai_metadata ai WHERE ai.item_id = i.id
+            ) as ai_json
+        FROM items i
+        WHERE "#.to_string();
 
     if show_trash && show_archived {
         sql.push_str("1=1");
     } else if show_trash {
-        sql.push_str("deleted_at IS NOT NULL");
+        sql.push_str("i.deleted_at IS NOT NULL");
     } else if show_archived {
-        sql.push_str("deleted_at IS NULL AND archived = 1");
+        sql.push_str("i.deleted_at IS NULL AND i.archived = 1");
     } else {
-        sql.push_str("deleted_at IS NULL AND archived = 0");
+        sql.push_str("i.deleted_at IS NULL AND i.archived = 0");
     }
 
     let mut query_params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
     if let Some(ref t) = filter_type {
         if t == "file" || t == "files" {
-            sql.push_str(" AND (type = 'file' OR type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = items.id))");
+            sql.push_str(" AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))");
         } else {
-            sql.push_str(" AND type = ?");
+            sql.push_str(" AND i.type = ?");
             query_params.push(Box::new(t.clone()));
         }
     }
 
-    sql.push_str(" ORDER BY created_at DESC");
+    sql.push_str(" ORDER BY i.created_at DESC LIMIT 500");
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let param_refs: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
@@ -547,6 +609,17 @@ pub fn get_items(
             let id: String = row.get(0)?;
             let favorite: i64 = row.get(6)?;
             let archived: i64 = row.get(7)?;
+            let tags_json: String = row.get(11).unwrap_or_else(|_| "[]".to_string());
+            let task_json: Option<String> = row.get(12).ok();
+            let link_json: Option<String> = row.get(13).ok();
+            let att_json: String = row.get(14).unwrap_or_else(|_| "[]".to_string());
+            let ai_json: Option<String> = row.get(15).ok();
+
+            let tags: Vec<TagSubRecord> = serde_json::from_str(&tags_json).unwrap_or_default();
+            let task: Option<TaskSubRecord> = task_json.and_then(|s| serde_json::from_str(&s).ok());
+            let link: Option<LinkSubRecord> = link_json.and_then(|s| serde_json::from_str(&s).ok());
+            let attachments: Vec<AttachmentSubRecord> = serde_json::from_str(&att_json).unwrap_or_default();
+            let ai_metadata: Option<AiMetadataSubRecord> = ai_json.and_then(|s| serde_json::from_str(&s).ok());
 
             Ok(ItemRecord {
                 id,
@@ -560,212 +633,107 @@ pub fn get_items(
                 created_at: row.get(8)?,
                 updated_at: row.get(9)?,
                 deleted_at: row.get(10)?,
-                tags: vec![],
-                task: None,
-                link: None,
-                attachments: vec![],
-                ai_metadata: None,
+                tags,
+                task,
+                link,
+                attachments,
+                ai_metadata,
             })
         })
         .map_err(|e| e.to_string())?;
 
     let mut items = Vec::new();
-    for item_res in rows {
-        let mut item = item_res.map_err(|e| e.to_string())?;
-
-        // Fetch task if task
-        if item.r#type == "task" {
-            let task_res = conn.query_row(
-                "SELECT due_date, priority, completed, completed_at FROM tasks WHERE item_id = ?1",
-                params![item.id],
-                |row| {
-                    let completed: i64 = row.get(2).unwrap_or(0);
-                    Ok(TaskSubRecord {
-                        due_date: row.get(0).ok(),
-                        priority: row.get(1).unwrap_or_else(|_| "medium".to_string()),
-                        completed: completed != 0,
-                        completed_at: row.get(3).ok(),
-                    })
-                },
-            );
-            item.task = task_res.ok();
-        }
-
-        // Fetch link if link
-        if item.r#type == "link" {
-            let link_res = conn.query_row(
-                "SELECT url, domain, page_title, preview_image FROM links WHERE item_id = ?1",
-                params![item.id],
-                |row| {
-                    Ok(LinkSubRecord {
-                        url: row.get(0).unwrap_or_default(),
-                        domain: row.get(1).unwrap_or_default(),
-                        page_title: row.get(2).unwrap_or_default(),
-                        preview_image: row.get(3).ok(),
-                    })
-                },
-            );
-            item.link = link_res.ok();
-        }
-
-        // Fetch attachments
-        if let Ok(mut att_stmt) = conn.prepare(
-            "SELECT id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url FROM attachments WHERE item_id = ?1"
-        ) {
-            if let Ok(att_rows) = att_stmt.query_map(params![item.id], |row| {
-                Ok(AttachmentSubRecord {
-                    id: row.get(0)?,
-                    file_name: row.get(1)?,
-                    file_path: row.get(2)?,
-                    mime_type: row.get(3)?,
-                    file_size: row.get(4)?,
-                    checksum: row.get(5)?,
-                    created_at: row.get(6)?,
-                    data_url: row.get(7).ok(),
-                })
-            }) {
-                item.attachments = att_rows.filter_map(|r| r.ok()).collect();
-            }
-        }
-
-        // Fetch tags
-        if let Ok(mut tag_stmt) = conn.prepare(
-            "SELECT t.id, t.name, t.color FROM tags t JOIN item_tags it ON t.id = it.tag_id WHERE it.item_id = ?1"
-        ) {
-            if let Ok(tag_rows) = tag_stmt.query_map(params![item.id], |row| {
-                Ok(TagSubRecord {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    color: row.get(2)?,
-                })
-            }) {
-                item.tags = tag_rows.filter_map(|r| r.ok()).collect();
-            }
-        }
-
-        // Fetch AI metadata
-        let ai_res = conn.query_row(
-            "SELECT id, provider, model, summary, classification, confidence, suggested_tags, processed_at FROM ai_metadata WHERE item_id = ?1",
-            params![item.id],
-            |row| {
-                let suggested_json: Option<String> = row.get(6).ok();
-                let suggested_tags: Option<Vec<String>> = suggested_json.and_then(|s| serde_json::from_str(&s).ok());
-                Ok(AiMetadataSubRecord {
-                    id: row.get(0)?,
-                    item_id: item.id.clone(),
-                    provider: row.get(1)?,
-                    model: row.get(2)?,
-                    summary: row.get(3).ok(),
-                    classification: row.get(4).ok(),
-                    confidence: row.get(5).ok(),
-                    suggested_tags,
-                    processed_at: row.get(7)?,
-                })
-            },
-        );
-        item.ai_metadata = ai_res.ok();
-
-        items.push(item);
+    for r in rows {
+        items.push(r.map_err(|e| e.to_string())?);
     }
-
     Ok(items)
 }
 
 #[tauri::command]
 pub fn create_item(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
     payload: CreateItemPayload,
 ) -> Result<ItemRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let id = payload.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    // Validasi awal (tanpa lock)
+    const ALLOWED_TYPES: &[&str] = &["note", "task", "link", "file", "image"];
+    if !ALLOWED_TYPES.contains(&payload.r#type.as_str()) {
+        return Err(format!("Invalid item type: {}", payload.r#type));
+    }
+    let title: String = payload.title.chars().take(500).collect();
+    if title.trim().is_empty() {
+        return Err("Title cannot be empty".to_string());
+    }
+    let id = payload.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    if id.len() > 64 || id.contains('/') || id.contains('\\') {
+        return Err("Invalid item id".to_string());
+    }
     let now = chrono::Utc::now().to_rfc3339();
-    let content = payload.content.unwrap_or_default();
-    let source = payload.source.unwrap_or_else(|| "direct".to_string());
+    let content: String = payload.content.clone().unwrap_or_default().chars().take(2_000_000).collect();
+    let source = payload.source.clone().unwrap_or_else(|| "direct".to_string());
 
-    conn.execute(
-        "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, 'inbox', 0, 0, ?6, ?7, NULL)",
-        params![id, payload.r#type, payload.title, content, source, now, now],
-    ).map_err(|e| e.to_string())?;
-
-
-    if let Some(task) = &payload.task {
-        conn.execute(
-            "INSERT INTO tasks (id, item_id, due_date, priority, completed, completed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![uuid::Uuid::new_v4().to_string(), id, task.due_date, task.priority, if task.completed { 1 } else { 0 }, task.completed_at],
-        ).map_err(|e| e.to_string())?;
+    // Pre-process attachments: decode base64 + tulis ke disk TANPA memegang DB lock.
+    // (Mencegah UI freeze + menghindari I/O panjang di dalam Mutex.)
+    struct PreparedAtt {
+        att_id: String,
+        file_name: String,
+        file_path: String,
+        mime_type: String,
+        file_size: i64,
+        checksum: String,
+        created_at: String,
+        data_url: Option<String>,
     }
-
-    if let Some(link) = &payload.link {
-        conn.execute(
-            "INSERT INTO links (id, item_id, url, domain, page_title, preview_image) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![uuid::Uuid::new_v4().to_string(), id, link.url, link.domain, link.page_title, link.preview_image],
-        ).map_err(|e| e.to_string())?;
-    }
-
-    // Save attachments
-    let mut saved_attachments = Vec::new();
+    let mut prepared: Vec<PreparedAtt> = Vec::new();
     if let Some(attachments) = &payload.attachments {
+        if attachments.len() > 50 {
+            return Err("Too many attachments (max 50)".to_string());
+        }
         for att in attachments {
-            let att_id = if att.id.is_empty() { uuid::Uuid::new_v4().to_string() } else { att.id.clone() };
-            let created_at = if att.created_at.is_empty() { now.clone() } else { att.created_at.clone() };
-
-            let mut file_path = att.file_path.clone();
+            let att_id = if att.id.is_empty() {
+                uuid::Uuid::new_v4().to_string()
+            } else {
+                att.id.clone()
+            };
+            let created_at = if att.created_at.is_empty() {
+                now.clone()
+            } else {
+                att.created_at.clone()
+            };
+            let safe_name = StorageManager::sanitize_file_name(&att.file_name);
+            let mut file_path = String::new();
             let mut checksum = att.checksum.clone();
             let mut file_size = att.file_size;
-
-            let mut final_data_url = match &att.data_url {
+            let final_data_url = match &att.data_url {
                 Some(s) if s.trim().is_empty() => None,
+                Some(s) if s.len() > 30_000_000 => None, // tolak blob > ~22MB
                 Some(s) => Some(s.clone()),
                 None => None,
             };
-
-            // If data_url contains base64 data, decode and save to attachments folder on disk
-            if let Some(ref data_url) = final_data_url {
+            if let Some(ref data_url) = final_data_url.clone() {
                 if let Some(comma_pos) = data_url.find(',') {
                     let b64_str = &data_url[comma_pos + 1..];
-                    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64_str) {
-                        if let Ok((target_path, computed_hash, written_size)) = storage.save_attachment(&att.file_name, &bytes) {
-                            file_path = target_path.to_string_lossy().to_string();
-                            checksum = computed_hash;
-                            file_size = written_size as i64;
-                        }
-                    }
-                }
-            } else {
-                // If data_url is missing/empty, but the file exists on disk and is an image:
-                let ext = std::path::Path::new(&att.file_name)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
-                let is_image = att.mime_type.starts_with("image/") || matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif" | "svg" | "bmp");
-                if is_image {
-                    let candidate = std::path::Path::new(&file_path);
-                    if candidate.is_file() {
-                        if let Ok(bytes) = std::fs::read(candidate) {
-                            if bytes.len() <= 15 * 1024 * 1024 {
-                                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                let mime = if att.mime_type.starts_with("image/") {
-                                    att.mime_type.clone()
-                                } else {
-                                    format!("image/{}", if ext == "jpg" { "jpeg" } else { &ext })
-                                };
-                                final_data_url = Some(format!("data:{};base64,{}", mime, b64));
+                    if b64_str.len() < 30_000_000 {
+                        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64_str) {
+                            if bytes.len() <= 20 * 1024 * 1024 {
+                                if let Ok((target_path, computed_hash, written_size)) =
+                                    storage.save_attachment(&safe_name, &bytes)
+                                {
+                                    file_path = target_path.to_string_lossy().to_string();
+                                    checksum = computed_hash;
+                                    file_size = written_size as i64;
+                                }
                             }
                         }
                     }
                 }
             }
-
-            conn.execute(
-                "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![att_id, id, att.file_name, file_path, att.mime_type, file_size, checksum, created_at, final_data_url],
-            ).map_err(|e| e.to_string())?;
-
-            saved_attachments.push(AttachmentSubRecord {
-                id: att_id,
-                file_name: att.file_name.clone(),
+            // NOTE: fallback baca arbitrary file_path dari frontend DIHAPUS (arbitrary file read).
+            // File dari disk harus masuk via import_files_from_paths yang tervalidasi.
+            prepared.push(PreparedAtt {
+                att_id,
+                file_name: safe_name,
                 file_path,
                 mime_type: att.mime_type.clone(),
                 file_size,
@@ -776,29 +744,99 @@ pub fn create_item(
         }
     }
 
-    // Save tags if provided
-    let mut saved_tags = Vec::new();
-    if let Some(tag_ids) = &payload.tag_ids {
-        for tag_id in tag_ids {
-            conn.execute(
-                "INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)",
-                params![id, tag_id],
-            ).ok();
+    // Tulis DB dalam SATU transaction (atomic: gagal di tengah → rollback, tanpa item yatim).
+    // Trigger items_ai otomatis isi FTS — jangan insert manual (hindari duplikat).
+    let (saved_tags, saved_attachments): (Vec<TagSubRecord>, Vec<AttachmentSubRecord>) = {
+        let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, 'inbox', 0, 0, ?6, ?7, NULL)",
+            params![id, payload.r#type, title, content, source, now, now],
+        )
+        .map_err(|e| e.to_string())?;
 
-            if let Ok(t) = conn.query_row(
-                "SELECT id, name, color FROM tags WHERE id = ?1",
-                params![tag_id],
-                |r| Ok(TagSubRecord { id: r.get(0)?, name: r.get(1)?, color: r.get(2)? }),
-            ) {
-                saved_tags.push(t);
+        if let Some(task) = &payload.task {
+            // Validasi priority
+            let prio = match task.priority.as_str() {
+                "low" | "medium" | "high" | "urgent" => task.priority.clone(),
+                _ => "medium".to_string(),
+            };
+            tx.execute(
+                "INSERT INTO tasks (id, item_id, due_date, priority, completed, completed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![uuid::Uuid::new_v4().to_string(), id, task.due_date, prio, if task.completed { 1 } else { 0 }, task.completed_at],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        if let Some(link) = &payload.link {
+            // Validasi URL scheme
+            let url_ok = link.url.starts_with("http://") || link.url.starts_with("https://");
+            if !url_ok {
+                return Err("Invalid link URL (only http/https allowed)".to_string());
+            }
+            let url: String = link.url.chars().take(2000).collect();
+            tx.execute(
+                "INSERT INTO links (id, item_id, url, domain, page_title, preview_image) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![uuid::Uuid::new_v4().to_string(), id, url, link.domain, link.page_title, link.preview_image],
+            ).map_err(|e| e.to_string())?;
+        }
+
+        let mut saved_attachments = Vec::new();
+        for p in prepared {
+            tx.execute(
+                "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![p.att_id, id, p.file_name, p.file_path, p.mime_type, p.file_size, p.checksum, p.created_at, p.data_url],
+            ).map_err(|e| e.to_string())?;
+            saved_attachments.push(AttachmentSubRecord {
+                id: p.att_id,
+                file_name: p.file_name,
+                file_path: p.file_path,
+                mime_type: p.mime_type,
+                file_size: p.file_size,
+                checksum: p.checksum,
+                created_at: p.created_at,
+                data_url: p.data_url,
+            });
+        }
+
+        let mut saved_tags = Vec::new();
+        if let Some(tag_ids) = &payload.tag_ids {
+            if tag_ids.len() > 20 {
+                return Err("Too many tags (max 20)".to_string());
+            }
+            for tag_id in tag_ids {
+                // FK check: hanya assign bila tag benar-benar ada
+                let exists: bool = tx
+                    .query_row("SELECT 1 FROM tags WHERE id = ?1", params![tag_id], |_| Ok(true))
+                    .unwrap_or(false);
+                if !exists {
+                    continue;
+                }
+                tx.execute(
+                    "INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)",
+                    params![id, tag_id],
+                )
+                .map_err(|e| e.to_string())?;
+
+                if let Ok(t) = tx.query_row(
+                    "SELECT id, name, color FROM tags WHERE id = ?1",
+                    params![tag_id],
+                    |r| Ok(TagSubRecord { id: r.get(0)?, name: r.get(1)?, color: r.get(2)? }),
+                ) {
+                    saved_tags.push(t);
+                }
             }
         }
-    }
+        tx.commit().map_err(|e| e.to_string())?;
+        (saved_tags, saved_attachments)
+        // lock dilepas di sini
+    };
+
+    let _ = app.emit("velco://items-changed", ());
 
     Ok(ItemRecord {
         id,
         r#type: payload.r#type,
-        title: payload.title,
+        title,
         content,
         source,
         status: "inbox".to_string(),
@@ -816,7 +854,11 @@ pub fn create_item(
 }
 
 #[tauri::command]
-pub fn update_item(db: State<'_, Database>, payload: UpdateItemPayload) -> Result<ItemRecord, String> {
+pub fn update_item(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+    payload: UpdateItemPayload,
+) -> Result<ItemRecord, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -927,11 +969,13 @@ pub fn update_item(db: State<'_, Database>, payload: UpdateItemPayload) -> Resul
 
     conn.execute("UPDATE items SET updated_at = ?1 WHERE id = ?2", params![now, payload.id]).ok();
 
+    let _ = app.emit("velco://items-changed", ());
+
     fetch_item_by_id(&conn, &payload.id)
 }
 
 #[tauri::command]
-pub fn trash_item(db: State<'_, Database>, id: String) -> Result<(), String> {
+pub fn trash_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
@@ -939,11 +983,12 @@ pub fn trash_item(db: State<'_, Database>, id: String) -> Result<(), String> {
         params![now, now, id],
     )
     .map_err(|e| e.to_string())?;
+    let _ = app.emit("velco://items-changed", ());
     Ok(())
 }
 
 #[tauri::command]
-pub fn restore_item(db: State<'_, Database>, id: String) -> Result<(), String> {
+pub fn restore_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
@@ -951,74 +996,140 @@ pub fn restore_item(db: State<'_, Database>, id: String) -> Result<(), String> {
         params![now, id],
     )
     .map_err(|e| e.to_string())?;
+    let _ = app.emit("velco://items-changed", ());
     Ok(())
 }
 
-#[tauri::command]
-pub fn delete_item_permanent(db: State<'_, Database>, id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+/// Hapus file fisik HANYA bila berada di dalam attachments_dir (jail).
+fn remove_jailed_file(storage: &StorageManager, file_path: &str, file_name: &str) {
+    // Resolve via jail helper; tolak absolut di luar sandbox.
+    let resolved = if let Some(r) = storage.resolve_attachment_path(file_path, file_name) {
+        r
+    } else {
+        return;
+    };
+    if StorageManager::ensure_within_dir(&storage.attachments_dir(), &resolved).is_err() {
+        return;
+    }
+    if resolved.is_file() {
+        let _ = std::fs::remove_file(resolved);
+    }
+}
 
-    // Delete attachment files on disk if they exist
-    if let Ok(mut stmt) = conn.prepare("SELECT file_path FROM attachments WHERE item_id = ?1") {
-        if let Ok(rows) = stmt.query_map(params![id], |row| row.get::<_, String>(0)) {
-            for path in rows.flatten() {
-                let p = std::path::Path::new(&path);
-                if p.is_file() {
-                    let _ = std::fs::remove_file(p);
+#[tauri::command]
+pub fn delete_item_permanent(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    id: String,
+) -> Result<(), String> {
+    // 1. Ambil daftar file di bawah lock singkat
+    let files: Vec<(String, String)> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        if let Ok(mut stmt) =
+            conn.prepare("SELECT file_path, file_name FROM attachments WHERE item_id = ?1")
+        {
+            if let Ok(rows) = stmt.query_map(params![id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }) {
+                for r in rows.flatten() {
+                    out.push(r);
                 }
             }
         }
+        out
+        // lock dilepas sebelum hapus file
+    };
+
+    // 2. Hapus file fisik dengan jail (di luar lock agar tidak block IPC)
+    for (fp, fn_) in files {
+        remove_jailed_file(&storage, &fp, &fn_);
     }
 
+    // 3. Hapus row DB (CASCADE + trigger FTS otomatis bersih)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM items WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
+    let _ = app.emit("velco://items-changed", ());
     Ok(())
 }
 
 #[tauri::command]
-pub fn empty_trash(db: State<'_, Database>) -> Result<usize, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    // Delete attachment files on disk for all deleted items
-    if let Ok(mut stmt) = conn.prepare("SELECT a.file_path FROM attachments a JOIN items i ON a.item_id = i.id WHERE i.deleted_at IS NOT NULL") {
-        if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
-            for path in rows.flatten() {
-                let p = std::path::Path::new(&path);
-                if p.is_file() {
-                    let _ = std::fs::remove_file(p);
+pub fn empty_trash(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+) -> Result<usize, String> {
+    // 1. Ambil daftar file trashed di bawah lock singkat
+    let files: Vec<(String, String)> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        if let Ok(mut stmt) = conn.prepare("SELECT a.file_path, a.file_name FROM attachments a JOIN items i ON a.item_id = i.id WHERE i.deleted_at IS NOT NULL") {
+            if let Ok(rows) = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            }) {
+                for r in rows.flatten() {
+                    out.push(r);
                 }
             }
         }
+        out
+    };
+
+    // 2. Hapus file di luar lock dengan jail
+    for (fp, fn_) in files {
+        remove_jailed_file(&storage, &fp, &fn_);
     }
 
+    // 3. Hapus rows
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let count = conn
         .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
         .map_err(|e| e.to_string())?;
+    let _ = app.emit("velco://items-changed", ());
     Ok(count)
 }
 
 #[tauri::command]
 pub fn import_files_from_paths(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
     paths: Vec<String>,
 ) -> Result<Vec<ItemRecord>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut imported_items = Vec::new();
-    let now = chrono::Utc::now().to_rfc3339();
-
+    // Batasi batch agar tidak OOM / freeze (frontend harus chunk bila >20)
+    if paths.len() > 20 {
+        return Err("Too many files in one batch (max 20)".to_string());
+    }
+    struct StagedFile {
+        file_name: String,
+        file_bytes: Vec<u8>,
+        mime_type: String,
+        item_type: String,
+        extension: String,
+    }
+    // 1. Baca + validasi SEMUA file TANPA memegang DB lock.
+    let mut staged: Vec<StagedFile> = Vec::new();
     for path_str in paths {
         let path = std::path::Path::new(&path_str);
-        if !path.exists() || !path.is_file() {
+        // Tolak symlink / direktori / file tak ada
+        let meta = match std::fs::symlink_metadata(path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() || !meta.is_file() {
             continue;
         }
-
-        let file_name = path
+        // Cap 100MB per file
+        if meta.len() > 100 * 1024 * 1024 {
+            continue;
+        }
+        let raw_name = path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("unnamed_file")
-            .to_string();
-
+            .unwrap_or("unnamed_file");
+        let file_name = StorageManager::sanitize_file_name(raw_name);
         let file_bytes = match std::fs::read(path) {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -1026,7 +1137,6 @@ pub fn import_files_from_paths(
                 continue;
             }
         };
-        let file_size = file_bytes.len() as i64;
 
         let extension = path
             .extension()
@@ -1055,76 +1165,118 @@ pub fn import_files_from_paths(
             _ => ("application/octet-stream", "file"),
         };
 
-        // Save copy to Velco attachments directory
-        let (saved_path, checksum, _) = storage
-            .save_attachment(&file_name, &file_bytes)
-            .map_err(|e| format!("Failed to save attachment {}: {}", file_name, e))?;
+        staged.push(StagedFile {
+            file_name,
+            file_bytes,
+            mime_type: mime_type.to_string(),
+            item_type: item_type.to_string(),
+            extension,
+        });
+    }
 
-        // Data URL generation: images up to 20MB, PDF up to 20MB
-        let data_url = if (item_type == "image" && file_size <= 20 * 1024 * 1024)
-            || (extension == "pdf" && file_size <= 20 * 1024 * 1024)
-        {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(&file_bytes);
-            Some(format!("data:{};base64,{}", mime_type, b64))
+    // 2. Tulis ke attachments_dir (masih tanpa DB lock) + siapkan konten.
+    struct ReadyFile {
+        file_name: String,
+        mime_type: String,
+        item_type: String,
+        content: String,
+        data_url: Option<String>,
+        saved_file_name: String,
+        checksum: String,
+        file_size: i64,
+    }
+    let mut ready: Vec<ReadyFile> = Vec::new();
+    for s in staged {
+        let file_size = s.file_bytes.len() as i64;
+        let (saved_path, checksum, _) = storage
+            .save_attachment(&s.file_name, &s.file_bytes)
+            .map_err(|e| format!("Failed to save attachment {}: {}", s.file_name, e))?;
+        let saved_file_name = saved_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&s.file_name)
+            .to_string();
+
+        let data_url = if s.item_type == "image" && file_size <= 64 * 1024 {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&s.file_bytes);
+            Some(format!("data:{};base64,{}", s.mime_type, b64))
         } else {
             None
         };
 
-        // Content summary & preview: direct text extraction for text & docx files
+        // Jangan simpan path absolut asal ke konten (privacy + cegah leak path sistem).
         let mut content = format!(
-            "File: {}\nSize: {:.1} KB\nType: {}\nPath: {}",
-            file_name,
+            "File: {}\nSize: {:.1} KB\nType: {}",
+            s.file_name,
             file_size as f64 / 1024.0,
-            mime_type,
-            path_str
+            s.mime_type,
         );
 
         if matches!(
-            extension.as_str(),
+            s.extension.as_str(),
             "txt" | "md" | "json" | "csv" | "log" | "rs" | "ts" | "js" | "html" | "css" | "xml" | "yaml" | "yml" | "sql" | "py" | "sh" | "bat" | "env" | "ini"
-        ) && file_size <= 5 * 1024 * 1024
+        ) && file_size <= 1 * 1024 * 1024
         {
-            if let Ok(text) = String::from_utf8(file_bytes.clone()) {
-                content = text;
+            if let Ok(text) = String::from_utf8(s.file_bytes.clone()) {
+                content = text.chars().take(200_000).collect();
             }
-        } else if extension == "docx" && file_size <= 15 * 1024 * 1024 {
-            if let Some(text) = extract_docx_text(&file_bytes) {
-                content = text;
+        } else if s.extension == "docx" && file_size <= 15 * 1024 * 1024 {
+            if let Some(text) = extract_docx_text(&s.file_bytes) {
+                content = text.chars().take(200_000).collect();
             }
-        } else if extension == "xlsx" && file_size <= 15 * 1024 * 1024 {
-            if let Some(text) = extract_xlsx_text(&file_bytes) {
-                content = text;
+        } else if s.extension == "xlsx" && file_size <= 15 * 1024 * 1024 {
+            if let Some(text) = extract_xlsx_text(&s.file_bytes) {
+                content = text.chars().take(200_000).collect();
             }
         }
 
-        let item_id = uuid::Uuid::new_v4().to_string();
-        let att_id = uuid::Uuid::new_v4().to_string();
-        let relative_file_path = format!(
-            "attachments/{}",
-            saved_path.file_name().and_then(|n| n.to_str()).unwrap_or(&file_name)
-        );
-
-        // Insert into items table
-        conn.execute(
-            "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, 'drag_drop', 'inbox', 0, 0, ?5, ?6, NULL)",
-            params![item_id, item_type, file_name, content, now, now],
-        ).map_err(|e| e.to_string())?;
-
-        // Insert into FTS5
-        conn.execute(
-            "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
-            params![item_id, file_name, content],
-        ).ok();
-
-        // Insert into attachments table
-        conn.execute(
-            "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![att_id, item_id, file_name, relative_file_path, mime_type, file_size, checksum, now, data_url],
-        ).map_err(|e| e.to_string())?;
-
-        let created_record = fetch_item_by_id(&conn, &item_id)?;
-        imported_items.push(created_record);
+        ready.push(ReadyFile {
+            file_name: s.file_name,
+            mime_type: s.mime_type,
+            item_type: s.item_type,
+            content,
+            data_url,
+            saved_file_name,
+            checksum,
+            file_size,
+        });
     }
+
+    // 3. Insert DB dalam transaction singkat (trigger FTS otomatis, tanpa manual insert).
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut imported_ids: Vec<String> = Vec::new();
+    {
+        let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        for r in &ready {
+            let item_id = uuid::Uuid::new_v4().to_string();
+            let att_id = uuid::Uuid::new_v4().to_string();
+            let relative_file_path = format!("attachments/{}", r.saved_file_name);
+            tx.execute(
+                "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, 'drag_drop', 'inbox', 0, 0, ?5, ?6, NULL)",
+                params![item_id, r.item_type, r.file_name, r.content, now, now],
+            )
+            .map_err(|e| e.to_string())?;
+            tx.execute(
+                "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![att_id, item_id, r.file_name, relative_file_path, r.mime_type, r.file_size, r.checksum, now, r.data_url],
+            )
+            .map_err(|e| e.to_string())?;
+            imported_ids.push(item_id);
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+
+    // 4. Fetch records (read-only, tanpa menahan transaction)
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut imported_items = Vec::new();
+    for item_id in imported_ids {
+        if let Ok(rec) = fetch_item_by_id(&conn, &item_id) {
+            imported_items.push(rec);
+        }
+    }
+
+    let _ = app.emit("velco://items-changed", ());
 
     Ok(imported_items)
 }
@@ -1321,35 +1473,58 @@ pub fn get_attachment_preview(
         .unwrap_or("")
         .to_lowercase();
 
-    // 1. Cek apakah berkas ada di disk
-    let candidate_paths = [
-        std::path::PathBuf::from(&file_path),
-        storage.attachments_dir().join(&file_path),
-        storage.attachments_dir().join(&file_name),
-    ];
+    // 1. Cek apakah berkas ada di disk — HANYA di dalam attachments_dir (jail).
+    // Path absolut di luar sandbox DITOLAK (mencegah arbitrary file read via DB beracun).
+    // Lock DB dilepas sebelum I/O file agar tidak block IPC lain.
+    let att_dir = storage.attachments_dir();
+    let safe_name = StorageManager::sanitize_file_name(&file_name);
+    let jailed_primary: Option<std::path::PathBuf> =
+        storage.resolve_attachment_path(&file_path, &safe_name);
+    // Drop guard sebelum fs::read (conn masih dipinjam oleh query di atas; explicitly drop)
+    // NOTE: `conn` adalah MutexGuard — drop agar read file tidak menahan lock.
+    drop(conn);
 
     let mut found_bytes: Option<Vec<u8>> = None;
-    for p in &candidate_paths {
-        if p.is_file() {
-            if let Ok(bytes) = std::fs::read(p) {
-                found_bytes = Some(bytes);
-                break;
+    if let Some(p) = jailed_primary {
+        if let Ok(jailed) = StorageManager::ensure_within_dir(&att_dir, &p) {
+            // Cap baca 30MB agar tidak OOM
+            if let Ok(meta) = std::fs::metadata(&jailed) {
+                if meta.len() <= 30 * 1024 * 1024 && jailed.is_file() {
+                    if let Ok(bytes) = std::fs::read(&jailed) {
+                        found_bytes = Some(bytes);
+                    }
+                }
             }
         }
     }
 
-    // Jika belum ketemu di path langsung, scan folder attachments untuk UUID prefix
+    // Jika belum ketemu, scan folder attachments untuk UUID prefix (tetap di dalam att_dir)
     if found_bytes.is_none() {
-        if let Ok(entries) = std::fs::read_dir(storage.attachments_dir()) {
+        if let Ok(entries) = std::fs::read_dir(&att_dir) {
+            let suffix = format!("_{}", safe_name);
             for entry in entries.flatten() {
                 let p = entry.path();
-                if p.is_file() {
-                    let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                    if fname.ends_with(&format!("_{}", file_name)) || fname == file_name {
-                        if let Ok(bytes) = std::fs::read(&p) {
-                            found_bytes = Some(bytes);
-                            break;
+                let is_file = entry
+                    .file_type()
+                    .map(|f| f.is_file())
+                    .unwrap_or_else(|_| p.is_file());
+                if !is_file {
+                    continue;
+                }
+                // Jail tiap kandidat
+                if StorageManager::ensure_within_dir(&att_dir, &p).is_err() {
+                    continue;
+                }
+                let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if fname.ends_with(&suffix) || fname == safe_name {
+                    if let Ok(meta) = std::fs::metadata(&p) {
+                        if meta.len() > 30 * 1024 * 1024 {
+                            continue;
                         }
+                    }
+                    if let Ok(bytes) = std::fs::read(&p) {
+                        found_bytes = Some(bytes);
+                        break;
                     }
                 }
             }
@@ -1373,6 +1548,16 @@ pub fn get_attachment_preview(
     let mut text_content: Option<String> = None;
     let preview_type;
 
+    // Helper: cache data_url kecil kembali ke DB di bawah lock singkat
+    let cache_data_url = |att_id: &str, url: &str| {
+        if let Ok(conn) = db.conn.lock() {
+            let _ = conn.execute(
+                "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
+                params![url, att_id],
+            );
+        }
+    };
+
     if is_pdf {
         preview_type = "pdf".to_string();
         if data_url.is_none() || data_url.as_deref() == Some("") {
@@ -1380,13 +1565,7 @@ pub fn get_attachment_preview(
                 if bytes.len() <= 30 * 1024 * 1024 {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
                     let url = format!("data:application/pdf;base64,{}", b64);
-                    // Cache kembali ke DB jika <= 10MB
-                    if bytes.len() <= 10 * 1024 * 1024 {
-                        let _ = conn.execute(
-                            "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
-                            params![url, id],
-                        );
-                    }
+                    // Do NOT cache multi-megabyte PDF base64 to SQLite; keep DB file light
                     data_url = Some(url);
                 }
             }
@@ -1428,15 +1607,17 @@ pub fn get_attachment_preview(
             }
         }
 
-        // Jika masih belum ada text_content, ambil dari content tabel items
+        // Jika masih belum ada text_content, ambil dari content tabel items (lock singkat)
         if text_content.is_none() {
-            if let Ok(raw_content) = conn.query_row(
-                "SELECT content FROM items WHERE id = ?1",
-                params![item_id],
-                |r| r.get::<_, String>(0),
-            ) {
-                if !raw_content.trim().is_empty() {
-                    text_content = Some(raw_content);
+            if let Ok(conn) = db.conn.lock() {
+                if let Ok(raw_content) = conn.query_row(
+                    "SELECT content FROM items WHERE id = ?1",
+                    params![item_id],
+                    |r| r.get::<_, String>(0),
+                ) {
+                    if !raw_content.trim().is_empty() {
+                        text_content = Some(raw_content.chars().take(500_000).collect());
+                    }
                 }
             }
         }
@@ -1452,12 +1633,9 @@ pub fn get_attachment_preview(
                         format!("image/{}", if extension == "jpg" { "jpeg" } else { &extension })
                     };
                     let url = format!("data:{};base64,{}", safe_mime, b64);
-                    // Cache kembali ke DB jika <= 5MB agar list view & modal langsung punya thumbnail
-                    if bytes.len() <= 5 * 1024 * 1024 {
-                        let _ = conn.execute(
-                            "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
-                            params![url, id],
-                        );
+                    // Only cache tiny thumbnails (<= 64KB) in SQLite to prevent bloat
+                    if bytes.len() <= 64 * 1024 {
+                        cache_data_url(&id, &url);
                     }
                     data_url = Some(url);
                 }

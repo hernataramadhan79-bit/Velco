@@ -1,10 +1,11 @@
 use rusqlite::params;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::database::Database;
 
 #[tauri::command]
 pub fn toggle_task_complete(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     item_id: String,
     completed: bool,
@@ -27,6 +28,8 @@ pub fn toggle_task_complete(
         params![chrono::Utc::now().to_rfc3339(), item_id],
     )
     .ok();
+
+    let _ = app.emit("velco://items-changed", ());
 
     Ok(())
 }

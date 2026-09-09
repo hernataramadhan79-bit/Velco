@@ -2,6 +2,7 @@ use tauri::{Emitter, Manager};
 use crate::ai::ollama::{ConnectionTestResult, DetailedModelInfo, OllamaClient};
 use crate::ai::{LlmProviderConfig, RecipeOutput};
 use crate::database::Database;
+use crate::filesystem::StorageManager;
 use serde_json::Value;
 
 // ============================================================================
@@ -119,8 +120,96 @@ fn build_recipe_system_prompt(recipe: &str, custom_prompt: &Option<String>) -> S
     )
 }
 
-/// Fetches item content from the database for the given IDs.
-fn fetch_item_contexts(db: &Database, item_ids: &[String]) -> Result<Vec<(String, String)>, String> {
+/// Helper: Extracts readable plain text from raw file bytes based on file extension and MIME type.
+fn extract_text_from_file_bytes(bytes: &[u8], ext: &str, mime_type: &str) -> Option<String> {
+    if bytes.is_empty() {
+        return None;
+    }
+
+    // 1. DOCX
+    if ext == "docx" || mime_type.contains("wordprocessingml") {
+        return crate::commands::items::extract_docx_text(bytes);
+    }
+
+    // 2. XLSX
+    if ext == "xlsx" || mime_type.contains("spreadsheetml") {
+        return crate::commands::items::extract_xlsx_text(bytes);
+    }
+
+    // 3. Text, Markdown, Code, JSON, CSV, Config, Logs, etc.
+    let is_text_type = matches!(
+        ext,
+        "txt" | "md" | "markdown" | "json" | "csv" | "tsv" | "xml" | "yaml" | "yml"
+            | "log" | "sql" | "html" | "css" | "scss" | "js" | "jsx" | "ts" | "tsx"
+            | "py" | "rs" | "go" | "c" | "cpp" | "h" | "hpp" | "java" | "sh" | "bat"
+            | "ps1" | "env" | "ini" | "conf" | "properties" | "toml" | "diff" | "patch"
+    ) || mime_type.starts_with("text/") || mime_type.contains("json") || mime_type.contains("xml") || mime_type.contains("javascript");
+
+    if is_text_type {
+        if bytes.len() <= 10 * 1024 * 1024 {
+            let s = String::from_utf8_lossy(bytes);
+            return Some(s.chars().take(80_000).collect());
+        }
+    }
+
+    // 4. PDF heuristic text stream extraction
+    if ext == "pdf" || mime_type == "application/pdf" {
+        return extract_pdf_heuristic(bytes);
+    }
+
+    None
+}
+
+/// Extract printable strings from PDF stream objects
+fn extract_pdf_heuristic(bytes: &[u8]) -> Option<String> {
+    let raw = String::from_utf8_lossy(bytes);
+    let mut extracted = String::new();
+
+    let mut in_parentheses = false;
+    let mut current_buf = String::new();
+    let mut is_escaped = false;
+
+    for ch in raw.chars() {
+        if in_parentheses {
+            if is_escaped {
+                current_buf.push(ch);
+                is_escaped = false;
+            } else if ch == '\\' {
+                is_escaped = true;
+            } else if ch == ')' {
+                in_parentheses = false;
+                if current_buf.len() >= 2 && current_buf.chars().any(|c| c.is_alphabetic()) {
+                    extracted.push_str(&current_buf);
+                    extracted.push(' ');
+                }
+                current_buf.clear();
+            } else if ch.is_ascii_graphic() || ch == ' ' {
+                current_buf.push(ch);
+            }
+        } else if ch == '(' {
+            in_parentheses = true;
+            current_buf.clear();
+        }
+
+        if extracted.len() > 60_000 {
+            break;
+        }
+    }
+
+    let trimmed = extracted.trim();
+    if trimmed.len() > 20 {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
+/// Fetches item content and any attached file contents from the database/storage for the given IDs.
+fn fetch_item_contexts(
+    db: &Database,
+    storage: &StorageManager,
+    item_ids: &[String],
+) -> Result<Vec<(String, String)>, String> {
     let conn = db
         .conn
         .lock()
@@ -129,28 +218,136 @@ fn fetch_item_contexts(db: &Database, item_ids: &[String]) -> Result<Vec<(String
     let mut results = Vec::new();
 
     for id in item_ids {
-        // Try content_index first for plain_text, fall back to items.content
-        let plain_text: Option<String> = conn
+        // 1. Try finding as item in items table
+        let item_opt = conn
             .query_row(
-                "SELECT plain_text FROM content_index WHERE item_id = ?1",
+                "SELECT id, title, content, type FROM items WHERE id = ?1 AND deleted_at IS NULL",
                 [id],
-                |row| row.get(0),
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
             )
             .ok();
 
-        let (title, content) = conn
-            .query_row(
-                "SELECT title, content FROM items WHERE id = ?1 AND deleted_at IS NULL",
-                [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
-            .map_err(|e| format!("Item {} not found: {}", id, e))?;
+        if let Some((item_id, title, mut content, _item_type)) = item_opt {
+            // Check content_index for plain_text
+            let plain_text: Option<String> = conn
+                .query_row(
+                    "SELECT plain_text FROM content_index WHERE item_id = ?1",
+                    [&item_id],
+                    |row| row.get(0),
+                )
+                .ok()
+                .filter(|t: &String| !t.trim().is_empty());
 
-        let text = plain_text
-            .filter(|t| !t.trim().is_empty())
-            .unwrap_or(content);
+            if let Some(pt) = plain_text {
+                content = pt;
+            }
 
-        results.push((title, text));
+            // Fetch any attachments associated with this item
+            let att_rows: Vec<(String, String, String, String, i64)> = if let Ok(mut att_stmt) = conn.prepare(
+                "SELECT id, file_name, file_path, mime_type, file_size FROM attachments WHERE item_id = ?1"
+            ) {
+                att_stmt
+                    .query_map([&item_id], |r| {
+                        Ok((
+                            r.get(0)?,
+                            r.get(1)?,
+                            r.get(2)?,
+                            r.get(3)?,
+                            r.get(4)?,
+                        ))
+                    })
+                    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            let mut attached_texts = Vec::new();
+            for (_att_id, file_name, file_path, mime_type, _file_size) in att_rows {
+                let safe_name = StorageManager::sanitize_file_name(&file_name);
+                let ext = std::path::Path::new(&file_name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+                    if let Ok(bytes) = std::fs::read(&resolved_path) {
+                        if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
+                            if !extracted.trim().is_empty() {
+                                attached_texts.push(format!(
+                                    "--- ATTACHED FILE: {} ---\n{}",
+                                    file_name,
+                                    extracted.chars().take(80_000).collect::<String>()
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !attached_texts.is_empty() {
+                let attachments_str = attached_texts.join("\n\n");
+                if content.trim().is_empty() || content.starts_with("File: ") {
+                    content = attachments_str;
+                } else {
+                    content = format!("{}\n\n{}", content, attachments_str);
+                }
+            }
+
+            results.push((title, content));
+        } else {
+            // 2. Try finding as a direct attachment ID in attachments table
+            let att_opt = conn
+                .query_row(
+                    "SELECT a.item_id, a.file_name, a.file_path, a.mime_type, a.file_size, COALESCE(i.title, a.file_name) \
+                     FROM attachments a LEFT JOIN items i ON a.item_id = i.id WHERE a.id = ?1",
+                    [id],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, i64>(4)?,
+                            row.get::<_, String>(5)?,
+                        ))
+                    },
+                )
+                .ok();
+
+            if let Some((_item_id, file_name, file_path, mime_type, _file_size, title)) = att_opt {
+                let safe_name = StorageManager::sanitize_file_name(&file_name);
+                let ext = std::path::Path::new(&file_name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                let mut content = format!("Attached File: {}", file_name);
+                if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+                    if let Ok(bytes) = std::fs::read(&resolved_path) {
+                        if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
+                            if !extracted.trim().is_empty() {
+                                content = format!(
+                                    "--- ATTACHED FILE CONTENT: {} ---\n{}",
+                                    file_name,
+                                    extracted.chars().take(80_000).collect::<String>()
+                                );
+                            }
+                        }
+                    }
+                }
+                results.push((title, content));
+            }
+        }
     }
 
     Ok(results)
@@ -517,9 +714,10 @@ pub async fn execute_context_recipe(
         return Err("No items provided for recipe execution".to_string());
     }
 
-    // 1. Fetch item content from database
+    // 1. Fetch item content from database and file storage
     let db = app.state::<Database>();
-    let items = fetch_item_contexts(&db, &item_ids)?;
+    let storage = app.state::<StorageManager>();
+    let items = fetch_item_contexts(&db, &storage, &item_ids)?;
 
     if items.is_empty() {
         return Err("No valid items found for the provided IDs".to_string());
@@ -536,30 +734,82 @@ pub async fn execute_context_recipe(
 }
 
 /// Apply the structured artifacts from a recipe output into the database.
+/// NOTE: dijalankan via `spawn_blocking` agar `std::Mutex` tidak memblokir executor Tokio.
+/// FTS dijaga trigger otomatis — tidak ada INSERT manual ke items_fts.
 #[tauri::command]
 pub async fn apply_recipe_artifacts(
     app: tauri::AppHandle,
     target_item_id: Option<String>,
     output: RecipeOutput,
 ) -> Result<(), String> {
-    let db = app.state::<Database>();
-    let conn = db
+    // Validasi + cap di luar blocking task (cepat, tanpa lock)
+    if output.extracted_tasks.len() > 100 {
+        return Err("Too many extracted tasks (max 100)".to_string());
+    }
+    if output.tags.len() > 30 {
+        return Err("Too many tags (max 30)".to_string());
+    }
+    let md_capped: Option<String> = output
+        .markdown_content
+        .clone()
+        .map(|m| m.chars().take(500_000).collect());
+
+    let output_owned = crate::ai::RecipeOutput {
+        extracted_tasks: output
+            .extracted_tasks
+            .into_iter()
+            .take(100)
+            .map(|t| crate::ai::ExtractedTaskPayload {
+                title: t.title.chars().take(500).collect(),
+                priority: t.priority,
+                due_date: t.due_date,
+            })
+            .collect(),
+        tags: output.tags.into_iter().take(30).collect(),
+        summary: output.summary.map(|s| s.chars().take(2000).collect()),
+        markdown_content: md_capped,
+    };
+
+    // Pindahkan AppHandle ke blocking thread; state DB diakses di sana.
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        apply_recipe_artifacts_blocking(&app2, target_item_id, output_owned)
+    })
+    .await
+    .map_err(|e| format!("Artifact task panicked: {}", e))?
+}
+
+fn apply_recipe_artifacts_blocking(
+    app: &tauri::AppHandle,
+    target_item_id: Option<String>,
+    output: crate::ai::RecipeOutput,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let db = app.state::<crate::database::Database>();
+    let mut conn = db
         .conn
         .lock()
         .map_err(|e| format!("Database lock error: {}", e))?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
-    // 1. Insert extracted tasks
+    // 1. Insert extracted tasks (atomic via transaction)
     for task in &output.extracted_tasks {
+        let title: String = task.title.chars().take(500).collect();
+        if title.trim().is_empty() {
+            continue;
+        }
         let item_id = uuid::Uuid::new_v4().to_string();
         let task_id = uuid::Uuid::new_v4().to_string();
 
         // Create the item
-        conn.execute(
+        tx.execute(
             "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at) \
              VALUES (?1, 'task', ?2, ?3, 'ai_recipe', 'inbox', 0, 0, ?4, ?4)",
-            rusqlite::params![item_id, task.title, task.title, now],
+            rusqlite::params![item_id, title, title, now],
         )
         .map_err(|e| format!("Failed to insert task item: {}", e))?;
 
@@ -569,59 +819,56 @@ pub async fn apply_recipe_artifacts(
             _ => "medium".to_string(),
         };
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO tasks (id, item_id, due_date, priority, completed, completed_at) \
              VALUES (?1, ?2, ?3, ?4, 0, NULL)",
             rusqlite::params![task_id, item_id, task.due_date, priority],
         )
         .map_err(|e| format!("Failed to insert task metadata: {}", e))?;
-
-        // Insert FTS entry
-        conn.execute(
-            "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
-            rusqlite::params![item_id, task.title, task.title],
-        )
-        .map_err(|e| format!("Failed to insert FTS entry: {}", e))?;
+        // FTS otomatis via trigger items_ai — tanpa insert manual.
     }
 
     // 2. Process tags
     for tag_name in &output.tags {
-        let trimmed = tag_name.trim();
+        let trimmed = tag_name.trim().chars().take(100).collect::<String>();
         if trimmed.is_empty() {
             continue;
         }
 
         // Upsert tag
-        let tag_id: String = conn
-            .query_row("SELECT id FROM tags WHERE name = ?1", [trimmed], |row| {
-                row.get(0)
-            })
-            .unwrap_or_else(|_| {
+        let tag_id: String = match tx.query_row(
+            "SELECT id FROM tags WHERE name = ?1",
+            [&trimmed],
+            |row| row.get(0),
+        ) {
+            Ok(id) => id,
+            Err(_) => {
                 let new_id = uuid::Uuid::new_v4().to_string();
-                conn.execute(
+                tx.execute(
                     "INSERT INTO tags (id, name, color, created_at) VALUES (?1, ?2, '#3b82f6', ?3)",
                     rusqlite::params![new_id, trimmed, now],
                 )
-                .ok();
+                .map_err(|e| format!("Failed to insert tag: {}", e))?;
                 new_id
-            });
+            }
+        };
 
         // Assign tag to target item if specified
         if let Some(ref target_id) = target_item_id {
-            conn.execute(
+            tx.execute(
                 "INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)",
                 rusqlite::params![target_id, tag_id],
             )
-            .ok();
+            .map_err(|e| format!("Failed to assign tag: {}", e))?;
         }
     }
 
-    // 3. Handle markdown content
+    // 3. Handle markdown content (trigger items_au otomatis sinkron FTS saat UPDATE/INSERT)
     if let Some(ref md) = output.markdown_content {
         if !md.trim().is_empty() {
             if let Some(ref target_id) = target_item_id {
                 // Append to existing item
-                let existing: String = conn
+                let existing: String = tx
                     .query_row(
                         "SELECT content FROM items WHERE id = ?1",
                         [target_id],
@@ -635,18 +882,11 @@ pub async fn apply_recipe_artifacts(
                     format!("{}\n\n---\n\n## AI Synthesis\n\n{}", existing, md)
                 };
 
-                conn.execute(
+                tx.execute(
                     "UPDATE items SET content = ?1, updated_at = ?2 WHERE id = ?3",
                     rusqlite::params![updated, now, target_id],
                 )
                 .map_err(|e| format!("Failed to update item content: {}", e))?;
-
-                // Keep FTS5 in sync
-                conn.execute("DELETE FROM items_fts WHERE item_id = ?1", rusqlite::params![target_id]).ok();
-                conn.execute(
-                    "INSERT INTO items_fts (item_id, title, content) SELECT id, title, content FROM items WHERE id = ?1",
-                    rusqlite::params![target_id],
-                ).ok();
             } else {
                 // Create a new master note
                 let note_id = uuid::Uuid::new_v4().to_string();
@@ -658,29 +898,59 @@ pub async fn apply_recipe_artifacts(
                     .take(100)
                     .collect::<String>();
 
-                conn.execute(
+                tx.execute(
                     "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at) \
                      VALUES (?1, 'note', ?2, ?3, 'ai_recipe', 'inbox', 0, 0, ?4, ?4)",
                     rusqlite::params![note_id, title, md, now],
                 )
                 .map_err(|e| format!("Failed to create master note: {}", e))?;
-
-                // Insert FTS entry
-                conn.execute(
-                    "INSERT INTO items_fts (item_id, title, content) VALUES (?1, ?2, ?3)",
-                    rusqlite::params![note_id, title, md],
-                )
-                .map_err(|e| format!("Failed to insert FTS entry: {}", e))?;
             }
         }
     }
 
+    tx.commit()
+        .map_err(|e| format!("Failed to commit artifacts: {}", e))?;
     Ok(())
 }
 
 // ============================================================================
 // Context Chat Commands (Interactive Conversational Workstation)
 // ============================================================================
+
+/// Registry request chat yang dibatalkan user via `cancel_chat`.
+/// Dicek di tiap iterasi streaming agar backend berhenti emit + hemat VRAM/CPU.
+static CANCELLED_CHAT_REQUESTS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+    std::sync::OnceLock::new();
+
+fn cancelled_requests() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    CANCELLED_CHAT_REQUESTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+fn is_chat_cancelled(request_id: &str) -> bool {
+    cancelled_requests()
+        .lock()
+        .map(|s| s.contains(request_id))
+        .unwrap_or(false)
+}
+
+/// Batalkan chat yang sedang streaming. Dipanggil dari `chatStore.stopGenerating`.
+/// Backend akan berhenti emit chunk untuk request_id ini dan mengembalikan Ok parsial.
+#[tauri::command]
+pub fn cancel_chat(request_id: String) -> Result<(), String> {
+    if request_id.trim().is_empty() {
+        return Err("request_id cannot be empty".to_string());
+    }
+    if let Ok(mut set) = cancelled_requests().lock() {
+        set.insert(request_id);
+        // Batasi ukuran set agar tidak tumbuh tanpa batas (LRU sederhana)
+        if set.len() > 100 {
+            if let Some(old) = set.iter().next().cloned() {
+                set.remove(&old);
+            }
+        }
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ChatMessagePayload {
@@ -705,10 +975,11 @@ pub async fn execute_context_chat(
     item_ids: Vec<String>,
     provider_config: LlmProviderConfig,
 ) -> Result<String, String> {
-    // 1. Fetch item content from SQLite
+    // 1. Fetch item and attached file contents from SQLite and file storage
     let db = app.state::<Database>();
+    let storage = app.state::<StorageManager>();
     let items = if !item_ids.is_empty() {
-        fetch_item_contexts(&db, &item_ids).unwrap_or_default()
+        fetch_item_contexts(&db, &storage, &item_ids).unwrap_or_default()
     } else {
         vec![]
     };
@@ -804,6 +1075,10 @@ pub async fn execute_context_chat(
 
             let mut line_buffer = String::new();
             while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+                // Hormati pembatalan user — berhenti segera tanpa emit lanjutan.
+                if is_chat_cancelled(&request_id) {
+                    break;
+                }
                 let chunk_str = String::from_utf8_lossy(&chunk);
                 line_buffer.push_str(&chunk_str);
 
@@ -959,6 +1234,9 @@ pub async fn execute_context_chat(
 
             let mut line_buffer = String::new();
             while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+                if is_chat_cancelled(&request_id) {
+                    break;
+                }
                 let chunk_str = String::from_utf8_lossy(&chunk);
                 line_buffer.push_str(&chunk_str);
 
@@ -1024,7 +1302,10 @@ pub async fn execute_context_chat(
         }
     }
 
-    // Emit final completion event
+    // Bersihkan registry cancel + emit final completion event
+    if let Ok(mut set) = cancelled_requests().lock() {
+        set.remove(&request_id);
+    }
     let _ = app.emit(
         "ai-chat-chunk",
         ChatChunkEvent {

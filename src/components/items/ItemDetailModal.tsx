@@ -220,6 +220,22 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [copiedPreviewText, setCopiedPreviewText] = useState(false);
   const [textPreviewMode, setTextPreviewMode] = useState<'formatted' | 'raw'>('formatted');
   const notify = useItemStore((s) => s.notify);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const copyTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pause media saat modal tutup (cegah audio jalan di background)
+  React.useEffect(() => {
+    return () => {
+      try {
+        audioRef.current?.pause();
+        videoRef.current?.pause();
+      } catch {
+        /* ignore */
+      }
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const activeAttachment: Attachment | undefined =
     item.attachments && item.attachments.length > 0
@@ -247,10 +263,21 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     };
   }, [hasFiles, activeAttachment?.id, item.id]);
 
+  // Pause media saat attachment berganti
+  React.useEffect(() => {
+    try {
+      audioRef.current?.pause();
+      videoRef.current?.pause();
+    } catch {
+      /* ignore */
+    }
+  }, [activeAttachment?.id, item.id]);
+
   const handleCopyPreviewText = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch(() => {});
     setCopiedPreviewText(true);
-    setTimeout(() => setCopiedPreviewText(false), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopiedPreviewText(false), 2000);
   };
 
   const activeFileName = activeAttachment?.fileName || item.title;
@@ -676,11 +703,36 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           active.baseUrl,
           active.apiKey
         );
+        // Validasi ketat: tolak confidence:"tinggi", suggestedTags:"bukan-array" dkk.
+        // Sebelumnya JSON.parse mentah langsung masuk SQLite lalu crash saat render.
         let parsed = { category: 'General', confidence: 0.8, suggestedTags: [] as string[] };
         try {
-          const jsonMatch = raw.match(/\{[\s\S]*\}/);
-          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-        } catch { /* use fallback */ }
+          const { extractValidJson } = await import('../../utils/aiUtils');
+          const { z } = await import('zod');
+          const ClassifySchema = z.object({
+            category: z.string().max(50).default('General'),
+            confidence: z.number().min(0).max(1).default(0.8),
+            suggestedTags: z.array(z.string().max(30)).max(10).default([]),
+          });
+          // Normalisasi key LLM yang bervariasi (category/classification, confidence/score)
+          const normalized = raw
+            .replace(/"classification"\s*:/g, '"category":')
+            .replace(/"score"\s*:/g, '"confidence":')
+            .replace(/"suggested_tags"\s*:/g, '"suggestedTags":')
+            .replace(/"tags"\s*:/g, '"suggestedTags":');
+          const v = extractValidJson(normalized, ClassifySchema) as {
+            category?: string;
+            confidence?: number;
+            suggestedTags?: string[];
+          };
+          parsed = {
+            category: (v.category ?? 'General').trim().slice(0, 50) || 'General',
+            confidence: typeof v.confidence === 'number' ? v.confidence : 0.8,
+            suggestedTags: (v.suggestedTags ?? []).map((t) => String(t).trim().slice(0, 30)).filter(Boolean).slice(0, 10),
+          };
+        } catch {
+          /* pakai fallback General */
+        }
         await onUpdate(item.id, {
           aiMetadata: {
             id: crypto.randomUUID(),
@@ -1088,6 +1140,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 </div>
               ) : isVideo && resolvedPreviewUrl ? (
                 <video
+                  ref={videoRef}
                   src={resolvedPreviewUrl}
                   controls
                   className="w-full max-h-[440px] rounded-xl bg-black shadow-md"
@@ -1105,7 +1158,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                       {formatFileSize(activeAttachment?.fileSize)} • Audio File
                     </span>
                   </div>
-                  <audio src={resolvedPreviewUrl} controls className="w-full" />
+                  <audio ref={audioRef} src={resolvedPreviewUrl} controls className="w-full" />
                 </div>
               ) : isTextLike && resolvedTextContent ? (
                 /* Rich Text / Code / Markdown / CSV / Docx Content Stage */

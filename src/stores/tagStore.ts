@@ -1,56 +1,75 @@
-import { useState, useEffect, useCallback } from 'react';
+import { create } from 'zustand';
 import { Tag } from '../types/item';
 import { db } from '../services/database';
 
-export function useTagStore() {
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+interface TagState {
+  tags: Tag[];
+  selectedTagId: string | null;
+  loading: boolean;
+  setSelectedTagId: (id: string | null) => void;
+  refreshTags: () => Promise<void>;
+  addTag: (name: string, color?: string) => Promise<Tag>;
+  removeTag: (id: string) => Promise<void>;
+}
 
-  const refreshTags = useCallback(async () => {
-    setLoading(true);
+/**
+ * Global zustand store untuk tags — SATU sumber kebenaran.
+ * Sebelumnya hook useState per-caller menyebabkan desync
+ * (hapus tag di TagsView tidak hilang di Sidebar/ItemDetailModal).
+ */
+export const useTagStore = create<TagState>()((set, get) => ({
+  tags: [],
+  selectedTagId: null,
+  loading: true,
+
+  setSelectedTagId: (id) => set({ selectedTagId: id }),
+
+  refreshTags: async () => {
+    set({ loading: true });
     try {
       const list = await db.getTags();
-      setTags(list);
+      set({ tags: list });
     } catch (err) {
       console.error('Failed to load tags:', err);
     } finally {
-      setLoading(false);
+      set({ loading: false });
     }
-  }, []);
+  },
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      await Promise.resolve();
-      if (active) {
-        await refreshTags();
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [refreshTags]);
-
-  const addTag = async (name: string, color?: string): Promise<Tag> => {
-    const newTag = await db.createTag(name, color);
-    await refreshTags();
+  addTag: async (name: string, color?: string): Promise<Tag> => {
+    const trimmed = name.trim().slice(0, 100);
+    if (!trimmed) throw new Error('Tag name cannot be empty');
+    const newTag = await db.createTag(trimmed, color);
+    // Optimistic insert + dedup, tanpa full refetch bila bisa
+    const exists = get().tags.some((t) => t.id === newTag.id);
+    if (!exists) {
+      set((s) => ({ tags: [...s.tags, newTag] }));
+    }
+    // Background re-sync agar konsisten dengan server
+    get().refreshTags().catch(() => {});
     return newTag;
-  };
+  },
 
-  const removeTag = async (id: string): Promise<void> => {
-    await db.deleteTag(id);
-    if (selectedTagId === id) setSelectedTagId(null);
-    await refreshTags();
-  };
-
-  return {
-    tags,
-    selectedTagId,
-    setSelectedTagId,
-    refreshTags,
-    addTag,
-    removeTag,
-    loading,
-  };
-}
+  removeTag: async (id: string): Promise<void> => {
+    const prev = get().tags;
+    // Optimistic remove + rollback bila gagal
+    set((s) => ({
+      tags: s.tags.filter((t) => t.id !== id),
+      selectedTagId: s.selectedTagId === id ? null : s.selectedTagId,
+    }));
+    try {
+      await db.deleteTag(id);
+      // Bersihkan referensi di itemStore (di-load lazy agar hindari circular import)
+      try {
+        const { useItemStore } = await import('./itemStore');
+        useItemStore.getState().removeTagFromItems(id);
+      } catch {
+        /* ignore — itemStore mungkin belum siap */
+      }
+    } catch (err) {
+      // Rollback
+      set({ tags: prev });
+      throw err;
+    }
+  },
+}));

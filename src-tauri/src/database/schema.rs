@@ -24,6 +24,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V2)?;
         conn.pragma_update(None, "user_version", 2)?;
     }
+    if version < 3 {
+        conn.execute_batch(MIGRATION_V3)?;
+        conn.pragma_update(None, "user_version", 3)?;
+    }
 
     Ok(())
 }
@@ -178,4 +182,12 @@ AFTER UPDATE ON items BEGIN
     INSERT INTO items_fts(item_id, title, content)
     VALUES (new.id, new.title, new.content);
 END;
+"#;
+
+/// V3: Index tambahan untuk ORDER BY updated_at + filter kombinasi.
+/// Sebelumnya tidak ada index updated_at padahal dipakai di search_items_v2,
+/// search_items, dan get_items_summary (ORDER BY updated_at/created_at DESC).
+const MIGRATION_V3: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_items_updated_at ON items(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_items_status_trash ON items(status, archived, deleted_at);
 "#;

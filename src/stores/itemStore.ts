@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { Item, ItemSummary, ItemDetail, CreateItemInput, ItemCounts } from '../types/item';
 import { db } from '../services/database';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export type NavigationView =
   | 'inbox'
@@ -65,6 +66,9 @@ interface ItemState {
 }
 
 let notificationTimer: ReturnType<typeof setTimeout> | null = null;
+// Request guards untuk cegah race: hanya respons terakhir yang boleh commit ke state.
+let refreshSeq = 0;
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Helper: map raw backend item ke ItemSummary */
 function mapToItemSummary(r: any): ItemSummary {
@@ -133,27 +137,32 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   // ── Navigation Actions ───────────────────────────────────
   setCurrentView: (view) => {
     set({ currentView: view, activeItemDetail: null });
-    get().refreshItems();
-    get().refreshCounts();
+    // Paralel, bukan serial waterfall
+    void Promise.all([get().refreshItems(), get().refreshCounts()]);
   },
 
   setSelectedItemId: (id) => {
     set({ selectedItemId: id });
     if (id) {
-      get().loadItemDetail(id);
+      void get().loadItemDetail(id);
     } else {
-      set({ activeItemDetail: null });
+      set({ activeItemDetail: null, loadingDetail: false });
     }
   },
 
   setSearchQuery: (query) => {
     set({ searchQuery: query });
-    get().refreshItems();
+    // Debounce 250ms: ketik cepat tidak spam IPC
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      searchDebounceTimer = null;
+      void get().refreshItems();
+    }, 250);
   },
 
   setActiveTagId: (tagId) => {
     set({ activeTagId: tagId });
-    get().refreshItems();
+    void get().refreshItems();
   },
 
   // ── Notification Actions ─────────────────────────────────
@@ -174,11 +183,13 @@ export const useItemStore = create<ItemState>()((set, get) => ({
     set({ notification: null });
   },
 
-  // ── Detail Loading ────────────────────────────────────────
+  // ── Detail Loading (dengan stale-guard) ────────────────────
   loadItemDetail: async (id) => {
     set({ loadingDetail: true });
     try {
       const raw = await invoke<any>('get_item_detail', { id });
+      // Guard: user sudah klik item lain / tutup detail → buang respons basi
+      if (get().selectedItemId !== id) return null;
       if (!raw) { set({ activeItemDetail: null, loadingDetail: false }); return null; }
       // map snake_case to camelCase
       const detail: ItemDetail = {
@@ -221,16 +232,19 @@ export const useItemStore = create<ItemState>()((set, get) => ({
           processedAt: raw.ai_metadata.processed_at,
         } : null,
       };
+      // Double-guard sebelum commit (cek lagi setelah mapping)
+      if (get().selectedItemId !== id) return null;
       set({ activeItemDetail: detail, loadingDetail: false });
       return detail;
     } catch (err) {
       console.error('Failed to load item detail:', err);
-      set({ loadingDetail: false });
+      // Hanya clear loading bila masih untuk id yang sama
+      if (get().selectedItemId === id) set({ loadingDetail: false });
       return null;
     }
   },
 
-  clearItemDetail: () => set({ activeItemDetail: null }),
+  clearItemDetail: () => set({ activeItemDetail: null, selectedItemId: null, loadingDetail: false }),
 
   // ── Data Refresh ─────────────────────────────────────────
   refreshCounts: async () => {
@@ -243,6 +257,7 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   refreshItems: async () => {
+    const mySeq = ++refreshSeq;
     set({ loading: true });
     const { currentView, searchQuery, activeTagId } = get();
 
@@ -252,6 +267,8 @@ export const useItemStore = create<ItemState>()((set, get) => ({
       if (searchQuery.trim()) {
         // Gunakan search_items_v2 yang baru
         const results = await invoke<any[]>('search_items_v2', { query: searchQuery });
+        // Buang bila sudah ada refresh lebih baru (ketik cepat)
+        if (mySeq !== refreshSeq) return;
         rawItems = (results ?? []).map((r) => r.item ?? r);
       } else {
         // Gunakan get_items_summary untuk efisiensi
@@ -268,6 +285,7 @@ export const useItemStore = create<ItemState>()((set, get) => ({
           includeTrash: opts.includeTrash ?? false,
           includeArchived: opts.includeArchived ?? false,
         });
+        if (mySeq !== refreshSeq) return;
       }
 
       let items = (rawItems ?? []).map(mapToItemSummary);
@@ -282,12 +300,15 @@ export const useItemStore = create<ItemState>()((set, get) => ({
         items = items.filter((i) => i.archived);
       }
 
+      if (mySeq !== refreshSeq) return;
       set({ items });
     } catch (err: any) {
+      if (mySeq !== refreshSeq) return;
       console.error('Failed to load items:', err);
-      get().notify(`Could not load items: ${err.message}`, 'error');
+      get().notify(`Could not load items: ${err.message ?? err}`, 'error');
     } finally {
-      set({ loading: false });
+      // Hanya clear loading bila ini request terakhir
+      if (mySeq === refreshSeq) set({ loading: false });
     }
   },
 
@@ -299,8 +320,7 @@ export const useItemStore = create<ItemState>()((set, get) => ({
         `Saved "${created.title.slice(0, 30)}${created.title.length > 30 ? '...' : ''}"`,
         'success'
       );
-      await get().refreshItems();
-      await get().refreshCounts();
+      await Promise.all([get().refreshItems(), get().refreshCounts()]);
       return created;
     } catch (err: any) {
       get().notify(`Failed to save: ${err.message}`, 'error');
@@ -357,8 +377,7 @@ export const useItemStore = create<ItemState>()((set, get) => ({
     const newArchived = !item.archived;
     await get().updateItem(id, { archived: newArchived });
     get().notify(newArchived ? 'Item archived' : 'Item unarchived', 'info');
-    await get().refreshItems();
-    await get().refreshCounts();
+    await Promise.all([get().refreshItems(), get().refreshCounts()]);
   },
 
   toggleTask: async (itemId, completed) => {
@@ -379,13 +398,20 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   trashItem: async (id) => {
+    // Snapshot untuk rollback bila IPC gagal (sebelumnya item hilang di UI tanpa rollback)
+    const prevItems = get().items;
+    const prevSelected = get().selectedItemId;
+    const prevDetail = get().activeItemDetail;
+    // Optimistic update
+    set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+    if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     try {
       await db.trashItem(id);
       get().notify('Moved item to Trash', 'info');
-      set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
       await get().refreshCounts();
-      if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     } catch (err: any) {
+      // Rollback
+      set({ items: prevItems, selectedItemId: prevSelected, activeItemDetail: prevDetail });
       get().notify(`Failed to trash item: ${err.message}`, 'error');
     }
   },
@@ -394,45 +420,57 @@ export const useItemStore = create<ItemState>()((set, get) => ({
     try {
       await db.restoreItem(id);
       get().notify('Restored item to Inbox', 'success');
-      await get().refreshItems();
-      await get().refreshCounts();
+      await Promise.all([get().refreshItems(), get().refreshCounts()]);
     } catch (err: any) {
       get().notify(`Failed to restore item: ${err.message}`, 'error');
     }
   },
 
   permanentDeleteItem: async (id) => {
+    const prevItems = get().items;
+    const prevSelected = get().selectedItemId;
+    const prevDetail = get().activeItemDetail;
+    set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+    if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     try {
       await db.permanentDeleteItem(id);
       get().notify('Item permanently deleted', 'info');
-      set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
       await get().refreshCounts();
-      if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     } catch (err: any) {
+      set({ items: prevItems, selectedItemId: prevSelected, activeItemDetail: prevDetail });
       get().notify(`Failed to delete item: ${err.message}`, 'error');
     }
   },
 
   emptyTrash: async () => {
+    const prevItems = get().items;
     try {
       await db.emptyTrash();
       get().notify('Trash emptied successfully', 'info');
-      await get().refreshItems();
-      await get().refreshCounts();
+      await Promise.all([get().refreshItems(), get().refreshCounts()]);
       set({ selectedItemId: null, activeItemDetail: null });
     } catch (err: any) {
+      set({ items: prevItems });
       get().notify(`Failed to empty trash: ${err.message}`, 'error');
     }
   },
 
   importFilesFromPaths: async (paths) => {
+    // Chunk 20 file per batch (sesuai batas Rust) agar tidak ditolak sekaligus
+    const CHUNK = 20;
+    const allImported: any[] = [];
     try {
-      const imported = await db.importFilesFromPaths(paths);
-      get().notify(`Imported ${imported.length} file(s) into Velco`, 'success');
-      await get().refreshItems();
-      await get().refreshCounts();
-      return imported;
+      for (let i = 0; i < paths.length; i += CHUNK) {
+        const chunk = paths.slice(i, i + CHUNK);
+        const imported = await db.importFilesFromPaths(chunk);
+        allImported.push(...imported);
+      }
+      get().notify(`Imported ${allImported.length} file(s) into Velco`, 'success');
+      await Promise.all([get().refreshItems(), get().refreshCounts()]);
+      return allImported;
     } catch (err: any) {
+      // Refresh parsial agar UI konsisten walau batch gagal sebagian
+      void Promise.all([get().refreshItems(), get().refreshCounts()]);
       get().notify(`Failed to import files: ${err.message}`, 'error');
       throw err;
     }
@@ -454,3 +492,18 @@ export const useItemStore = create<ItemState>()((set, get) => ({
     }));
   },
 }));
+
+let crossWindowDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+if (typeof window !== 'undefined') {
+  listen('velco://items-changed', () => {
+    if (crossWindowDebounceTimer) {
+      clearTimeout(crossWindowDebounceTimer);
+    }
+    crossWindowDebounceTimer = setTimeout(() => {
+      const state = useItemStore.getState();
+      void Promise.all([state.refreshItems(), state.refreshCounts()]);
+    }, 250);
+  }).catch(() => {
+    // Graceful fallback for non-Tauri or test environments
+  });
+}

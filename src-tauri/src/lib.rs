@@ -6,6 +6,7 @@ pub mod filesystem;
 use database::Database;
 use filesystem::StorageManager;
 use std::time::Duration;
+use tauri::Manager;
 
 pub fn run() {
     let storage = StorageManager::new(None);
@@ -13,15 +14,62 @@ pub fn run() {
     let db = match Database::new(&db_path) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("Failed to initialize database at {:?}: {}. Attempting recovery...", db_path, e);
-            let backup_name = format!("velco_corrupted_{}.db", chrono::Utc::now().timestamp());
-            let backup_path = storage.database_dir().join(backup_name);
-            let _ = std::fs::rename(&db_path, &backup_path);
-            Database::new(&db_path).expect("Failed to initialize fresh SQLite database after recovery")
+            let err_str = e.to_string().to_lowercase();
+            let is_lock_or_busy = err_str.contains("busy")
+                || err_str.contains("locked")
+                || err_str.contains("permission denied")
+                || err_str.contains("access is denied");
+
+            if is_lock_or_busy {
+                eprintln!(
+                    "Fatal: Database at {:?} is locked or accessed by another process ({}). Exiting safely without destructive modification.",
+                    db_path, e
+                );
+                std::process::exit(1);
+            }
+
+            let is_corrupt = err_str.contains("corrupt")
+                || err_str.contains("malformed")
+                || err_str.contains("not a database");
+
+            if is_corrupt {
+                eprintln!("Database corruption detected at {:?}: {}. Attempting recovery...", db_path, e);
+                let backup_name = format!("velco_corrupted_{}.db", chrono::Utc::now().timestamp());
+                let backup_path = storage.database_dir().join(backup_name);
+                // Rename DB utama + file pendamping WAL/SHM agar tidak orphan.
+                let _ = std::fs::rename(&db_path, &backup_path);
+                for suffix in ["-wal", "-shm", "-journal"] {
+                    let mut src = db_path.as_os_str().to_owned();
+                    src.push(suffix);
+                    let src_path = std::path::PathBuf::from(src);
+                    if src_path.exists() {
+                        let mut dst = backup_path.as_os_str().to_owned();
+                        dst.push(suffix);
+                        let _ = std::fs::rename(&src_path, std::path::PathBuf::from(dst));
+                    }
+                }
+                match Database::new(&db_path) {
+                    Ok(d) => d,
+                    Err(e2) => {
+                        eprintln!("Recovery failed ({}). Exiting.", e2);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("Failed to initialize database ({}). Exiting.", e);
+                std::process::exit(1);
+            }
         }
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app.get_webview_window("main").map(|w| {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            });
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -119,6 +167,7 @@ pub fn run() {
             commands::ai::execute_context_recipe,
             commands::ai::apply_recipe_artifacts,
             commands::ai::execute_context_chat,
+            commands::ai::cancel_chat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Velco application");

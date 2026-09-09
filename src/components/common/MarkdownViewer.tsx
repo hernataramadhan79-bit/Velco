@@ -8,14 +8,21 @@ interface MarkdownViewerProps {
 }
 
 function sanitizeUrl(url: string): string {
+  if (!url) return '#';
+  const trimmed = url.trim();
+  // Defense-in-depth: tolak skema berbahaya sebelum URL parsing.
+  // `file:` sengaja TIDAK diizinkan (LLM bisa inject file:///C:/...) — sebelumnya lolos.
+  if (/^\s*(javascript|data|vbscript|file|blob):/i.test(trimmed)) return '#';
   try {
-    const u = new URL(url);
-    // Hanya izinkan protocol http, https, file
-    if (!['http:', 'https:', 'file:'].includes(u.protocol)) {
+    const u = new URL(trimmed);
+    // Hanya izinkan http/https
+    if (!['http:', 'https:'].includes(u.protocol)) {
       return '#';
     }
-    return url;
+    return trimmed;
   } catch {
+    // Izinkan anchor relatif #... saja
+    if (trimmed.startsWith('#')) return trimmed;
     return '#';
   }
 }
@@ -39,11 +46,19 @@ type Block =
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language }) => {
   const [copied, setCopied] = useState(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(code).catch(() => {});
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -489,7 +504,7 @@ function formatInline(text: string, depth = 0): React.ReactNode {
   if (depth > 2) return text;
 
   const INLINE_REGEX =
-    /(`[^`\n]+`)|(\[([^\]]+)\]\(((?:https?:\/\/|file:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*|_)(.+?)(?:\*|_)|(~~.+?~~)/g;
+    /(`[^`\n]+`)|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*|_)(.+?)(?:\*|_)|(~~.+?~~)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -518,16 +533,18 @@ function formatInline(text: string, depth = 0): React.ReactNode {
     else if (match[2]) {
       const linkLabel = match[3];
       const linkUrl = match[4];
+      const safeUrl = sanitizeUrl(linkUrl);
       elements.push(
         <a
           key={match.index}
-          href={sanitizeUrl(linkUrl)}
+          href={safeUrl}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            openExternalUrl(linkUrl);
+            if (safeUrl === '#') return;
+            void openExternalUrl(safeUrl);
           }}
           className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-medium cursor-pointer"
         >
@@ -539,16 +556,18 @@ function formatInline(text: string, depth = 0): React.ReactNode {
     // 3. Plain URL
     else if (match[5]) {
       const url = match[5];
+      const safePlain = sanitizeUrl(url);
       elements.push(
         <a
           key={match.index}
-          href={sanitizeUrl(url)}
+          href={safePlain}
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            openExternalUrl(url);
+            if (safePlain === '#') return;
+            void openExternalUrl(safePlain);
           }}
           className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium cursor-pointer"
         >

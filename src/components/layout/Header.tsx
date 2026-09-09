@@ -42,19 +42,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     settings: 'VELCO / SYSTEM / SETTINGS',
   };
 
-  const isLocal = ['ollama', 'lmstudio'].includes(settings.aiProvider);
-  const activeModel = isLocal
-    ? (settings.aiProvider === 'ollama' ? (settings.ollamaModel || 'qwen2.5:latest') : (settings.lmstudioModel || 'qwen2.5-coder'))
-    : (settings.aiProvider === 'openai' ? (settings.openaiModel || 'gpt-4o-mini') :
-       settings.aiProvider === 'gemini' ? (settings.geminiModel || 'gemini-1.5-flash') :
-       settings.aiProvider === 'openrouter' ? (settings.openrouterModel || 'openai/gpt-4o-mini') :
-       'cloud-model');
-
-  const activeProvider = settings.aiProvider === 'none' ? 'None' :
-    settings.aiProvider === 'ollama' ? 'Ollama' :
-    settings.aiProvider === 'lmstudio' ? 'LM Studio' :
-    settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
-
   const cycleTheme = () => {
     const themes: ('system' | 'light' | 'dark')[] = ['system', 'light', 'dark'];
     const nextIdx = (themes.indexOf(settings.theme) + 1) % themes.length;
@@ -103,18 +90,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
       {/* Right: Engine Telemetry & Actions */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* LM Studio Style Engine Telemetry Pill */}
-        {settings.aiEnabled && settings.aiProvider !== 'none' && (
-          <div
-            className="hidden lg:flex items-center gap-1.5 px-2 py-0.8 rounded-md bg-slate-100 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] text-[11px] font-mono text-slate-600 dark:text-zinc-400"
-            title={`Active Engine: ${activeProvider} (${activeModel})`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isLocal ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-blue-500'}`} />
-            <span className="text-slate-500 dark:text-zinc-500">{activeProvider}:</span>
-            <span className="text-slate-800 dark:text-zinc-300 truncate max-w-[130px]">{activeModel}</span>
-          </div>
-        )}
-
         <AIPrivacyBadge />
 
         {/* Studio / Workbench Toggle */}

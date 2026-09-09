@@ -265,7 +265,26 @@ export class TauriDbAdapter implements DatabaseAdapter {
   }
 
   async importBackup(jsonString: string): Promise<number> {
-    return tauriInvoke<number>('import_backup', { jsonData: jsonString });
+    // Backend kini return {imported, failed, errors} — tetap kembalikan imported agar kompatibel.
+    const res: any = await tauriInvoke('import_backup', { jsonData: jsonString });
+    if (typeof res === 'number') return res;
+    if (res && typeof res.imported === 'number') {
+      if (res.failed > 0) {
+        console.warn(`Backup import: ${res.imported} ok, ${res.failed} failed`, res.errors?.slice(0, 5));
+      }
+      return res.imported;
+    }
+    return 0;
+  }
+
+  async importBackupDetailed(jsonString: string): Promise<{ imported: number; failed: number; errors: string[] }> {
+    const res: any = await tauriInvoke('import_backup', { jsonData: jsonString });
+    if (typeof res === 'number') return { imported: res, failed: 0, errors: [] };
+    return {
+      imported: Number(res?.imported) || 0,
+      failed: Number(res?.failed) || 0,
+      errors: Array.isArray(res?.errors) ? res.errors : [],
+    };
   }
 
   async importFilesFromPaths(paths: string[]): Promise<Item[]> {

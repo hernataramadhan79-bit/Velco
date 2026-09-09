@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { ChatMessage, ChatChunkEvent, LlmProviderConfig } from '../types/ai';
 import { StagedItem } from './contextStore';
 import { aiService } from '../services/ai';
@@ -165,6 +166,12 @@ export const useChatStore = create<ChatState>()(
       },
 
       stopGenerating: () => {
+        const reqId = get().activeRequestId;
+        // Beritahu backend agar berhenti generate + emit (sebelumnya hanya unlisten lokal,
+        // backend terus jalan dan block pesan baru).
+        if (reqId) {
+          invoke('cancel_chat', { requestId: reqId }).catch(() => {});
+        }
         if (activeUnlisten) {
           activeUnlisten();
           activeUnlisten = null;
@@ -173,7 +180,7 @@ export const useChatStore = create<ChatState>()(
           isGenerating: false,
           activeRequestId: null,
           messages: state.messages.map((msg) =>
-            msg.isStreaming ? { ...msg, isStreaming: false } : msg
+            msg.isStreaming ? { ...msg, isStreaming: false, content: msg.content || '(dibatalkan)' } : msg
           ),
         }));
       },

@@ -1,5 +1,22 @@
-import React from 'react';
-import { LandingHeroAiChat } from '../../components/chat/LandingHeroAiChat';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useChatStore } from '../../stores/chatStore';
+import { useContextStore } from '../../stores/contextStore';
+import { useSettings } from '../../stores/settingsStore';
+import { useItemStore } from '../../stores/itemStore';
+import { getLlmProviderConfig } from '../../utils/aiUtils';
+import { db } from '../../services/database';
+import { formatTaskBatchSource } from '../../types/item';
+import {
+  StructuredTaskItem,
+  extractStructuredTasks,
+  generateCleanBatchTitle,
+  smartHeuristicTaskExtraction,
+} from '../../services/ai/taskExtractor';
+import { TaskExtractionModal } from '../../components/tasks/TaskExtractionModal';
+import { PlaygroundHeader } from './PlaygroundHeader';
+import { PlaygroundEmptyState } from './PlaygroundEmptyState';
+import { PlaygroundMessageItem } from './PlaygroundMessageItem';
+import { PlaygroundInputDock } from './PlaygroundInputDock';
 
 interface PlaygroundViewProps {
   onOpenSettings?: () => void;
@@ -10,25 +27,256 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   onOpenSettings,
   onArtifactCreated,
 }) => {
+  const { messages, isGenerating, sendMessage, stopGenerating, clearChat, deleteMessage } =
+    useChatStore();
+  const { chatContextItems } = useContextStore();
+  const { settings } = useSettings();
+
+  const [prompt, setPrompt] = useState('');
+
+  // Message Action Feedback States
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedNoteId, setSavedNoteId] = useState<string | null>(null);
+  const [extractingMsgId, setExtractingMsgId] = useState<string | null>(null);
+  const [savedBatchMsgId, setSavedBatchMsgId] = useState<string | null>(null);
+
+  // Task Extraction Modal States
+  const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
+  const [extractedTasks, setExtractedTasks] = useState<StructuredTaskItem[]>([]);
+  const [extractBatchTitle, setExtractBatchTitle] = useState<string>('');
+
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
+  const isUserScrolledUpRef = useRef(false);
+
+  // Scroll detection to respect user's manual scroll position
+  const handleScroll = () => {
+    if (!messagesScrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesScrollRef.current;
+    // Consider scrolled up if user is more than 120px from bottom
+    isUserScrolledUpRef.current = scrollHeight - (scrollTop + clientHeight) > 120;
+  };
+
+  // Auto-scroll to bottom when new messages arrive or while streaming
+  useEffect(() => {
+    if (!isUserScrolledUpRef.current && bottomAnchorRef.current) {
+      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isGenerating]);
+
+  // Send Message Handler
+  const handleSend = useCallback(
+    (textToSend?: string) => {
+      const content = (textToSend || prompt).trim();
+      if (!content || isGenerating || !settings.aiEnabled) return;
+
+      const config = getLlmProviderConfig(settings);
+      sendMessage(content, chatContextItems, config);
+      setPrompt('');
+      isUserScrolledUpRef.current = false;
+
+      // Ensure view scrolls to bottom on user send
+      setTimeout(() => {
+        bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    },
+    [prompt, isGenerating, settings, chatContextItems, sendMessage]
+  );
+
+  // New Chat Handler
+  const handleNewChat = useCallback(() => {
+    if (isGenerating) return;
+    clearChat();
+    setPrompt('');
+    isUserScrolledUpRef.current = false;
+  }, [isGenerating, clearChat]);
+
+  // Copy Message Handler
+  const handleCopyMessage = useCallback((id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
+  // Save Assistant Response as SQLite Note
+  const handleSaveToNote = useCallback(
+    async (msgId: string, content: string) => {
+      try {
+        const title = content.slice(0, 60).trim() || 'Playground Note';
+        await db.createItem({
+          type: 'note',
+          title,
+          content,
+          source: 'ai_chat',
+        });
+        await useItemStore.getState().refreshItems();
+        await useItemStore.getState().refreshCounts();
+        setSavedNoteId(msgId);
+        setTimeout(() => setSavedNoteId(null), 3000);
+
+        if (onArtifactCreated) {
+          onArtifactCreated(`Saved note: "${title}"`);
+        }
+      } catch (err) {
+        console.error('Failed to save chat message as note:', err);
+      }
+    },
+    [onArtifactCreated]
+  );
+
+  // Extract Actionable Tasks from Assistant Message
+  const handleExtractTasksFromMessage = useCallback(
+    async (msg: { id: string; content: string }) => {
+      setExtractingMsgId(msg.id);
+      try {
+        const generatedTitle = generateCleanBatchTitle(msg.content, 'Playground Action Items');
+        setExtractBatchTitle(generatedTitle);
+
+        if (!settings.aiEnabled) {
+          const fallback = smartHeuristicTaskExtraction(msg.content);
+          if (fallback.length > 0) {
+            setExtractedTasks(fallback);
+            setIsExtractModalOpen(true);
+          }
+          return;
+        }
+
+        const llmConfig = getLlmProviderConfig(settings);
+        const model = llmConfig.config.model;
+        const baseUrl = llmConfig.config.base_url;
+        const apiKey = 'api_key' in llmConfig.config ? llmConfig.config.api_key : undefined;
+
+        const tasks = await extractStructuredTasks(msg.content, model, baseUrl, apiKey);
+        if (tasks.length > 0) {
+          setExtractedTasks(tasks);
+          setIsExtractModalOpen(true);
+        } else {
+          const fallback = smartHeuristicTaskExtraction(msg.content);
+          if (fallback.length > 0) {
+            setExtractedTasks(fallback);
+            setIsExtractModalOpen(true);
+          }
+        }
+      } catch (err) {
+        const fallback = smartHeuristicTaskExtraction(msg.content);
+        if (fallback.length > 0) {
+          setExtractedTasks(fallback);
+          setIsExtractModalOpen(true);
+        }
+      } finally {
+        setExtractingMsgId(null);
+      }
+    },
+    [settings]
+  );
+
+  // Confirm Saving Extracted Tasks to SQLite
+  const handleConfirmExtractTasks = useCallback(
+    async (tasksToCreate: StructuredTaskItem[]) => {
+      if (tasksToCreate.length === 0) return;
+      try {
+        const batchId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const batchSourceStr = formatTaskBatchSource({
+          origin: 'ai_chat',
+          batchId,
+          batchTitle: extractBatchTitle || 'Playground Tasks',
+        });
+
+        for (const t of tasksToCreate) {
+          await db.createItem({
+            type: 'task',
+            title: t.title,
+            content: t.description || '',
+            source: batchSourceStr,
+            task: {
+              priority: t.priority || 'medium',
+              completed: false,
+              dueDate: t.dueDate,
+            },
+          });
+        }
+
+        await useItemStore.getState().refreshItems();
+        await useItemStore.getState().refreshCounts();
+
+        if (extractingMsgId) {
+          setSavedBatchMsgId(extractingMsgId);
+          setTimeout(() => setSavedBatchMsgId(null), 3000);
+        }
+
+        setIsExtractModalOpen(false);
+
+        if (onArtifactCreated) {
+          onArtifactCreated(
+            `Created ${tasksToCreate.length} task${tasksToCreate.length > 1 ? 's' : ''}`
+          );
+        }
+      } catch (err) {
+        console.error('Failed to save extracted tasks from playground:', err);
+      }
+    },
+    [extractBatchTitle, extractingMsgId, onArtifactCreated]
+  );
+
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-4 pb-12 min-w-0">
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-100 tracking-tight">
-            Local Playground
-          </h2>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Interactive multi-turn LLM workspace with local context injection.
-          </p>
-        </div>
-        <span className="text-[10px] font-mono text-zinc-500 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
-          Playground Canvas
-        </span>
+    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-slate-50/50 dark:bg-[#09090b] select-none">
+      {/* 1. Dedicated Top Chat Navigation Bar */}
+      <PlaygroundHeader
+        onNewChat={handleNewChat}
+        onClearChat={clearChat}
+        isGenerating={isGenerating}
+        hasMessages={messages.length > 0}
+        contextCount={chatContextItems.length}
+      />
+
+      {/* 2. Scrollable Messages Viewport */}
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6"
+      >
+        {messages.length === 0 ? (
+          <PlaygroundEmptyState
+            onSelectPrompt={(text) => handleSend(text)}
+            disabled={isGenerating}
+          />
+        ) : (
+          <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 pb-6">
+            {messages.map((msg) => (
+              <PlaygroundMessageItem
+                key={msg.id}
+                msg={msg}
+                onCopy={handleCopyMessage}
+                isCopied={copiedId === msg.id}
+                onSaveToNote={handleSaveToNote}
+                isSavedNote={savedNoteId === msg.id}
+                onExtractTasks={handleExtractTasksFromMessage}
+                isExtracting={extractingMsgId === msg.id}
+                isSavedBatch={savedBatchMsgId === msg.id}
+                onDelete={deleteMessage}
+              />
+            ))}
+            <div ref={bottomAnchorRef} className="h-2" />
+          </div>
+        )}
       </div>
 
-      <LandingHeroAiChat
-        onOpenSettings={onOpenSettings}
-        onArtifactCreated={onArtifactCreated}
+      {/* 3. Floating Bottom Input Dock */}
+      <PlaygroundInputDock
+        prompt={prompt}
+        onPromptChange={setPrompt}
+        onSend={() => handleSend()}
+        onStop={stopGenerating}
+        isGenerating={isGenerating}
+      />
+
+      {/* 4. Task Extraction Modal Dialog */}
+      <TaskExtractionModal
+        isOpen={isExtractModalOpen}
+        onClose={() => setIsExtractModalOpen(false)}
+        tasks={extractedTasks}
+        sourceTitle={extractBatchTitle}
+        onConfirm={handleConfirmExtractTasks}
       />
     </div>
   );

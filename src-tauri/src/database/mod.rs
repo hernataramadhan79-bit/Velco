@@ -12,14 +12,15 @@ impl Database {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let conn = Connection::open(path)?;
 
-        // Konfigurasi PRAGMA untuk performa dan ketahanan
-        apply_pragma(&conn, "PRAGMA journal_mode = WAL");
-        apply_pragma(&conn, "PRAGMA synchronous = NORMAL");
-        apply_pragma(&conn, "PRAGMA busy_timeout = 5000");
-        apply_pragma(&conn, "PRAGMA foreign_keys = ON");
-        apply_pragma(&conn, "PRAGMA cache_size = -64000");
-        apply_pragma(&conn, "PRAGMA temp_store = MEMORY");
-        apply_pragma(&conn, "PRAGMA mmap_size = 268435456");
+        // Konfigurasi PRAGMA untuk performa dan ketahanan.
+        // Kegagalan PRAGMA kritis (WAL/foreign_keys) kini dilog ke stderr agar tidak fail-silent.
+        apply_pragma(&conn, "PRAGMA journal_mode = WAL", true);
+        apply_pragma(&conn, "PRAGMA synchronous = NORMAL", false);
+        apply_pragma(&conn, "PRAGMA busy_timeout = 5000", false);
+        apply_pragma(&conn, "PRAGMA foreign_keys = ON", true);
+        apply_pragma(&conn, "PRAGMA cache_size = -64000", false);
+        apply_pragma(&conn, "PRAGMA temp_store = MEMORY", false);
+        apply_pragma(&conn, "PRAGMA mmap_size = 268435456", false);
 
         // Jalankan migrasi berbasis user_version
         schema::run_migrations(&conn)
@@ -37,11 +38,21 @@ impl Database {
     }
 }
 
-/// Eksekusi PRAGMA secara aman, mengabaikan apakah menghasilkan baris (seperti journal_mode/mmap) atau tidak
-fn apply_pragma(conn: &Connection, pragma_sql: &str) {
-    if let Ok(mut stmt) = conn.prepare(pragma_sql) {
-        if let Ok(mut rows) = stmt.query([]) {
-            let _ = rows.next();
+/// Eksekusi PRAGMA. `critical=true` → log warning bila gagal (sebelumnya ditelan diam-diam).
+fn apply_pragma(conn: &Connection, pragma_sql: &str, critical: bool) {
+    match conn.prepare(pragma_sql) {
+        Ok(mut stmt) => match stmt.query([]) {
+            Ok(mut rows) => {
+                let _ = rows.next();
+            }
+            Err(e) if critical => {
+                eprintln!("Warning: PRAGMA failed '{}': {}", pragma_sql, e);
+            }
+            _ => {}
+        },
+        Err(e) if critical => {
+            eprintln!("Warning: PRAGMA prepare failed '{}': {}", pragma_sql, e);
         }
+        _ => {}
     }
 }

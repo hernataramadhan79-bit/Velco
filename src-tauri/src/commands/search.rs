@@ -162,7 +162,6 @@ pub fn search_items_v2(
           AND (
               (?1 != '' AND i.id IN (SELECT item_id FROM items_fts WHERE items_fts MATCH ?1))
               OR LOWER(i.title) LIKE LOWER(?4)
-              OR LOWER(i.content) LIKE LOWER(?4)
               OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?4))
           )
         ORDER BY
@@ -262,7 +261,6 @@ pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate:
           AND (
               (?1 != '' AND i.id IN (SELECT item_id FROM items_fts WHERE items_fts MATCH ?1))
               OR LOWER(i.title) LIKE LOWER(?4)
-              OR LOWER(i.content) LIKE LOWER(?4)
               OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id AND LOWER(a.file_name) LIKE LOWER(?4))
           )
         ORDER BY
