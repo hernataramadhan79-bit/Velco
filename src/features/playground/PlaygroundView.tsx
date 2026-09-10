@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
 import { useContextStore } from '../../stores/contextStore';
 import { useSettings } from '../../stores/settingsStore';
@@ -33,6 +34,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   const { settings } = useSettings();
 
   const [prompt, setPrompt] = useState('');
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   // Message Action Feedback States
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -53,9 +55,17 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   const handleScroll = () => {
     if (!messagesScrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messagesScrollRef.current;
-    // Consider scrolled up if user is more than 120px from bottom
-    isUserScrolledUpRef.current = scrollHeight - (scrollTop + clientHeight) > 120;
+    // Consider scrolled up if user is more than 100px from bottom
+    const isUp = scrollHeight - (scrollTop + clientHeight) > 100;
+    isUserScrolledUpRef.current = isUp;
+    setShowScrollBottom(isUp);
   };
+
+  const scrollToBottom = useCallback(() => {
+    bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollBottom(false);
+    isUserScrolledUpRef.current = false;
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive or while streaming
   useEffect(() => {
@@ -230,33 +240,55 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
       />
 
       {/* 2. Scrollable Messages Viewport */}
-      <div
-        ref={messagesScrollRef}
-        onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6"
-      >
-        {messages.length === 0 ? (
-          <PlaygroundEmptyState
-            onSelectPrompt={(text) => handleSend(text)}
-            disabled={isGenerating}
-          />
-        ) : (
-          <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 pb-6">
-            {messages.map((msg) => (
-              <PlaygroundMessageItem
-                key={msg.id}
-                msg={msg}
-                onCopy={handleCopyMessage}
-                isCopied={copiedId === msg.id}
-                onSaveToNote={handleSaveToNote}
-                isSavedNote={savedNoteId === msg.id}
-                onExtractTasks={handleExtractTasksFromMessage}
-                isExtracting={extractingMsgId === msg.id}
-                isSavedBatch={savedBatchMsgId === msg.id}
-                onDelete={deleteMessage}
+      <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div
+          ref={messagesScrollRef}
+          onScroll={handleScroll}
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        >
+          {messages.length === 0 ? (
+            <div className="p-4 sm:p-6">
+              <PlaygroundEmptyState
+                onSelectPrompt={(text) => handleSend(text)}
+                disabled={isGenerating}
               />
-            ))}
-            <div ref={bottomAnchorRef} className="h-2" />
+            </div>
+          ) : (
+            <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 px-4 sm:px-6 pt-4 pb-6">
+              {messages.map((msg) => (
+                <PlaygroundMessageItem
+                  key={msg.id}
+                  msg={msg}
+                  onCopy={handleCopyMessage}
+                  isCopied={copiedId === msg.id}
+                  onSaveToNote={handleSaveToNote}
+                  isSavedNote={savedNoteId === msg.id}
+                  onExtractTasks={handleExtractTasksFromMessage}
+                  isExtracting={extractingMsgId === msg.id}
+                  isSavedBatch={savedBatchMsgId === msg.id}
+                  onDelete={deleteMessage}
+                />
+              ))}
+              <div ref={bottomAnchorRef} className="h-2" />
+            </div>
+          )}
+        </div>
+
+        {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
+        {showScrollBottom && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-xl backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
+              title="Scroll to latest message"
+              aria-label="Scroll to latest message"
+            >
+              <ChevronDown className="w-4 h-4 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
+              {isGenerating && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
+              )}
+            </button>
           </div>
         )}
       </div>

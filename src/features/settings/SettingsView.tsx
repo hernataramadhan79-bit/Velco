@@ -5,6 +5,7 @@ import { db } from '../../services/database';
 import { AIProviderType } from '../../types/settings';
 import { AIModelInfo } from '../../types/ai';
 import { PriorityLevel } from '../../types/item';
+import { DynamicModelSelector } from './DynamicModelSelector';
 import {
   ArrowLeft,
   Folder,
@@ -98,6 +99,122 @@ const CURATED_OPENROUTER_FREE_MODELS: AIModelInfo[] = [
   },
 ];
 
+const PROVIDER_FALLBACK_MODELS: Record<string, AIModelInfo[]> = {
+  openrouter: CURATED_OPENROUTER_FREE_MODELS,
+  gemini: [
+    {
+      id: 'gemini-2.0-flash',
+      name: 'Gemini 2.0 Flash',
+      isFree: true,
+      contextLength: 1048576,
+      description: 'Next-gen high speed multimodal model (Recommended)',
+    },
+    {
+      id: 'gemini-2.0-flash-lite',
+      name: 'Gemini 2.0 Flash-Lite',
+      isFree: true,
+      contextLength: 1048576,
+      description: 'Cost-effective ultra-fast multimodal model',
+    },
+    {
+      id: 'gemini-1.5-flash',
+      name: 'Gemini 1.5 Flash',
+      isFree: true,
+      contextLength: 1048576,
+      description: 'Fast and versatile multimodal model (Free Tier available)',
+    },
+    {
+      id: 'gemini-1.5-pro',
+      name: 'Gemini 1.5 Pro',
+      isFree: true,
+      contextLength: 2097152,
+      description: 'High-intelligence model with 2M token context window',
+    },
+  ],
+  openai: [
+    {
+      id: 'gpt-4o-mini',
+      name: 'GPT-4o Mini',
+      isFree: false,
+      contextLength: 128000,
+      description: 'Fast, lightweight flagship mini model (Recommended)',
+    },
+    {
+      id: 'gpt-4o',
+      name: 'GPT-4o',
+      isFree: false,
+      contextLength: 128000,
+      description: 'High-intelligence multimodal flagship model',
+    },
+    {
+      id: 'o3-mini',
+      name: 'o3-mini',
+      isFree: false,
+      contextLength: 128000,
+      description: 'Latest high-speed reasoning model',
+    },
+    {
+      id: 'o1-mini',
+      name: 'o1-mini',
+      isFree: false,
+      contextLength: 128000,
+      description: 'Fast reasoning model specialized in STEM & code',
+    },
+  ],
+  anthropic: [
+    {
+      id: 'claude-3-7-sonnet-20250219',
+      name: 'Claude 3.7 Sonnet',
+      isFree: false,
+      contextLength: 200000,
+      description: 'Hybrid reasoning & coding state-of-the-art model (Recommended)',
+    },
+    {
+      id: 'claude-3-5-sonnet-20241022',
+      name: 'Claude 3.5 Sonnet',
+      isFree: false,
+      contextLength: 200000,
+      description: 'Industry-leading intelligence and coding performance',
+    },
+    {
+      id: 'claude-3-5-haiku-20241022',
+      name: 'Claude 3.5 Haiku',
+      isFree: false,
+      contextLength: 200000,
+      description: 'Fast, responsive, and highly cost-effective',
+    },
+    {
+      id: 'claude-3-opus-20240229',
+      name: 'Claude 3 Opus',
+      isFree: false,
+      contextLength: 200000,
+      description: 'Deep reasoning on complex analysis tasks',
+    },
+  ],
+  ollama: [
+    {
+      id: 'qwen2.5:latest',
+      name: 'Qwen 2.5',
+      isFree: true,
+      description: 'Standard high-capability local model',
+    },
+    {
+      id: 'llama3.2:latest',
+      name: 'Llama 3.2',
+      isFree: true,
+      description: 'Lightweight efficient local model',
+    },
+  ],
+  lmstudio: [
+    {
+      id: 'qwen2.5-coder-7b-instruct',
+      name: 'Qwen 2.5 Coder 7B',
+      isFree: true,
+      description: 'Local code reasoning model',
+    },
+  ],
+};
+
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const { settings, updateSettings } = useSettings();
   const [activeSection, setActiveSection] = useState<SettingsSection>('ai');
@@ -113,7 +230,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
 
   // Live real-time models catalog (initialized with curated models for immediate availability)
   const [detailedModels, setDetailedModels] = useState<AIModelInfo[]>(() =>
-    settings.aiProvider === 'openrouter' ? CURATED_OPENROUTER_FREE_MODELS : []
+    PROVIDER_FALLBACK_MODELS[settings.aiProvider] || []
   );
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [modelFilter, setModelFilter] = useState<'all' | 'free'>('free');
@@ -285,14 +402,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         return;
       }
 
-      // 3. Last-resort fallback for OpenRouter
-      if (settings.aiProvider === 'openrouter') {
-        setDetailedModels(CURATED_OPENROUTER_FREE_MODELS);
+      // 3. Fallback to curated models for the provider
+      const fallback = PROVIDER_FALLBACK_MODELS[settings.aiProvider] || [];
+      if (fallback.length > 0) {
+        setDetailedModels(fallback);
       }
     } catch (err) {
       console.warn('Failed to fetch live models:', err);
-      if (settings.aiProvider === 'openrouter') {
-        setDetailedModels(CURATED_OPENROUTER_FREE_MODELS);
+      const fallback = PROVIDER_FALLBACK_MODELS[settings.aiProvider] || [];
+      if (fallback.length > 0) {
+        setDetailedModels(fallback);
       }
     } finally {
       setIsLoadingModels(false);
@@ -332,20 +451,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     }
   };
 
+  // Sync models on provider switch or credential change
   useEffect(() => {
     let active = true;
+    const initialFallback = PROVIDER_FALLBACK_MODELS[settings.aiProvider] || [];
+    setDetailedModels(initialFallback);
+
     if (settings.aiEnabled && activeSection === 'ai') {
       const timer = setTimeout(() => {
         if (active) {
           fetchLiveModels();
         }
-      }, 0);
+      }, 300);
       return () => {
         active = false;
         clearTimeout(timer);
       };
     }
-  }, [settings.aiProvider, settings.aiEnabled, activeSection, fetchLiveModels]);
+  }, [
+    settings.aiProvider,
+    settings.aiEnabled,
+    activeSection,
+    fetchLiveModels,
+    settings.geminiApiKey,
+    settings.openaiApiKey,
+    settings.anthropicApiKey,
+    settings.customApiUrl,
+    settings.customApiKey,
+    settings.ollamaUrl,
+    settings.lmstudioUrl,
+  ]);
 
   const handleExportBackup = async () => {
     let url: string | null = null;
@@ -760,82 +895,56 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {/* Ollama */}
                       {settings.aiProvider === 'ollama' && (
                         <div className="space-y-3 text-xs">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                                Ollama URL
-                              </label>
-                              <input
-                                type="text"
-                                value={settings.ollamaUrl}
-                                onChange={(e) => updateSettings({ ollamaUrl: e.target.value })}
-                                placeholder="http://localhost:11434"
-                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                                Model Tag
-                              </label>
-                              <input
-                                type="text"
-                                value={settings.ollamaModel}
-                                onChange={(e) => updateSettings({ ollamaModel: e.target.value })}
-                                placeholder="qwen2.5:latest"
-                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                              />
-                            </div>
+                          <div>
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
+                              Ollama URL
+                            </label>
+                            <input
+                              type="text"
+                              value={settings.ollamaUrl}
+                              onChange={(e) => updateSettings({ ollamaUrl: e.target.value })}
+                              placeholder="http://localhost:11434"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
+                            />
                           </div>
-                          <button
-                            type="button"
-                            onClick={fetchLiveModels}
-                            disabled={isLoadingModels}
-                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                          >
-                            <RefreshCw className={`w-3 h-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
-                            <span>Detect Installed Ollama Models</span>
-                          </button>
+                          <DynamicModelSelector
+                            providerLabel="Ollama"
+                            selectedModel={settings.ollamaModel}
+                            onSelectModel={(m) => updateSettings({ ollamaModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.ollamaUrl)}
+                            apiKeyHelpText="Ensure Ollama is running locally at the URL above to detect installed models."
+                          />
                         </div>
                       )}
 
                       {/* LM Studio */}
                       {settings.aiProvider === 'lmstudio' && (
                         <div className="space-y-3 text-xs">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                                LM Studio URL
-                              </label>
-                              <input
-                                type="text"
-                                value={settings.lmstudioUrl}
-                                onChange={(e) => updateSettings({ lmstudioUrl: e.target.value })}
-                                placeholder="http://localhost:1234/v1"
-                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                                Loaded Model Identifier
-                              </label>
-                              <input
-                                type="text"
-                                value={settings.lmstudioModel}
-                                onChange={(e) => updateSettings({ lmstudioModel: e.target.value })}
-                                placeholder="qwen2.5-coder-7b-instruct"
-                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                              />
-                            </div>
+                          <div>
+                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
+                              LM Studio URL
+                            </label>
+                            <input
+                              type="text"
+                              value={settings.lmstudioUrl}
+                              onChange={(e) => updateSettings({ lmstudioUrl: e.target.value })}
+                              placeholder="http://localhost:1234/v1"
+                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
+                            />
                           </div>
-                          <button
-                            type="button"
-                            onClick={fetchLiveModels}
-                            disabled={isLoadingModels}
-                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                          >
-                            <RefreshCw className={`w-3 h-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
-                            <span>Detect Loaded Models</span>
-                          </button>
+                          <DynamicModelSelector
+                            providerLabel="LM Studio"
+                            selectedModel={settings.lmstudioModel}
+                            onSelectModel={(m) => updateSettings({ lmstudioModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.lmstudioUrl)}
+                            apiKeyHelpText="Ensure LM Studio local server is started (port 1234) to detect loaded models."
+                          />
                         </div>
                       )}
 
@@ -874,22 +983,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               </button>
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'].map((m) => (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => updateSettings({ geminiModel: m })}
-                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
-                                  settings.geminiModel === m
-                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
-                                }`}
-                              >
-                                {m}
-                              </button>
-                            ))}
-                          </div>
+                          <DynamicModelSelector
+                            providerLabel="Google Gemini"
+                            selectedModel={settings.geminiModel}
+                            onSelectModel={(m) => updateSettings({ geminiModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.geminiApiKey)}
+                            apiKeyHelpText="Enter your Gemini API key above to load live models directly from Google AI Studio."
+                          />
                         </div>
                       )}
 
@@ -897,9 +1000,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {settings.aiProvider === 'openai' && (
                         <div className="space-y-3 text-xs">
                           <div>
-                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                              OpenAI API Key
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300">
+                                OpenAI API Key
+                              </label>
+                              <a
+                                href="https://platform.openai.com/api-keys"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline text-[11px]"
+                              >
+                                Get Key
+                              </a>
+                            </div>
                             <div className="relative">
                               <input
                                 type={showApiKey ? 'text' : 'password'}
@@ -918,22 +1031,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               </button>
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {['gpt-4o-mini', 'gpt-4o', 'o3-mini'].map((m) => (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => updateSettings({ openaiModel: m })}
-                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
-                                  settings.openaiModel === m
-                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
-                                }`}
-                              >
-                                {m}
-                              </button>
-                            ))}
-                          </div>
+                          <DynamicModelSelector
+                            providerLabel="OpenAI"
+                            selectedModel={settings.openaiModel}
+                            onSelectModel={(m) => updateSettings({ openaiModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.openaiApiKey)}
+                            apiKeyHelpText="Enter your OpenAI API key above to load live models from your account."
+                          />
                         </div>
                       )}
 
@@ -941,9 +1048,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                       {settings.aiProvider === 'anthropic' && (
                         <div className="space-y-3 text-xs">
                           <div>
-                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                              Anthropic API Key
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="font-medium text-slate-700 dark:text-zinc-300">
+                                Anthropic API Key
+                              </label>
+                              <a
+                                href="https://console.anthropic.com/settings/keys"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline text-[11px]"
+                              >
+                                Get Key
+                              </a>
+                            </div>
                             <div className="relative">
                               <input
                                 type={showApiKey ? 'text' : 'password'}
@@ -962,52 +1079,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               </button>
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {['claude-3-7-sonnet-20250219', 'claude-3-5-haiku-20241022'].map((m) => (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => updateSettings({ anthropicModel: m })}
-                                className={`px-2.5 py-1 rounded-md text-xs font-mono border cursor-pointer ${
-                                  settings.anthropicModel === m
-                                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold'
-                                    : 'border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#101014] text-slate-600 dark:text-zinc-400'
-                                }`}
-                              >
-                                {m.split('-')[0]} {m.split('-')[1]}
-                              </button>
-                            ))}
-                          </div>
+                          <DynamicModelSelector
+                            providerLabel="Anthropic Claude"
+                            selectedModel={settings.anthropicModel}
+                            onSelectModel={(m) => updateSettings({ anthropicModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.anthropicApiKey)}
+                            apiKeyHelpText="Enter your Anthropic API key above to load live Claude models."
+                          />
                         </div>
                       )}
 
                       {/* Custom */}
                       {settings.aiProvider === 'custom' && (
                         <div className="space-y-3 text-xs">
-                          <div>
-                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                              Endpoint URL
-                            </label>
-                            <input
-                              type="text"
-                              value={settings.customApiUrl}
-                              onChange={(e) => updateSettings({ customApiUrl: e.target.value })}
-                              placeholder="https://api.groq.com/openai/v1"
-                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                            />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
+                                Endpoint URL
+                              </label>
+                              <input
+                                type="text"
+                                value={settings.customApiUrl}
+                                onChange={(e) => updateSettings({ customApiUrl: e.target.value })}
+                                placeholder="https://api.groq.com/openai/v1"
+                                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
+                                API Key (Optional)
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type={showApiKey ? 'text' : 'password'}
+                                  value={settings.customApiKey}
+                                  onChange={(e) => updateSettings({ customApiKey: e.target.value })}
+                                  placeholder="Bearer key if required..."
+                                  className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-blue-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowApiKey(!showApiKey)}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
+                                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                                >
+                                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <label className="font-medium text-slate-700 dark:text-zinc-300 block mb-1">
-                              Model Name
-                            </label>
-                            <input
-                              type="text"
-                              value={settings.customModel}
-                              onChange={(e) => updateSettings({ customModel: e.target.value })}
-                              placeholder="llama-3.3-70b-versatile"
-                              className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:border-blue-500"
-                            />
-                          </div>
+                          <DynamicModelSelector
+                            providerLabel="Custom API"
+                            selectedModel={settings.customModel}
+                            onSelectModel={(m) => updateSettings({ customModel: m })}
+                            models={detailedModels}
+                            isLoading={isLoadingModels}
+                            onRefresh={fetchLiveModels}
+                            hasApiKeyOrUrl={Boolean(settings.customApiUrl)}
+                            apiKeyHelpText="Enter your custom OpenAI-compatible endpoint URL above to discover available models."
+                          />
                         </div>
                       )}
 

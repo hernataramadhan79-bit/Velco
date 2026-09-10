@@ -131,8 +131,32 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             </button>
           )}
 
-          {/* 2. Type Icon or Image Thumbnail */}
-          {thumbnail ? (
+          {/* 2. Type Icon, Task Completion Checkbox, or Image Thumbnail */}
+          {item.type === 'task' && onToggleTask && !isTrashView ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTask(item.id, !item.task?.completed);
+              }}
+              aria-label={item.task?.completed ? 'Mark task as incomplete' : 'Mark task as complete'}
+              title={item.task?.completed ? 'Mark task as incomplete' : 'Mark task as complete'}
+              className={`mt-0.5 p-1.5 rounded-lg border flex items-center justify-center transition-all shrink-0 cursor-pointer shadow-2xs relative group/chk ${
+                item.task?.completed
+                  ? 'bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 shadow-xs'
+                  : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.06] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-500/60 dark:hover:border-emerald-500/60'
+              }`}
+            >
+              {item.task?.completed ? (
+                <Check className="w-3.5 h-3.5 stroke-[3] text-white" />
+              ) : (
+                <>
+                  <CheckSquare className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400 transition-all duration-150 group-hover/chk:opacity-0 group-hover/chk:scale-75" />
+                  <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-600 dark:text-emerald-400 absolute transition-all duration-150 opacity-0 group-hover/chk:opacity-100 scale-75 group-hover/chk:scale-100" />
+                </>
+              )}
+            </button>
+          ) : thumbnail ? (
             <div className="mt-0.5 w-10 h-10 rounded-lg overflow-hidden border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-zinc-800 shrink-0 shadow-2xs">
               <img
                 src={thumbnail}
@@ -151,25 +175,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({
           {/* 3. Main Content: Title, Priority, Snippets, Attachments */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              {/* Task Completion Check Ring (Only for task items) */}
-              {item.type === 'task' && onToggleTask && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleTask(item.id, !item.task?.completed);
-                  }}
-                  className={`w-3.5 h-3.5 rounded border transition-all cursor-pointer shrink-0 flex items-center justify-center ${
-                    item.task?.completed
-                      ? 'bg-emerald-500 border-emerald-500 text-white'
-                      : 'border-slate-300 dark:border-white/[0.2] hover:border-emerald-400 text-transparent'
-                  }`}
-                  title={item.task?.completed ? 'Mark task as pending' : 'Mark task as completed'}
-                >
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                </button>
-              )}
-
               <h3
                 className={`text-xs font-medium tracking-tight truncate ${
                   item.type === 'task' && item.task?.completed

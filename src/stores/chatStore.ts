@@ -180,7 +180,7 @@ export const useChatStore = create<ChatState>()(
           isGenerating: false,
           activeRequestId: null,
           messages: state.messages.map((msg) =>
-            msg.isStreaming ? { ...msg, isStreaming: false, content: msg.content || '(dibatalkan)' } : msg
+            msg.isStreaming ? { ...msg, isStreaming: false, content: msg.content || '(Generation stopped)' } : msg
           ),
         }));
       },

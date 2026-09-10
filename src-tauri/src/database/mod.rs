@@ -32,6 +32,9 @@ impl Database {
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_items_title ON items(title)", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_name ON attachments(file_name)", []);
 
+        // Normalisasi item lawas bertipe 'text' agar menjadi 'note'
+        let _ = conn.execute("UPDATE items SET type = 'note' WHERE type = 'text'", []);
+
         Ok(Self {
             conn: Mutex::new(conn),
         })

@@ -60,7 +60,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openaiApiKey: '',
   openaiModel: 'gpt-4o-mini',
   geminiApiKey: '',
-  geminiModel: 'gemini-1.5-flash',
+  geminiModel: 'gemini-2.0-flash',
   anthropicApiKey: '',
   anthropicModel: 'claude-3-5-haiku-20241022',
   openrouterApiKey: '',

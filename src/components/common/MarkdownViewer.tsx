@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, Check, ExternalLink, CheckSquare, Square } from 'lucide-react';
+import { Copy, Check, Download, ExternalLink, CheckSquare, Square } from 'lucide-react';
 import { openExternalUrl } from '../../utils/urlUtils';
 
 interface MarkdownViewerProps {
@@ -25,6 +25,61 @@ function sanitizeUrl(url: string): string {
     if (trimmed.startsWith('#')) return trimmed;
     return '#';
   }
+}
+
+function getFileExtension(lang?: string): string {
+  if (!lang) return 'txt';
+  const l = lang.toLowerCase();
+  const map: Record<string, string> = {
+    javascript: 'js',
+    js: 'js',
+    typescript: 'ts',
+    ts: 'ts',
+    tsx: 'tsx',
+    jsx: 'jsx',
+    python: 'py',
+    py: 'py',
+    html: 'html',
+    css: 'css',
+    rust: 'rs',
+    rs: 'rs',
+    json: 'json',
+    markdown: 'md',
+    md: 'md',
+    sql: 'sql',
+    bash: 'sh',
+    sh: 'sh',
+    shell: 'sh',
+    yaml: 'yaml',
+    yml: 'yaml',
+    xml: 'xml',
+    go: 'go',
+    cpp: 'cpp',
+    c: 'c',
+    java: 'java',
+    kotlin: 'kt',
+    swift: 'swift',
+    php: 'php',
+    ruby: 'rb',
+  };
+  return map[l] || 'txt';
+}
+
+function formatLanguageName(lang?: string): string {
+  if (!lang) return 'Code';
+  const l = lang.toLowerCase();
+  if (['html', 'css', 'json', 'sql', 'xml', 'yaml', 'csv', 'svg'].includes(l)) {
+    return l.toUpperCase();
+  }
+  if (l === 'js') return 'JavaScript';
+  if (l === 'ts') return 'TypeScript';
+  if (l === 'tsx') return 'TypeScript (React)';
+  if (l === 'jsx') return 'JavaScript (React)';
+  if (l === 'py') return 'Python';
+  if (l === 'md') return 'Markdown';
+  if (l === 'rs') return 'Rust';
+  if (l === 'sh' || l === 'bash') return 'Shell';
+  return lang.charAt(0).toUpperCase() + lang.slice(1);
 }
 
 interface TableData {
@@ -61,31 +116,52 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
     timerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownload = () => {
+    const ext = getFileExtension(language);
+    const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `snippet-${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="relative my-2.5 rounded-xl border border-slate-700/80 bg-slate-950 text-xs font-mono shadow-md overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800/80 text-slate-400 text-[10px]">
-        <span className="uppercase font-semibold tracking-wider text-indigo-400">
-          {language || 'code'}
+    <div className="group relative my-3 rounded-xl border border-slate-800 dark:border-white/[0.1] bg-[#0d0e12] dark:bg-[#111216] text-xs font-mono shadow-sm">
+      {/* Gemini-Style Sticky Header Bar */}
+      <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-slate-900 dark:bg-[#16171c] border-b border-slate-800 dark:border-white/[0.08] rounded-t-xl select-none shadow-xs">
+        <span className="font-sans text-xs font-medium text-slate-300 dark:text-zinc-300">
+          {formatLanguageName(language)}
         </span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-800"
-          title="Copy code"
-        >
-          {copied ? (
-            <>
-              <Check className="w-3 h-3 text-emerald-400" />
-              <span className="text-emerald-400 font-medium">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3 h-3" />
-              <span>Copy</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
+            title="Download code"
+            aria-label="Download code"
+          >
+            <Download className="w-4 h-4 stroke-[1.75]" />
+          </button>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-colors cursor-pointer flex items-center justify-center"
+            title={copied ? 'Copied to clipboard!' : 'Copy code'}
+            aria-label="Copy code"
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-emerald-400 stroke-[2.5]" />
+            ) : (
+              <Copy className="w-4 h-4 stroke-[1.75]" />
+            )}
+          </button>
+        </div>
       </div>
-      <div className="p-3 overflow-x-auto text-slate-200 leading-relaxed text-[11px]">
+      <div className="p-4 overflow-x-auto text-slate-200 dark:text-zinc-200 leading-relaxed text-[11.5px] rounded-b-xl">
         <pre className="font-mono">{code}</pre>
       </div>
     </div>

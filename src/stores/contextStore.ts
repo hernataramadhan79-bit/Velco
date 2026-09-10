@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export interface StagedItem {
   id: string;
-  type: 'note' | 'task' | 'link' | 'file';
+  type: 'note' | 'task' | 'link' | 'file' | 'image' | 'audio';
   title: string;
   plainText: string;
   estimatedTokens: number;

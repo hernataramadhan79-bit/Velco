@@ -23,6 +23,7 @@ import {
   Plus,
   ShieldAlert,
   Zap,
+  ChevronDown,
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chatStore';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
@@ -103,10 +104,13 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [showParameters, setShowParameters] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const isUserScrolledUpRef = useRef(false);
 
   const chatTokens = totalChatTokens();
 
@@ -133,9 +137,31 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     }
   }, [isContextPickerOpen, loadWorkspaceItems]);
 
-  // Auto-scroll chat to latest message on update
+  // Track scroll position to respect manual reading position
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isUp = scrollHeight - (scrollTop + clientHeight) > 80;
+    isUserScrolledUpRef.current = isUp;
+    setShowScrollBottom(isUp);
+  };
+
+  const scrollToBottom = useCallback(() => {
+    if (bottomAnchorRef.current) {
+      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    setShowScrollBottom(false);
+    isUserScrolledUpRef.current = false;
+  }, []);
+
+  // Auto-scroll chat to latest message on update only if user is at the bottom
   useEffect(() => {
-    if (chatContainerRef.current) {
+    if (!isUserScrolledUpRef.current && chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages, isGenerating]);
@@ -166,6 +192,10 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     const content = textToSend || prompt.trim();
     if (!content || isGenerating || !settings.aiEnabled) return;
 
+    // Reset user scroll lock on new send
+    isUserScrolledUpRef.current = false;
+    setShowScrollBottom(false);
+
     // Send with context & provider config
     const config = getLlmProviderConfig(settings);
     sendMessage(content, chatContextItems, config);
@@ -173,6 +203,12 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
+
+    setTimeout(() => {
+      if (bottomAnchorRef.current) {
+        bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 50);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -372,113 +408,136 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
 
       {/* Conversation Thread Area */}
       {messages.length > 0 && (
-        <div
-          ref={chatContainerRef}
-          className="p-4 space-y-4 max-h-[420px] overflow-y-auto overflow-x-hidden border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#09090b]/50 w-full min-w-0"
-        >
-          {messages.map((msg) => {
-            const isUser = msg.role === 'user';
-            const isSavedNote = savedNoteId === msg.id;
-            const isExtracting = extractingMsgId === msg.id;
-            const isSavedBatch = savedBatchMsgId === msg.id;
-            const isCopied = copiedId === msg.id;
+        <div className="relative w-full">
+          <div
+            ref={chatContainerRef}
+            onScroll={handleScroll}
+            className="px-4 pb-4 pt-0 space-y-4 max-h-[420px] overflow-y-auto overflow-x-hidden border-b border-slate-200 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#09090b]/50 w-full min-w-0"
+          >
+            <div className="h-2" />
+            {messages.map((msg) => {
+              const isUser = msg.role === 'user';
+              const isSavedNote = savedNoteId === msg.id;
+              const isExtracting = extractingMsgId === msg.id;
+              const isSavedBatch = savedBatchMsgId === msg.id;
+              const isCopied = copiedId === msg.id;
 
-            return (
-              <div
-                key={msg.id}
-                className={`flex gap-3 text-xs w-full min-w-0 ${
-                  isUser ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {!isUser && (
-                  <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
-                  </div>
-                )}
-
+              return (
                 <div
-                  className={`flex flex-col max-w-[88%] min-w-0 ${
-                    isUser ? 'items-end' : 'items-start'
+                  key={msg.id}
+                  className={`flex gap-3 text-xs w-full min-w-0 ${
+                    isUser ? 'justify-end' : 'justify-start'
                   }`}
                 >
+                  {!isUser && (
+                    <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </div>
+                  )}
+
                   <div
-                    className={`p-3 rounded-lg leading-relaxed break-words overflow-hidden min-w-0 ${
-                      isUser
-                        ? 'bg-slate-100 text-slate-900 border border-slate-200 dark:bg-white/[0.06] dark:border-white/[0.08] dark:text-zinc-100'
-                        : 'text-slate-800 dark:text-zinc-200'
+                    className={`flex flex-col max-w-[88%] min-w-0 ${
+                      isUser ? 'items-end' : 'items-start'
                     }`}
                   >
-                    {isUser ? (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    ) : (
-                      <div className="prose prose-slate dark:prose-invert prose-xs max-w-none text-slate-800 dark:text-zinc-200">
-                        <MarkdownViewer content={msg.content} />
+                    <div
+                      className={`leading-relaxed break-words min-w-0 ${
+                        isUser
+                          ? 'p-3 rounded-lg overflow-hidden bg-slate-100 text-slate-900 border border-slate-200 dark:bg-white/[0.06] dark:border-white/[0.08] dark:text-zinc-100'
+                          : 'p-3 rounded-lg text-slate-800 dark:text-zinc-200'
+                      }`}
+                    >
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : (
+                        <div className="prose prose-slate dark:prose-invert prose-xs max-w-none text-slate-800 dark:text-zinc-200">
+                          <MarkdownViewer content={msg.content} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Message Action Bar (Assistant Only) */}
+                    {!isUser && (
+                      <div className="flex items-center gap-1 mt-1 px-1">
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
+                          title="Copy response"
+                        >
+                          {isCopied ? (
+                            <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[2]" />
+                          ) : (
+                            <Copy className="w-3 h-3 stroke-[1.5]" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleSaveToNote(msg.id, msg.content)}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
+                            isSavedNote
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
+                          }`}
+                          title="Save response to a new Note"
+                        >
+                          <FileText className="w-2.5 h-2.5" />
+                          <span>{isSavedNote ? 'Saved' : 'Save as Note'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleExtractTasksFromMessage(msg)}
+                          disabled={isExtracting}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
+                            isSavedBatch
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
+                          }`}
+                          title="Extract actionable tasks from this response"
+                        >
+                          {isExtracting ? (
+                            <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-500 dark:text-blue-400" />
+                          ) : (
+                            <ListTodo className="w-2.5 h-2.5" />
+                          )}
+                          <span>{isSavedBatch ? 'Extracted' : 'Extract Tasks'}</span>
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  {/* Message Action Bar (Assistant Only) */}
-                  {!isUser && (
-                    <div className="flex items-center gap-1 mt-1 px-1">
-                      <button
-                        onClick={() => handleCopyMessage(msg.id, msg.content)}
-                        className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
-                        title="Copy response"
-                      >
-                        {isCopied ? (
-                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 stroke-[2]" />
-                        ) : (
-                          <Copy className="w-3 h-3 stroke-[1.5]" />
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleSaveToNote(msg.id, msg.content)}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
-                          isSavedNote
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
-                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
-                        }`}
-                        title="Save response to a new Note"
-                      >
-                        <FileText className="w-2.5 h-2.5" />
-                        <span>{isSavedNote ? 'Saved' : 'Save as Note'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleExtractTasksFromMessage(msg)}
-                        disabled={isExtracting}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer ${
-                          isSavedBatch
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
-                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04]'
-                        }`}
-                        title="Extract actionable tasks from this response"
-                      >
-                        {isExtracting ? (
-                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-500 dark:text-blue-400" />
-                        ) : (
-                          <ListTodo className="w-2.5 h-2.5" />
-                        )}
-                        <span>{isSavedBatch ? 'Extracted' : 'Extract Tasks'}</span>
-                      </button>
+                  {isUser && (
+                    <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="w-3.5 h-3.5 stroke-[1.5]" />
                     </div>
                   )}
                 </div>
+              );
+            })}
 
-                {isUser && (
-                  <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="w-3.5 h-3.5 stroke-[1.5]" />
-                  </div>
-                )}
+            {isGenerating && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500 font-mono py-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
+                <span>Generating response...</span>
               </div>
-            );
-          })}
+            )}
+            <div ref={bottomAnchorRef} className="h-1" />
+          </div>
 
-          {isGenerating && (
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500 font-mono py-1">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
-              <span>Generating response...</span>
+          {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
+          {showScrollBottom && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="w-7 h-7 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-lg backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
+                title="Scroll to latest message"
+                aria-label="Scroll to latest message"
+              >
+                <ChevronDown className="w-3.5 h-3.5 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
+                {isGenerating && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
+                )}
+              </button>
             </div>
           )}
         </div>

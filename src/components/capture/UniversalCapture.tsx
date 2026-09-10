@@ -39,8 +39,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
     const trimmed = text.trim();
     if (/^(https?:\/\/|www\.)\S+$/i.test(trimmed)) return 'link';
     if (/^(\[ ?\]|todo:|task:|- \[ \])/i.test(trimmed)) return 'task';
-    if (trimmed.includes('\n') || trimmed.length > 120) return 'note';
-    return 'text';
+    return 'note';
   }, [text, forcedType, attachedFiles]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -135,8 +134,9 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
       let content = '';
       let linkMeta = undefined;
       let taskMeta = undefined;
+      const targetType: ItemType = (detectedType === 'text' || !detectedType) ? 'note' : detectedType;
 
-      if (detectedType === 'task') {
+      if (targetType === 'task') {
         const cleanTitle = trimmed.replace(/^(\[ ?\]|todo:|task:|- \[ \])/i, '').trim();
         title = cleanTitle || 'Untitled Task';
         taskMeta = {
@@ -144,7 +144,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           completed: false,
           dueDate: taskDueDate || null,
         };
-      } else if (detectedType === 'link') {
+      } else if (targetType === 'link') {
         const url = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
         try {
           const u = new URL(url);
@@ -157,7 +157,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
         } catch {
           title = trimmed;
         }
-      } else if (detectedType === 'note') {
+      } else if (targetType === 'note') {
         const lines = trimmed.split('\n');
         title = lines[0].replace(/^[#\s]+/, '').slice(0, 80) || 'Untitled Note';
         content = trimmed;
@@ -180,9 +180,9 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
       }));
 
       await onCapture({
-        type: detectedType,
+        type: targetType,
         title,
-        content: content || (attachedFiles[0]?.textContent ? attachedFiles[0].textContent : (detectedType === 'text' ? trimmed : '')),
+        content: content || (attachedFiles[0]?.textContent ? attachedFiles[0].textContent : trimmed),
         task: taskMeta,
         link: linkMeta,
         attachments: attachmentsPayload,
@@ -230,7 +230,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           </label>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-zinc-400 uppercase border border-slate-200 dark:border-white/[0.06]">
-              AUTO: {detectedType}
+              AUTO: {(detectedType === 'text' || !detectedType ? 'note' : detectedType).toUpperCase()}
             </span>
           </div>
         </div>

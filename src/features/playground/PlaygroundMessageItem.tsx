@@ -80,10 +80,10 @@ export const PlaygroundMessageItem: React.FC<PlaygroundMessageItemProps> = ({
 
         {/* Message Bubble / Markdown Card */}
         <div
-          className={`w-full overflow-hidden text-sm leading-relaxed ${
+          className={`w-full text-sm leading-relaxed ${
             isUser
-              ? 'bg-slate-900 text-white dark:bg-[#18181c] dark:text-zinc-100 rounded-2xl rounded-tr-xs px-4 py-3 shadow-xs border border-slate-800 dark:border-white/[0.09]'
-              : 'text-slate-800 dark:text-zinc-200 py-1'
+              ? 'overflow-hidden bg-slate-900 text-white dark:bg-[#18181c] dark:text-zinc-100 rounded-2xl rounded-tr-xs px-4 py-3 shadow-xs border border-slate-800 dark:border-white/[0.09]'
+              : 'text-slate-800 dark:text-zinc-200 py-1 min-w-0'
           }`}
         >
           {isUser ? (

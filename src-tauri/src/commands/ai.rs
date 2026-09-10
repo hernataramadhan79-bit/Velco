@@ -4,6 +4,7 @@ use crate::ai::{LlmProviderConfig, RecipeOutput};
 use crate::database::Database;
 use crate::filesystem::StorageManager;
 use serde_json::Value;
+use base64::Engine;
 
 // ============================================================================
 // Existing AI commands (backward-compatible for Settings UI)
@@ -204,21 +205,98 @@ fn extract_pdf_heuristic(bytes: &[u8]) -> Option<String> {
     }
 }
 
-/// Fetches item content and any attached file contents from the database/storage for the given IDs.
+#[derive(Debug, Clone)]
+pub struct ExtractedImage {
+    pub file_name: String,
+    pub mime_type: String,
+    pub base64: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ContextFetchResult {
+    pub items: Vec<(String, String)>,
+    pub images: Vec<ExtractedImage>,
+}
+
+fn is_image_file_type(mime: &str, ext: &str) -> bool {
+    mime.starts_with("image/")
+        || matches!(
+            ext,
+            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "svg"
+        )
+}
+
+fn normalize_image_mime(mime: &str, ext: &str) -> String {
+    if ext == "png" {
+        "image/png".to_string()
+    } else if ext == "jpg" || ext == "jpeg" {
+        "image/jpeg".to_string()
+    } else if ext == "webp" {
+        "image/webp".to_string()
+    } else if ext == "gif" {
+        "image/gif".to_string()
+    } else if ext == "svg" {
+        "image/svg+xml".to_string()
+    } else if ext == "bmp" {
+        "image/bmp".to_string()
+    } else if mime.starts_with("image/") {
+        mime.to_string()
+    } else {
+        "image/jpeg".to_string()
+    }
+}
+
+fn extract_image_base64(
+    data_url: Option<&str>,
+    storage: &StorageManager,
+    file_path: &str,
+    safe_name: &str,
+) -> Option<String> {
+    // 1. Dari data_url jika ada di SQLite
+    if let Some(url) = data_url {
+        let trimmed = url.trim();
+        if trimmed.starts_with("data:") {
+            if let Some((_, b64)) = trimmed.split_once(',') {
+                let clean_b64 = b64.trim();
+                if !clean_b64.is_empty() {
+                    return Some(clean_b64.to_string());
+                }
+            }
+        } else if trimmed.len() > 100 && !trimmed.contains(' ') && !trimmed.starts_with("http") {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    // 2. Dari file fisik di disk via storage manager
+    if let Some(p) = storage.resolve_attachment_path(file_path, safe_name) {
+        if let Ok(meta) = std::fs::metadata(&p) {
+            // Batas 20MB per gambar agar aman dari OOM
+            if meta.len() <= 20 * 1024 * 1024 && p.is_file() {
+                if let Ok(bytes) = std::fs::read(&p) {
+                    return Some(base64::engine::general_purpose::STANDARD.encode(&bytes));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Fetches item content and any attached file contents (including multimodal images) from database/storage.
 fn fetch_item_contexts(
     db: &Database,
     storage: &StorageManager,
     item_ids: &[String],
-) -> Result<Vec<(String, String)>, String> {
+) -> Result<ContextFetchResult, String> {
     let conn = db
         .conn
         .lock()
         .map_err(|e| format!("Database lock error: {}", e))?;
 
-    let mut results = Vec::new();
+    let mut result = ContextFetchResult::default();
 
     for id in item_ids {
-        // 1. Try finding as item in items table
+        // 1. Cek tabel items
         let item_opt = conn
             .query_row(
                 "SELECT id, title, content, type FROM items WHERE id = ?1 AND deleted_at IS NULL",
@@ -234,7 +312,7 @@ fn fetch_item_contexts(
             )
             .ok();
 
-        if let Some((item_id, title, mut content, _item_type)) = item_opt {
+        if let Some((item_id, title, mut content, item_type)) = item_opt {
             // Check content_index for plain_text
             let plain_text: Option<String> = conn
                 .query_row(
@@ -250,8 +328,8 @@ fn fetch_item_contexts(
             }
 
             // Fetch any attachments associated with this item
-            let att_rows: Vec<(String, String, String, String, i64)> = if let Ok(mut att_stmt) = conn.prepare(
-                "SELECT id, file_name, file_path, mime_type, file_size FROM attachments WHERE item_id = ?1"
+            let att_rows: Vec<(String, String, String, String, i64, Option<String>)> = if let Ok(mut att_stmt) = conn.prepare(
+                "SELECT id, file_name, file_path, mime_type, file_size, data_url FROM attachments WHERE item_id = ?1"
             ) {
                 att_stmt
                     .query_map([&item_id], |r| {
@@ -261,6 +339,7 @@ fn fetch_item_contexts(
                             r.get(2)?,
                             r.get(3)?,
                             r.get(4)?,
+                            r.get(5).ok(),
                         ))
                     })
                     .map(|rows| rows.filter_map(|r| r.ok()).collect())
@@ -270,7 +349,9 @@ fn fetch_item_contexts(
             };
 
             let mut attached_texts = Vec::new();
-            for (_att_id, file_name, file_path, mime_type, _file_size) in att_rows {
+            let mut item_images = Vec::new();
+
+            for (_att_id, file_name, file_path, mime_type, _file_size, data_url) in att_rows {
                 let safe_name = StorageManager::sanitize_file_name(&file_name);
                 let ext = std::path::Path::new(&file_name)
                     .extension()
@@ -278,7 +359,20 @@ fn fetch_item_contexts(
                     .unwrap_or("")
                     .to_lowercase();
 
-                if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+                if is_image_file_type(&mime_type, &ext) {
+                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path, &safe_name) {
+                        let norm_mime = normalize_image_mime(&mime_type, &ext);
+                        item_images.push(ExtractedImage {
+                            file_name: file_name.clone(),
+                            mime_type: norm_mime.clone(),
+                            base64: b64,
+                        });
+                        attached_texts.push(format!(
+                            "--- ATTACHED IMAGE: {} ({}) ---\n[Image data attached for multimodal visual inspection]",
+                            file_name, norm_mime
+                        ));
+                    }
+                } else if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
                     if let Ok(bytes) = std::fs::read(&resolved_path) {
                         if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
                             if !extracted.trim().is_empty() {
@@ -293,6 +387,35 @@ fn fetch_item_contexts(
                 }
             }
 
+            // Fallback untuk item bertipe image yang menyimpan data di content
+            if item_type == "image" && item_images.is_empty() {
+                let trimmed = content.trim();
+                if trimmed.starts_with("data:") {
+                    if let Some((head, b64)) = trimmed.split_once(',') {
+                        let norm_mime = if head.contains("png") {
+                            "image/png"
+                        } else if head.contains("webp") {
+                            "image/webp"
+                        } else if head.contains("gif") {
+                            "image/gif"
+                        } else {
+                            "image/jpeg"
+                        };
+                        item_images.push(ExtractedImage {
+                            file_name: title.clone(),
+                            mime_type: norm_mime.to_string(),
+                            base64: b64.trim().to_string(),
+                        });
+                        attached_texts.push(format!(
+                            "--- IMAGE: {} ({}) ---\n[Image data attached for multimodal visual inspection]",
+                            title, norm_mime
+                        ));
+                    }
+                }
+            }
+
+            result.images.extend(item_images);
+
             if !attached_texts.is_empty() {
                 let attachments_str = attached_texts.join("\n\n");
                 if content.trim().is_empty() || content.starts_with("File: ") {
@@ -302,12 +425,12 @@ fn fetch_item_contexts(
                 }
             }
 
-            results.push((title, content));
+            result.items.push((title, content));
         } else {
             // 2. Try finding as a direct attachment ID in attachments table
             let att_opt = conn
                 .query_row(
-                    "SELECT a.item_id, a.file_name, a.file_path, a.mime_type, a.file_size, COALESCE(i.title, a.file_name) \
+                    "SELECT a.item_id, a.file_name, a.file_path, a.mime_type, a.file_size, a.data_url, COALESCE(i.title, a.file_name) \
                      FROM attachments a LEFT JOIN items i ON a.item_id = i.id WHERE a.id = ?1",
                     [id],
                     |row| {
@@ -317,13 +440,14 @@ fn fetch_item_contexts(
                             row.get::<_, String>(2)?,
                             row.get::<_, String>(3)?,
                             row.get::<_, i64>(4)?,
-                            row.get::<_, String>(5)?,
+                            row.get::<_, Option<String>>(5).ok().flatten(),
+                            row.get::<_, String>(6)?,
                         ))
                     },
                 )
                 .ok();
 
-            if let Some((_item_id, file_name, file_path, mime_type, _file_size, title)) = att_opt {
+            if let Some((_item_id, file_name, file_path, mime_type, _file_size, data_url, title)) = att_opt {
                 let safe_name = StorageManager::sanitize_file_name(&file_name);
                 let ext = std::path::Path::new(&file_name)
                     .extension()
@@ -332,7 +456,21 @@ fn fetch_item_contexts(
                     .to_lowercase();
 
                 let mut content = format!("Attached File: {}", file_name);
-                if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+
+                if is_image_file_type(&mime_type, &ext) {
+                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path, &safe_name) {
+                        let norm_mime = normalize_image_mime(&mime_type, &ext);
+                        result.images.push(ExtractedImage {
+                            file_name: file_name.clone(),
+                            mime_type: norm_mime.clone(),
+                            base64: b64,
+                        });
+                        content = format!(
+                            "--- ATTACHED IMAGE FILE: {} ({}) ---\n[Image data attached for multimodal visual inspection]",
+                            file_name, norm_mime
+                        );
+                    }
+                } else if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
                     if let Ok(bytes) = std::fs::read(&resolved_path) {
                         if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
                             if !extracted.trim().is_empty() {
@@ -345,12 +483,12 @@ fn fetch_item_contexts(
                         }
                     }
                 }
-                results.push((title, content));
+                result.items.push((title, content));
             }
         }
     }
 
-    Ok(results)
+    Ok(result)
 }
 
 /// Builds the user prompt with all staged item contexts.
@@ -367,6 +505,7 @@ async fn call_llm(
     provider_config: &LlmProviderConfig,
     system_prompt: &str,
     user_prompt: &str,
+    images: &[ExtractedImage],
 ) -> Result<RecipeOutput, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -378,12 +517,16 @@ async fn call_llm(
             let ollama_client = crate::ai::ollama::LocalAiClient::new(Some(base_url.clone()), None);
             let target_model = ollama_client.resolve_local_model(model).await;
             let url = format!("{}/api/generate", base_url.trim_end_matches('/'));
-            let payload = serde_json::json!({
+            let mut payload = serde_json::json!({
                 "model": target_model,
                 "prompt": format!("{}\n\n{}", system_prompt, user_prompt),
                 "stream": false,
                 "format": "json"
             });
+            if !images.is_empty() {
+                let img_payload: Vec<&str> = images.iter().map(|img| img.base64.as_str()).collect();
+                payload["images"] = serde_json::json!(img_payload);
+            }
 
             let resp = client
                 .post(&url)
@@ -437,21 +580,60 @@ async fn call_llm(
             };
 
             let payload = if is_anthropic {
+                let user_content = if images.is_empty() {
+                    serde_json::json!(user_prompt)
+                } else {
+                    let mut parts = Vec::new();
+                    for img in images {
+                        parts.push(serde_json::json!({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.mime_type,
+                                "data": img.base64
+                            }
+                        }));
+                    }
+                    parts.push(serde_json::json!({
+                        "type": "text",
+                        "text": user_prompt
+                    }));
+                    serde_json::json!(parts)
+                };
+
                 serde_json::json!({
                     "model": model,
                     "system": system_prompt,
                     "messages": [
-                        { "role": "user", "content": user_prompt }
+                        { "role": "user", "content": user_content }
                     ],
                     "max_tokens": 4096,
                     "temperature": 0.3
                 })
             } else {
+                let user_content = if images.is_empty() {
+                    serde_json::json!(user_prompt)
+                } else {
+                    let mut parts = vec![serde_json::json!({
+                        "type": "text",
+                        "text": user_prompt
+                    })];
+                    for img in images {
+                        parts.push(serde_json::json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:{};base64,{}", img.mime_type, img.base64)
+                            }
+                        }));
+                    }
+                    serde_json::json!(parts)
+                };
+
                 serde_json::json!({
                     "model": model,
                     "messages": [
                         { "role": "system", "content": system_prompt },
-                        { "role": "user", "content": user_prompt }
+                        { "role": "user", "content": user_content }
                     ],
                     "temperature": 0.3,
                     "stream": false
@@ -717,18 +899,18 @@ pub async fn execute_context_recipe(
     // 1. Fetch item content from database and file storage
     let db = app.state::<Database>();
     let storage = app.state::<StorageManager>();
-    let items = fetch_item_contexts(&db, &storage, &item_ids)?;
+    let context_data = fetch_item_contexts(&db, &storage, &item_ids)?;
 
-    if items.is_empty() {
+    if context_data.items.is_empty() && context_data.images.is_empty() {
         return Err("No valid items found for the provided IDs".to_string());
     }
 
     // 2. Build prompts
     let system_prompt = build_recipe_system_prompt(&recipe, &custom_prompt);
-    let user_prompt = build_context_prompt(&items);
+    let user_prompt = build_context_prompt(&context_data.items);
 
     // 3. Call the LLM
-    let output = call_llm(&provider_config, &system_prompt, &user_prompt).await?;
+    let output = call_llm(&provider_config, &system_prompt, &user_prompt, &context_data.images).await?;
 
     Ok(output)
 }
@@ -978,10 +1160,10 @@ pub async fn execute_context_chat(
     // 1. Fetch item and attached file contents from SQLite and file storage
     let db = app.state::<Database>();
     let storage = app.state::<StorageManager>();
-    let items = if !item_ids.is_empty() {
+    let context_data = if !item_ids.is_empty() {
         fetch_item_contexts(&db, &storage, &item_ids).unwrap_or_default()
     } else {
-        vec![]
+        ContextFetchResult::default()
     };
 
     // 2. Build system prompt grounded on the staged context
@@ -990,10 +1172,16 @@ pub async fn execute_context_chat(
          Your mission is to help the user understand, cross-reference, analyze, and synthesize their stored knowledge.\n"
     );
 
-    if !items.is_empty() {
+    if !context_data.items.is_empty() || !context_data.images.is_empty() {
         system_prompt.push_str("\nThe user has assembled the following staged items into their active Context Cart:\n\n");
-        for (title, content) in &items {
+        for (title, content) in &context_data.items {
             system_prompt.push_str(&format!("--- CONTEXT ITEM: {} ---\n{}\n---\n\n", title, content));
+        }
+        if !context_data.images.is_empty() {
+            system_prompt.push_str(&format!(
+                "\nNote: {} image(s) from the context items have been attached to the chat for direct visual inspection.\n",
+                context_data.images.len()
+            ));
         }
         system_prompt.push_str(
             "Guidelines:\n\
@@ -1025,11 +1213,22 @@ pub async fn execute_context_chat(
                 "content": system_prompt
             })];
 
-            for msg in &messages {
-                ollama_messages.push(serde_json::json!({
-                    "role": msg.role,
-                    "content": msg.content
-                }));
+            let last_user_idx = messages.iter().rposition(|m| m.role == "user");
+
+            for (idx, msg) in messages.iter().enumerate() {
+                if Some(idx) == last_user_idx && !context_data.images.is_empty() {
+                    let imgs_b64: Vec<&str> = context_data.images.iter().map(|img| img.base64.as_str()).collect();
+                    ollama_messages.push(serde_json::json!({
+                        "role": msg.role,
+                        "content": msg.content,
+                        "images": imgs_b64
+                    }));
+                } else {
+                    ollama_messages.push(serde_json::json!({
+                        "role": msg.role,
+                        "content": msg.content
+                    }));
+                }
             }
 
             let payload = serde_json::json!({
@@ -1135,14 +1334,40 @@ pub async fn execute_context_chat(
             };
 
             let payload = if is_anthropic {
+                let last_user_idx = messages.iter().rposition(|m| m.role == "user" || (m.role != "assistant" && m.role != "system"));
+
                 let anthropic_messages: Vec<serde_json::Value> = messages
                     .iter()
-                    .filter(|m| m.role != "system")
-                    .map(|m| {
-                        serde_json::json!({
-                            "role": if m.role == "assistant" { "assistant" } else { "user" },
-                            "content": m.content
-                        })
+                    .enumerate()
+                    .filter(|(_, m)| m.role != "system")
+                    .map(|(idx, m)| {
+                        let role = if m.role == "assistant" { "assistant" } else { "user" };
+                        if Some(idx) == last_user_idx && !context_data.images.is_empty() {
+                            let mut parts = Vec::new();
+                            for img in &context_data.images {
+                                parts.push(serde_json::json!({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": img.mime_type,
+                                        "data": img.base64
+                                    }
+                                }));
+                            }
+                            parts.push(serde_json::json!({
+                                "type": "text",
+                                "text": m.content
+                            }));
+                            serde_json::json!({
+                                "role": role,
+                                "content": parts
+                            })
+                        } else {
+                            serde_json::json!({
+                                "role": role,
+                                "content": m.content
+                            })
+                        }
                     })
                     .collect();
 
@@ -1159,11 +1384,32 @@ pub async fn execute_context_chat(
                     "content": system_prompt
                 })];
 
-                for msg in &messages {
-                    openai_messages.push(serde_json::json!({
-                        "role": msg.role,
-                        "content": msg.content
-                    }));
+                let last_user_idx = messages.iter().rposition(|m| m.role == "user");
+
+                for (idx, msg) in messages.iter().enumerate() {
+                    if Some(idx) == last_user_idx && !context_data.images.is_empty() {
+                        let mut parts = vec![serde_json::json!({
+                            "type": "text",
+                            "text": msg.content
+                        })];
+                        for img in &context_data.images {
+                            parts.push(serde_json::json!({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": format!("data:{};base64,{}", img.mime_type, img.base64)
+                                }
+                            }));
+                        }
+                        openai_messages.push(serde_json::json!({
+                            "role": msg.role,
+                            "content": parts
+                        }));
+                    } else {
+                        openai_messages.push(serde_json::json!({
+                            "role": msg.role,
+                            "content": msg.content
+                        }));
+                    }
                 }
 
                 serde_json::json!({
@@ -1318,3 +1564,93 @@ pub async fn execute_context_chat(
 
     Ok(full_text)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::filesystem::StorageManager;
+    use crate::database::Database;
+
+    #[test]
+    fn test_image_type_detection_and_normalization() {
+        assert!(is_image_file_type("image/png", "png"));
+        assert!(is_image_file_type("image/jpeg", "jpg"));
+        assert!(is_image_file_type("application/octet-stream", "png"));
+        assert!(is_image_file_type("", "webp"));
+        assert!(!is_image_file_type("text/plain", "txt"));
+
+        assert_eq!(normalize_image_mime("application/octet-stream", "png"), "image/png");
+        assert_eq!(normalize_image_mime("image/jpeg", "jpg"), "image/jpeg");
+        assert_eq!(normalize_image_mime("image/webp", "webp"), "image/webp");
+    }
+
+    #[test]
+    fn test_extract_image_base64_from_data_url() {
+        let temp_dir = std::env::temp_dir().join(format!("velco_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let storage = StorageManager::new(Some(temp_dir.clone()));
+        let sample_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+        let data_url = format!("data:image/png;base64,{}", sample_b64);
+
+        let extracted = extract_image_base64(Some(&data_url), &storage, "", "test.png");
+        assert_eq!(extracted, Some(sample_b64.to_string()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_extract_image_base64_from_storage_file() {
+        let temp_dir = std::env::temp_dir().join(format!("velco_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let storage = StorageManager::new(Some(temp_dir.clone()));
+        let raw_bytes = b"fake image bytes for testing";
+        let (saved_path, _, _) = storage.save_attachment("test_photo.jpg", raw_bytes).unwrap();
+        let file_path = saved_path.to_string_lossy().to_string();
+
+        let extracted = extract_image_base64(None, &storage, &file_path, "test_photo.jpg");
+        assert!(extracted.is_some());
+        let decoded = base64::engine::general_purpose::STANDARD.decode(extracted.unwrap()).unwrap();
+        assert_eq!(decoded, raw_bytes);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_fetch_item_contexts_with_image_attachment() {
+        let temp_dir = std::env::temp_dir().join(format!("velco_test_{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let storage = StorageManager::new(Some(temp_dir.clone()));
+        let db_path = temp_dir.join("test.db");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        crate::database::schema::run_migrations(&conn).unwrap();
+        let db = Database { conn: std::sync::Mutex::new(conn) };
+
+        let item_id = "test-item-123";
+        let att_id = "test-att-456";
+        let sample_b64 = "AQIDBA==";
+        let data_url = format!("data:image/png;base64,{}", sample_b64);
+
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at) \
+                 VALUES (?1, 'image', 'Screenshot Diagram', '', 'upload', 'inbox', 0, 0, '2026-09-10', '2026-09-10')",
+                rusqlite::params![item_id],
+            ).unwrap();
+
+            conn.execute(
+                "INSERT INTO attachments (id, item_id, file_name, file_path, mime_type, file_size, checksum, created_at, data_url) \
+                 VALUES (?1, ?2, 'diagram.png', '', 'image/png', 100, 'local', '2026-09-10', ?3)",
+                rusqlite::params![att_id, item_id, data_url],
+            ).unwrap();
+        }
+
+        let res = fetch_item_contexts(&db, &storage, &[item_id.to_string()]).unwrap();
+        assert_eq!(res.images.len(), 1);
+        assert_eq!(res.images[0].file_name, "diagram.png");
+        assert_eq!(res.images[0].mime_type, "image/png");
+        assert_eq!(res.images[0].base64, sample_b64);
+        assert_eq!(res.items.len(), 1);
+        assert!(res.items[0].1.contains("ATTACHED IMAGE: diagram.png"));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
+

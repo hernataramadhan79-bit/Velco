@@ -12,6 +12,7 @@ import {
   Globe,
   Loader2,
   Check,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore, StagedItem, itemToStagedItem } from '../../stores/contextStore';
@@ -45,12 +46,13 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
-  const [pickerTab, setPickerTab] = useState<'all' | 'note' | 'task' | 'file' | 'link'>('all');
+  const [pickerTab, setPickerTab] = useState<'all' | 'note' | 'task' | 'image' | 'file' | 'link'>('all');
   const [workspaceItems, setWorkspaceItems] = useState<Item[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const chatTokens = totalChatTokens();
 
@@ -108,6 +110,102 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const isImg = file.type.startsWith('image/');
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const dataUrl = evt.target?.result as string;
+        if (dataUrl) {
+          try {
+            const created = await db.createItem({
+              type: isImg ? 'image' : 'file',
+              title: file.name,
+              content: isImg ? '' : `File attached: ${file.name}`,
+              source: 'chat_upload',
+              attachments: [
+                {
+                  id: crypto.randomUUID(),
+                  fileName: file.name,
+                  filePath: '',
+                  mimeType: file.type || 'application/octet-stream',
+                  fileSize: file.size,
+                  dataUrl,
+                } as any,
+              ],
+            });
+            addChatContextItem(itemToStagedItem(created));
+            void loadWorkspaceItems();
+          } catch (err) {
+            console.error('Failed to save uploaded file to workspace context:', err);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    let foundImage = false;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        foundImage = true;
+        const file = items[i].getAsFile();
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = async (evt) => {
+            const dataUrl = evt.target?.result as string;
+            if (dataUrl) {
+              try {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const ext = file.type.split('/')[1] || 'png';
+                const created = await db.createItem({
+                  type: 'image',
+                  title: `Pasted Image (${timeStr})`,
+                  content: '',
+                  source: 'clipboard',
+                  attachments: [
+                    {
+                      id: crypto.randomUUID(),
+                      fileName: `clipboard-${Date.now()}.${ext}`,
+                      filePath: '',
+                      mimeType: file.type,
+                      fileSize: file.size,
+                      dataUrl,
+                    } as any,
+                  ],
+                });
+                addChatContextItem(itemToStagedItem(created));
+                void loadWorkspaceItems();
+              } catch (err) {
+                console.error('Failed to save pasted image:', err);
+              }
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+    }
+
+    if (foundImage) {
+      const text = e.clipboardData.getData('text');
+      if (!text || !text.trim()) {
+        e.preventDefault();
+      }
+    }
+  };
+
   const getItemTypeIcon = (type: string) => {
     switch (type) {
       case 'note':
@@ -115,12 +213,13 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
         return <FileText className="w-3.5 h-3.5 text-emerald-500 shrink-0" />;
       case 'task':
         return <CheckSquare className="w-3.5 h-3.5 text-blue-500 shrink-0" />;
-      case 'file':
       case 'image':
+        return <ImageIcon className="w-3.5 h-3.5 text-purple-500 shrink-0" />;
+      case 'file':
       case 'audio':
         return <FileCode className="w-3.5 h-3.5 text-amber-500 shrink-0" />;
       case 'link':
-        return <Globe className="w-3.5 h-3.5 text-purple-500 shrink-0" />;
+        return <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />;
       default:
         return <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />;
     }
@@ -131,15 +230,23 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
     let note = 0;
     let task = 0;
     let file = 0;
+    let image = 0;
     let link = 0;
 
     for (const item of workspaceItems) {
-      if (item.type === 'note' || item.type === 'text') note++;
-      else if (item.type === 'task') task++;
-      else if (item.type === 'link') link++;
-      else if (
-        item.type === 'file' ||
+      if (item.type === 'note' || item.type === 'text') {
+        note++;
+      } else if (item.type === 'task') {
+        task++;
+      } else if (item.type === 'link') {
+        link++;
+      } else if (
         item.type === 'image' ||
+        (item.attachments && item.attachments.some((a) => a.mimeType?.startsWith('image/')))
+      ) {
+        image++;
+      } else if (
+        item.type === 'file' ||
         item.type === 'audio' ||
         (item.attachments && item.attachments.length > 0)
       ) {
@@ -153,6 +260,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
       all: workspaceItems.length,
       note,
       task,
+      image,
       file,
       link,
     };
@@ -164,10 +272,15 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
       if (pickerTab === 'note' && item.type !== 'note' && item.type !== 'text') return false;
       if (pickerTab === 'task' && item.type !== 'task') return false;
       if (pickerTab === 'link' && item.type !== 'link') return false;
+      if (pickerTab === 'image') {
+        const isImg =
+          item.type === 'image' ||
+          (item.attachments && item.attachments.some((a) => a.mimeType?.startsWith('image/')));
+        if (!isImg) return false;
+      }
       if (
         pickerTab === 'file' &&
         item.type !== 'file' &&
-        item.type !== 'image' &&
         item.type !== 'audio' &&
         (!item.attachments || item.attachments.length === 0)
       ) {
@@ -322,6 +435,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
                     { id: 'all', label: 'All', count: categoryCounts.all },
                     { id: 'note', label: 'Notes', count: categoryCounts.note },
                     { id: 'task', label: 'Tasks', count: categoryCounts.task },
+                    { id: 'image', label: 'Images', count: categoryCounts.image },
                     { id: 'file', label: 'Files', count: categoryCounts.file },
                     { id: 'link', label: 'Links', count: categoryCounts.link },
                   ] as const
@@ -453,10 +567,11 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
             value={prompt}
             onChange={(e) => onPromptChange(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={!settings.aiEnabled}
             placeholder={
               settings.aiEnabled
-                ? "Message AI... (Enter to send, Shift+Enter for newline)"
+                ? "Message AI... (Enter to send, Shift+Enter for newline, Ctrl+V to paste screenshot)"
                 : "AI engine is disabled in Settings..."
             }
             className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 min-h-[42px] max-h-56 py-1 px-1 leading-relaxed disabled:cursor-not-allowed select-text"
@@ -464,7 +579,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
 
           {/* Bottom Toolbar inside Card */}
           <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/[0.05] text-xs">
-            {/* Left Controls: Attach Context Button */}
+            {/* Left Controls: Attach Context Button & Upload Button */}
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -484,6 +599,26 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
                     {chatContextItems.length}
                   </span>
                 )}
+              </button>
+
+              {/* Direct file/image upload input & button */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*,.pdf,.docx,.xlsx,.txt,.md,.json,.csv"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <button
+                type="button"
+                onClick={() => settings.aiEnabled && fileInputRef.current?.click()}
+                disabled={!settings.aiEnabled}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Upload image or file directly into chat context"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-purple-500 stroke-[1.75]" />
+                <span className="hidden sm:inline">Upload</span>
               </button>
             </div>
 

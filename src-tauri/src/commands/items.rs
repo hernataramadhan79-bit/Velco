@@ -76,10 +76,35 @@ pub struct TagSubRecord {
     pub color: String,
 }
 
+fn deserialize_bool_flexible<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Visitor;
+    struct BoolVisitor;
+    impl<'de> Visitor<'de> for BoolVisitor {
+        type Value = bool;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a boolean or an integer (0 or 1)")
+        }
+        fn visit_bool<E>(self, v: bool) -> Result<bool, E> {
+            Ok(v)
+        }
+        fn visit_i64<E>(self, v: i64) -> Result<bool, E> {
+            Ok(v != 0)
+        }
+        fn visit_u64<E>(self, v: u64) -> Result<bool, E> {
+            Ok(v != 0)
+        }
+    }
+    deserializer.deserialize_any(BoolVisitor)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TaskSubRecord {
     pub due_date: Option<String>,
     pub priority: String,
+    #[serde(deserialize_with = "deserialize_bool_flexible", default)]
     pub completed: bool,
     pub completed_at: Option<String>,
 }
@@ -311,6 +336,10 @@ pub fn get_items_summary(
             " AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))".to_string(),
             None,
         ),
+        Some("note") | Some("notes") => (
+            " AND (i.type = 'note' OR i.type = 'text')".to_string(),
+            None,
+        ),
         Some(t) if ALLOWED_TYPES.contains(&t) => (" AND i.type = ?".to_string(), Some(t.to_string())),
         Some(_) => (" AND 1=0".to_string(), None), // tipe tak dikenal → kosong, bukan error
         None => (String::new(), None),
@@ -320,7 +349,7 @@ pub fn get_items_summary(
         r#"
         SELECT
             i.id,
-            COALESCE(i.type, 'note'),
+            COALESCE(CASE WHEN i.type = 'text' THEN 'note' ELSE i.type END, 'note'),
             COALESCE(i.title, ''),
             COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
             CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END as pinned,
@@ -340,7 +369,7 @@ pub fn get_items_summary(
                 '[]'
             ) as tags_json,
             (
-                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', tk.completed, 'completed_at', tk.completed_at)
+                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', CASE WHEN tk.completed = 1 THEN json('true') ELSE json('false') END, 'completed_at', tk.completed_at)
                 FROM tasks tk WHERE tk.item_id = i.id
             ) as task_json,
             (
@@ -534,7 +563,7 @@ pub fn get_items(
     let mut sql = r#"
         SELECT
             i.id,
-            COALESCE(i.type, 'note'),
+            COALESCE(CASE WHEN i.type = 'text' THEN 'note' ELSE i.type END, 'note'),
             COALESCE(i.title, ''),
             COALESCE(i.content, ''),
             COALESCE(i.source, 'direct'),
@@ -556,7 +585,7 @@ pub fn get_items(
                 '[]'
             ) as tags_json,
             (
-                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', tk.completed, 'completed_at', tk.completed_at)
+                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', CASE WHEN tk.completed = 1 THEN json('true') ELSE json('false') END, 'completed_at', tk.completed_at)
                 FROM tasks tk WHERE tk.item_id = i.id
             ) as task_json,
             (
@@ -594,6 +623,8 @@ pub fn get_items(
     if let Some(ref t) = filter_type {
         if t == "file" || t == "files" {
             sql.push_str(" AND (i.type = 'file' OR i.type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = i.id))");
+        } else if t == "note" || t == "notes" {
+            sql.push_str(" AND (i.type = 'note' OR i.type = 'text')");
         } else {
             sql.push_str(" AND i.type = ?");
             query_params.push(Box::new(t.clone()));

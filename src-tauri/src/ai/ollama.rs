@@ -427,50 +427,111 @@ impl LocalAiClient {
 
         // 2. Google Gemini
         if provider_id == "gemini" || self.base_url.contains("generativelanguage.googleapis.com") {
-            let mut req = self.client.get("https://generativelanguage.googleapis.com/v1beta/openai/models");
-            if let Some(ref key) = self.api_key {
-                if !key.is_empty() {
-                    req = req.header("Authorization", format!("Bearer {}", key));
-                }
-            }
-            if let Ok(resp) = req.send().await {
-                if resp.status().is_success() {
-                    if let Ok(val) = resp.json::<Value>().await {
-                        if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
-                            let models: Vec<DetailedModelInfo> = arr
-                                .iter()
-                                .filter_map(|m| {
-                                    let id = m.get("id").and_then(|i| i.as_str())?.to_string();
-                                    Some(DetailedModelInfo {
-                                        id: id.clone(),
-                                        name: format!("Google {}", id),
-                                        is_free: true,
-                                        context_length: Some(1048576),
-                                        description: Some("Google Gemini with free tier in AI Studio".to_string()),
+            let api_key_str = self.api_key.as_deref().unwrap_or("").trim();
+
+            if !api_key_str.is_empty() {
+                // A. Try native Gemini API v1beta/models?key=...
+                let native_url = format!("https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key_str);
+                if let Ok(resp) = self.client.get(&native_url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("models").and_then(|m| m.as_array()) {
+                                let mut models: Vec<DetailedModelInfo> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let methods = m.get("supportedGenerationMethods").and_then(|s| s.as_array())?;
+                                        let can_generate = methods.iter().any(|meth| meth.as_str() == Some("generateContent"));
+                                        if !can_generate {
+                                            return None;
+                                        }
+
+                                        let raw_name = m.get("name").and_then(|n| n.as_str())?;
+                                        let id = raw_name.trim_start_matches("models/").to_string();
+                                        let display_name = m.get("displayName").and_then(|d| d.as_str()).unwrap_or(&id).to_string();
+                                        let description = m.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                                        let context_length = m.get("inputTokenLimit").and_then(|t| t.as_u64());
+
+                                        Some(DetailedModelInfo {
+                                            id,
+                                            name: display_name,
+                                            is_free: true,
+                                            context_length,
+                                            description,
+                                        })
                                     })
-                                })
-                                .collect();
-                            if !models.is_empty() {
-                                return Ok(models);
+                                    .collect();
+
+                                if !models.is_empty() {
+                                    models.sort_by(|a, b| {
+                                        let prio = |id: &str| -> i32 {
+                                            if id.starts_with("gemini-2.0-flash") && !id.contains("lite") { 0 }
+                                            else if id.starts_with("gemini-2.0-flash-lite") { 1 }
+                                            else if id.starts_with("gemini-2.5") { 2 }
+                                            else if id.starts_with("gemini-1.5-flash") { 3 }
+                                            else if id.starts_with("gemini-1.5-pro") { 4 }
+                                            else if id.starts_with("gemini-2.0-pro") { 5 }
+                                            else if id.starts_with("gemini-") { 6 }
+                                            else { 10 }
+                                        };
+                                        prio(&a.id).cmp(&prio(&b.id)).then_with(|| a.name.cmp(&b.name))
+                                    });
+                                    return Ok(models);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // B. Fallback to OpenAI-compatible endpoint
+                let mut req = self.client.get("https://generativelanguage.googleapis.com/v1beta/openai/models");
+                req = req.header("Authorization", format!("Bearer {}", api_key_str));
+                if let Ok(resp) = req.send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
+                                let models: Vec<DetailedModelInfo> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let id = m.get("id").and_then(|i| i.as_str())?.to_string();
+                                        Some(DetailedModelInfo {
+                                            id: id.clone(),
+                                            name: format!("Google {}", id),
+                                            is_free: true,
+                                            context_length: Some(1048576),
+                                            description: Some("Google Gemini model via AI Studio".to_string()),
+                                        })
+                                    })
+                                    .collect();
+                                if !models.is_empty() {
+                                    return Ok(models);
+                                }
                             }
                         }
                     }
                 }
             }
+
             return Ok(vec![
+                DetailedModelInfo {
+                    id: "gemini-2.0-flash".to_string(),
+                    name: "Gemini 2.0 Flash".to_string(),
+                    is_free: true,
+                    context_length: Some(1048576),
+                    description: Some("Next-gen high speed multimodal model (Recommended)".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "gemini-2.0-flash-lite".to_string(),
+                    name: "Gemini 2.0 Flash-Lite".to_string(),
+                    is_free: true,
+                    context_length: Some(1048576),
+                    description: Some("Cost-effective ultra-fast multimodal model".to_string()),
+                },
                 DetailedModelInfo {
                     id: "gemini-1.5-flash".to_string(),
                     name: "Gemini 1.5 Flash".to_string(),
                     is_free: true,
                     context_length: Some(1048576),
                     description: Some("Fast and versatile multimodal model (Free Tier available)".to_string()),
-                },
-                DetailedModelInfo {
-                    id: "gemini-2.0-flash".to_string(),
-                    name: "Gemini 2.0 Flash".to_string(),
-                    is_free: true,
-                    context_length: Some(1048576),
-                    description: Some("Next-gen high speed multimodal model (Free Tier available)".to_string()),
                 },
                 DetailedModelInfo {
                     id: "gemini-1.5-pro".to_string(),
@@ -484,13 +545,59 @@ impl LocalAiClient {
 
         // 3. Anthropic Claude
         if provider_id == "anthropic" || self.base_url.contains("anthropic.com") {
+            let api_key_str = self.api_key.as_deref().unwrap_or("").trim();
+
+            if !api_key_str.is_empty() {
+                let req = self.client.get("https://api.anthropic.com/v1/models")
+                    .header("x-api-key", api_key_str)
+                    .header("anthropic-version", "2023-06-01");
+
+                if let Ok(resp) = req.send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
+                                let mut models: Vec<DetailedModelInfo> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let id = m.get("id").and_then(|i| i.as_str())?.to_string();
+                                        let display_name = m.get("display_name").and_then(|n| n.as_str()).unwrap_or(&id).to_string();
+                                        Some(DetailedModelInfo {
+                                            id: id.clone(),
+                                            name: display_name,
+                                            is_free: false,
+                                            context_length: Some(200000),
+                                            description: Some(format!("Anthropic Claude model ({})", id)),
+                                        })
+                                    })
+                                    .collect();
+
+                                if !models.is_empty() {
+                                    models.sort_by(|a, b| {
+                                        let prio = |id: &str| -> i32 {
+                                            if id.starts_with("claude-3-7-sonnet") { 0 }
+                                            else if id.starts_with("claude-3-5-sonnet") { 1 }
+                                            else if id.starts_with("claude-3-5-haiku") { 2 }
+                                            else if id.starts_with("claude-3-opus") { 3 }
+                                            else if id.starts_with("claude-3-haiku") { 4 }
+                                            else { 10 }
+                                        };
+                                        prio(&a.id).cmp(&prio(&b.id)).then_with(|| a.name.cmp(&b.name))
+                                    });
+                                    return Ok(models);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             return Ok(vec![
                 DetailedModelInfo {
                     id: "claude-3-7-sonnet-20250219".to_string(),
                     name: "Claude 3.7 Sonnet".to_string(),
                     is_free: false,
                     context_length: Some(200000),
-                    description: Some("Hybrid reasoning & coding state-of-the-art model".to_string()),
+                    description: Some("Hybrid reasoning & coding state-of-the-art model (Recommended)".to_string()),
                 },
                 DetailedModelInfo {
                     id: "claude-3-5-sonnet-20241022".to_string(),
@@ -518,59 +625,91 @@ impl LocalAiClient {
 
         // 4. OpenAI
         if provider_id == "openai" || self.base_url.contains("api.openai.com") {
-            let mut req = self.client.get("https://api.openai.com/v1/models");
-            if let Some(ref key) = self.api_key {
-                if !key.is_empty() {
-                    req = req.header("Authorization", format!("Bearer {}", key));
-                }
-            }
-            if let Ok(resp) = req.send().await {
-                if resp.status().is_success() {
-                    if let Ok(val) = resp.json::<Value>().await {
-                        if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
-                            let mut chat_models: Vec<DetailedModelInfo> = arr
-                                .iter()
-                                .filter_map(|m| {
-                                    let id = m.get("id").and_then(|i| i.as_str())?.to_string();
-                                    if id.starts_with("gpt-") || id.starts_with("o1-") || id.starts_with("o3-") || id.starts_with("chatgpt-") {
-                                        Some(DetailedModelInfo {
-                                            id: id.clone(),
-                                            name: id.clone(),
-                                            is_free: false,
-                                            context_length: Some(128000),
-                                            description: None,
-                                        })
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
+            let api_key_str = self.api_key.as_deref().unwrap_or("").trim();
+            if !api_key_str.is_empty() {
+                let mut req = self.client.get("https://api.openai.com/v1/models");
+                req = req.header("Authorization", format!("Bearer {}", api_key_str));
+                if let Ok(resp) = req.send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
+                                let exclude_keywords = [
+                                    "whisper", "tts", "dall-e", "embedding", "text-embedding", "davinci",
+                                    "babbage", "moderation", "realtime", "transcription", "canary", "curie", "ada",
+                                    "audio", "search", "similarity"
+                                ];
 
-                            if !chat_models.is_empty() {
-                                chat_models.sort_by(|a, b| {
-                                    let prio = |id: &str| -> i32 {
-                                        if id == "gpt-4o-mini" { 0 }
-                                        else if id == "gpt-4o" { 1 }
-                                        else if id == "o3-mini" { 2 }
-                                        else if id == "o1-mini" { 3 }
-                                        else if id.starts_with("gpt-4") { 4 }
-                                        else { 10 }
-                                    };
-                                    prio(&a.id).cmp(&prio(&b.id))
-                                });
-                                return Ok(chat_models);
+                                let mut chat_models: Vec<DetailedModelInfo> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let id = m.get("id").and_then(|i| i.as_str())?.to_string();
+                                        let lower_id = id.to_lowercase();
+                                        if exclude_keywords.iter().any(|k| lower_id.contains(k)) {
+                                            return None;
+                                        }
+
+                                        let is_chat = id.starts_with("gpt-")
+                                            || id.starts_with("o1")
+                                            || id.starts_with("o3")
+                                            || id.starts_with("o4")
+                                            || id.starts_with("chatgpt-");
+
+                                        if is_chat {
+                                            let desc = if id == "gpt-4o-mini" {
+                                                Some("Fast, lightweight flagship mini model (Recommended)".to_string())
+                                            } else if id == "gpt-4o" {
+                                                Some("High-intelligence multimodal flagship model".to_string())
+                                            } else if id.starts_with("o3-mini") {
+                                                Some("Latest high-speed reasoning model".to_string())
+                                            } else if id.starts_with("o1-mini") {
+                                                Some("Fast reasoning model for STEM & code".to_string())
+                                            } else {
+                                                None
+                                            };
+
+                                            Some(DetailedModelInfo {
+                                                id: id.clone(),
+                                                name: id.clone(),
+                                                is_free: false,
+                                                context_length: Some(128000),
+                                                description: desc,
+                                            })
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+
+                                if !chat_models.is_empty() {
+                                    chat_models.sort_by(|a, b| {
+                                        let prio = |id: &str| -> i32 {
+                                            if id == "gpt-4o-mini" { 0 }
+                                            else if id == "gpt-4o" { 1 }
+                                            else if id == "o3-mini" { 2 }
+                                            else if id == "o1-mini" { 3 }
+                                            else if id == "o1" { 4 }
+                                            else if id.starts_with("gpt-4o") { 5 }
+                                            else if id.starts_with("gpt-4-turbo") { 6 }
+                                            else if id.starts_with("gpt-4") { 7 }
+                                            else { 10 }
+                                        };
+                                        prio(&a.id).cmp(&prio(&b.id)).then_with(|| a.id.cmp(&b.id))
+                                    });
+                                    return Ok(chat_models);
+                                }
                             }
                         }
                     }
                 }
             }
+
             return Ok(vec![
                 DetailedModelInfo {
                     id: "gpt-4o-mini".to_string(),
                     name: "GPT-4o Mini".to_string(),
                     is_free: false,
                     context_length: Some(128000),
-                    description: Some("Fast, lightweight, highly capable flagship mini model".to_string()),
+                    description: Some("Fast, lightweight, highly capable flagship mini model (Recommended)".to_string()),
                 },
                 DetailedModelInfo {
                     id: "gpt-4o".to_string(),
@@ -585,6 +724,13 @@ impl LocalAiClient {
                     is_free: false,
                     context_length: Some(128000),
                     description: Some("Latest high-speed reasoning model".to_string()),
+                },
+                DetailedModelInfo {
+                    id: "o1-mini".to_string(),
+                    name: "o1-mini".to_string(),
+                    is_free: false,
+                    context_length: Some(128000),
+                    description: Some("Fast reasoning model specialized in STEM & code".to_string()),
                 },
             ]);
         }
@@ -638,6 +784,54 @@ impl LocalAiClient {
                                 })
                                 .collect();
                             return Ok(models);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7. Custom / Generic OpenAI compatible
+        if provider_id == "custom" && !self.base_url.is_empty() {
+            let urls = if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
+                vec![format!("{}/models", self.base_url.trim_end_matches('/'))]
+            } else {
+                vec![
+                    format!("{}/v1/models", self.base_url.trim_end_matches('/')),
+                    format!("{}/models", self.base_url.trim_end_matches('/')),
+                ]
+            };
+
+            for url in urls {
+                let mut req = self.client.get(&url);
+                if let Some(ref key) = self.api_key {
+                    if !key.is_empty() {
+                        req = req.header("Authorization", format!("Bearer {}", key));
+                    }
+                }
+                if let Ok(resp) = req.send().await {
+                    if resp.status().is_success() {
+                        if let Ok(val) = resp.json::<Value>().await {
+                            if let Some(arr) = val.get("data").and_then(|d| d.as_array()) {
+                                let models: Vec<DetailedModelInfo> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let id = m.get("id").and_then(|i| i.as_str())?.to_string();
+                                        let name = m.get("name").and_then(|n| n.as_str()).unwrap_or(&id).to_string();
+                                        let context_length = m.get("context_length").and_then(|c| c.as_u64());
+                                        let description = m.get("description").and_then(|d| d.as_str()).map(|s| s.to_string());
+                                        Some(DetailedModelInfo {
+                                            id,
+                                            name,
+                                            is_free: false,
+                                            context_length,
+                                            description,
+                                        })
+                                    })
+                                    .collect();
+                                if !models.is_empty() {
+                                    return Ok(models);
+                                }
+                            }
                         }
                     }
                 }
@@ -884,14 +1078,43 @@ impl LocalAiClient {
 
             let status = resp.status();
             if status.is_success() {
+                // Fetch dynamic model list from Anthropic
+                let models = match test_client
+                    .get("https://api.anthropic.com/v1/models")
+                    .header("x-api-key", api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .send()
+                    .await
+                {
+                    Ok(m_resp) if m_resp.status().is_success() => {
+                        m_resp
+                            .json::<Value>()
+                            .await
+                            .ok()
+                            .and_then(|v| {
+                                v.get("data").and_then(|d| d.as_array()).map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                                        .collect()
+                                })
+                            })
+                            .unwrap_or_else(|| vec![
+                                "claude-3-7-sonnet-20250219".to_string(),
+                                "claude-3-5-sonnet-20241022".to_string(),
+                                "claude-3-5-haiku-20241022".to_string(),
+                            ])
+                    }
+                    _ => vec![
+                        "claude-3-7-sonnet-20250219".to_string(),
+                        "claude-3-5-sonnet-20241022".to_string(),
+                        "claude-3-5-haiku-20241022".to_string(),
+                    ],
+                };
+
                 return Ok(ConnectionTestResult {
                     success: true,
-                    message: "Connected successfully to Anthropic Claude!".to_string(),
-                    models: vec![
-                        "claude-3-5-haiku-20241022".to_string(),
-                        "claude-3-5-sonnet-20241022".to_string(),
-                        "claude-3-opus-20240229".to_string(),
-                    ],
+                    message: format!("Connected successfully to Anthropic Claude! {} models detected.", models.len()),
+                    models,
                 });
             } else if status == reqwest::StatusCode::UNAUTHORIZED {
                 return Ok(ConnectionTestResult {
@@ -931,7 +1154,39 @@ impl LocalAiClient {
                 _ => "",
             };
 
-            // Try listing models first
+            // For Gemini, try native models endpoint with API key first
+            if provider_id == "gemini" || self.base_url.contains("generativelanguage.googleapis.com") {
+                let native_url = format!("https://generativelanguage.googleapis.com/v1beta/models?key={}", api_key);
+                if let Ok(g_resp) = test_client.get(&native_url).send().await {
+                    if g_resp.status().is_success() {
+                        if let Ok(val) = g_resp.json::<Value>().await {
+                            if let Some(arr) = val.get("models").and_then(|m| m.as_array()) {
+                                let models: Vec<String> = arr
+                                    .iter()
+                                    .filter_map(|m| {
+                                        let methods = m.get("supportedGenerationMethods").and_then(|s| s.as_array())?;
+                                        if !methods.iter().any(|meth| meth.as_str() == Some("generateContent")) {
+                                            return None;
+                                        }
+                                        let raw = m.get("name").and_then(|n| n.as_str())?;
+                                        Some(raw.trim_start_matches("models/").to_string())
+                                    })
+                                    .collect();
+
+                                if !models.is_empty() {
+                                    return Ok(ConnectionTestResult {
+                                        success: true,
+                                        message: format!("Connected successfully to Google Gemini! {} models detected.", models.len()),
+                                        models,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Try listing models from OpenAI-compatible endpoint
             let models_url = if self.base_url.ends_with("/v1") || self.base_url.ends_with("/openai") {
                 format!("{}/models", self.base_url)
             } else {

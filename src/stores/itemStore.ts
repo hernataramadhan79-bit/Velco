@@ -340,12 +340,20 @@ export const useItemStore = create<ItemState>()((set, get) => ({
                 title: updates.title ?? item.title,
                 pinned: updates.favorite !== undefined ? updates.favorite : item.pinned,
                 archived: updates.archived ?? item.archived,
+                task: updates.task
+                  ? {
+                      ...(item.task || { priority: 'medium', completed: false }),
+                      ...updates.task,
+                    }
+                  : item.task,
               }
             : item
         ),
-        // Reset detail jika item yang di-update adalah yang sedang dilihat
+        // Sinkronisasi activeItemDetail jika sedang dibuka
         activeItemDetail:
-          state.activeItemDetail?.id === id ? null : state.activeItemDetail,
+          state.activeItemDetail?.id === id
+            ? { ...state.activeItemDetail, ...updated }
+            : state.activeItemDetail,
       }));
       if (
         updates.archived !== undefined ||
@@ -381,11 +389,42 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   toggleTask: async (itemId, completed) => {
+    const prevItems = get().items;
+    const prevDetail = get().activeItemDetail;
+    const nowIso = completed ? new Date().toISOString() : null;
+
+    // Optimistic update pada item list dan active detail
+    set((state) => ({
+      items: state.items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              task: item.task
+                ? { ...item.task, completed, completedAt: nowIso }
+                : { id: '', priority: 'medium', completed, completedAt: nowIso },
+            }
+          : item
+      ),
+      activeItemDetail:
+        state.activeItemDetail?.id === itemId
+          ? {
+              ...state.activeItemDetail,
+              task: state.activeItemDetail.task
+                ? { ...state.activeItemDetail.task, completed, completedAt: nowIso }
+                : { id: '', itemId, priority: 'medium', completed, completedAt: nowIso },
+            }
+          : state.activeItemDetail,
+    }));
+
     try {
       await db.toggleTask(itemId, completed);
-      // Jika due_date diubah, reset notified
+      // Jika due_date diubah / task belum selesai, reset notified
       if (!completed) {
-        try { await invoke('reset_task_notified', { itemId }); } catch { /* ignore */ }
+        try {
+          await invoke('reset_task_notified', { itemId });
+        } catch {
+          /* ignore */
+        }
       }
       // Reload detail jika ini item yang aktif
       if (get().selectedItemId === itemId) {
@@ -393,6 +432,8 @@ export const useItemStore = create<ItemState>()((set, get) => ({
       }
       await get().refreshCounts();
     } catch (err: any) {
+      // Rollback jika gagal
+      set({ items: prevItems, activeItemDetail: prevDetail });
       get().notify(`Failed to toggle task: ${err.message}`, 'error');
     }
   },
