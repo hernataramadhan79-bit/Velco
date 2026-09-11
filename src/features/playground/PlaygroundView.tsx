@@ -48,7 +48,6 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   const [extractBatchTitle, setExtractBatchTitle] = useState<string>('');
 
   const messagesScrollRef = useRef<HTMLDivElement>(null);
-  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const isUserScrolledUpRef = useRef(false);
 
   // Scroll detection to respect user's manual scroll position
@@ -62,15 +61,20 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   };
 
   const scrollToBottom = useCallback(() => {
-    bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesScrollRef.current) {
+      messagesScrollRef.current.scrollTo({
+        top: messagesScrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
     setShowScrollBottom(false);
     isUserScrolledUpRef.current = false;
   }, []);
 
   // Auto-scroll to bottom when new messages arrive or while streaming
   useEffect(() => {
-    if (!isUserScrolledUpRef.current && bottomAnchorRef.current) {
-      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (!isUserScrolledUpRef.current && messagesScrollRef.current) {
+      messagesScrollRef.current.scrollTop = messagesScrollRef.current.scrollHeight;
     }
   }, [messages, isGenerating]);
 
@@ -87,7 +91,12 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
 
       // Ensure view scrolls to bottom on user send
       setTimeout(() => {
-        bottomAnchorRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (messagesScrollRef.current) {
+          messagesScrollRef.current.scrollTo({
+            top: messagesScrollRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
+        }
       }, 50);
     },
     [prompt, isGenerating, settings, chatContextItems, sendMessage]
@@ -269,7 +278,7 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
                   onDelete={deleteMessage}
                 />
               ))}
-              <div ref={bottomAnchorRef} className="h-2" />
+              <div className="h-2" />
             </div>
           )}
         </div>

@@ -107,7 +107,6 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const isUserScrolledUpRef = useRef(false);
@@ -147,9 +146,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   };
 
   const scrollToBottom = useCallback(() => {
-    if (bottomAnchorRef.current) {
-      bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
-    } else if (chatContainerRef.current) {
+    if (chatContainerRef.current) {
       chatContainerRef.current.scrollTo({
         top: chatContainerRef.current.scrollHeight,
         behavior: 'smooth',
@@ -205,8 +202,11 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     }
 
     setTimeout(() => {
-      if (bottomAnchorRef.current) {
-        bottomAnchorRef.current.scrollIntoView({ behavior: 'smooth' });
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: 'smooth',
+        });
       }
     }, 50);
   };
@@ -520,7 +520,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                 <span>Generating response...</span>
               </div>
             )}
-            <div ref={bottomAnchorRef} className="h-1" />
+            <div className="h-1" />
           </div>
 
           {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
