@@ -10,7 +10,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "tauri": "node scripts/tauri-runner.js",
-    "build:exe": "node scripts/build-exe.js"
+    "build:exe": "node scripts/build-exe.js",
+    "build:mac": "node scripts/tauri-runner.js build",
+    "build:mac:universal": "node scripts/tauri-runner.js build --target universal-apple-darwin"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.11",

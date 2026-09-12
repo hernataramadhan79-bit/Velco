@@ -18,6 +18,7 @@ import { useSettings } from '../../stores/settingsStore';
 import { useContextStore, StagedItem, itemToStagedItem } from '../../stores/contextStore';
 import { db } from '../../services/database';
 import { Item } from '../../types/item';
+import { modKey } from '../../utils/platformUtils';
 
 interface PlaygroundInputDockProps {
   prompt: string;
@@ -571,7 +572,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
             disabled={!settings.aiEnabled}
             placeholder={
               settings.aiEnabled
-                ? "Message AI... (Enter to send, Shift+Enter for newline, Ctrl+V to paste screenshot)"
+                ? `Message AI... (Enter to send, Shift+Enter for newline, ${modKey}+V to paste screenshot)`
                 : "AI engine is disabled in Settings..."
             }
             className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 min-h-[42px] max-h-56 py-1 px-1 leading-relaxed disabled:cursor-not-allowed select-text"

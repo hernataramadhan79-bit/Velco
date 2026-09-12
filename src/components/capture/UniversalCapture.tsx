@@ -10,6 +10,7 @@ import {
 import { CreateItemInput, ItemType, PriorityLevel } from '../../types/item';
 import { DueDatePicker } from '../tasks/DueDatePicker';
 import { createImageThumbnail, inferMimeType, isImageFile } from '../../utils/fileUtils';
+import { modKey } from '../../utils/platformUtils';
 
 interface UniversalCaptureProps {
   onCapture: (input: CreateItemInput) => Promise<any>;
@@ -376,7 +377,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
         <div className="flex items-center gap-2.5">
           <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-mono hidden sm:inline">
             <kbd className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-white/[0.06] text-slate-500 dark:text-zinc-400">
-              Ctrl+Enter
+              {modKey}+Enter
             </kbd>{' '}
             save
           </span>

@@ -4,6 +4,7 @@ import { ItemCard } from './ItemCard';
 import { Inbox, ChevronDown, ChevronRight } from 'lucide-react';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { formatShortcut } from '../../utils/platformUtils';
 
 interface ItemListProps {
   items: (Item | ItemSummary)[];
@@ -66,7 +67,7 @@ export const ItemList: React.FC<ItemListProps> = ({
           Capture notes, tasks, or drop attachments.
           <br />
           <span className="text-slate-600 dark:text-zinc-400">
-            Press <kbd className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-[10px] text-slate-700 dark:text-zinc-300">Ctrl+K</kbd> to search.
+            Press <kbd className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-[10px] text-slate-700 dark:text-zinc-300">{formatShortcut('K')}</kbd> to search.
           </span>
         </p>
       </div>

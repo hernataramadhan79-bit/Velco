@@ -4,6 +4,7 @@ import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
 import { PanelLeft, Search, Zap } from 'lucide-react';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
+import { modKey, formatShortcut } from '../../utils/platformUtils';
 
 interface HeaderProps {
   currentView: NavigationView;
@@ -57,7 +58,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           <button
             onClick={onToggleSidebar}
             className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
-            title="Open sidebar (Ctrl+B)"
+            title={`Open sidebar (${modKey}+B)`}
           >
             <PanelLeft className="w-3.5 h-3.5 stroke-[1.5]" />
           </button>
@@ -82,7 +83,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               <span className="text-[11px] text-slate-600 dark:text-zinc-400">Search workstation...</span>
             </span>
             <kbd className="px-1.5 py-0.2 rounded bg-slate-200/80 dark:bg-white/[0.04] border border-slate-300/80 dark:border-white/[0.07] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
-              Ctrl+K
+              {formatShortcut('K')}
             </kbd>
           </button>
         </div>
@@ -125,7 +126,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 ? 'bg-slate-200 dark:bg-white/[0.12] text-blue-500 border-blue-500/40 shadow-xs'
                 : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 bg-slate-100 dark:bg-[#141418] hover:bg-slate-200/80 dark:hover:bg-[#1a1a20]'
             }`}
-            title="Toggle Studio Workbench (Ctrl+J)"
+            title={`Toggle Studio Workbench (${modKey}+J)`}
           >
             <Zap className={`w-3.5 h-3.5 stroke-[1.5] ${isFoundryOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
             {stagedCount > 0 && (

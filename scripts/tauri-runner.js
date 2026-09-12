@@ -6,9 +6,11 @@ const cargoBin = path.join(os.homedir(), '.cargo', 'bin');
 const env = { ...process.env };
 
 const currentPath = env.PATH || env.Path || '';
-if (!currentPath.toLowerCase().includes('.cargo\\bin')) {
+if (!currentPath.includes(cargoBin) && !currentPath.includes('.cargo')) {
   env.PATH = `${cargoBin}${path.delimiter}${currentPath}`;
-  env.Path = env.PATH;
+  if (isWin) {
+    env.Path = env.PATH;
+  }
 }
 
 const args = process.argv.slice(2);

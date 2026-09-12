@@ -20,6 +20,7 @@ import {
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
 import { useSettings } from '../../stores/settingsStore';
+import { modKey, formatShortcut } from '../../utils/platformUtils';
 
 interface SidebarProps {
   currentView: NavigationView;
@@ -181,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             <button
               onClick={onToggleSidebar}
               className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05] transition-colors cursor-pointer"
-              title="Hide sidebar (Ctrl+B)"
+              title={`Hide sidebar (${modKey}+B)`}
             >
               <PanelLeftClose className="w-4 h-4 stroke-[1.5]" />
             </button>
@@ -202,7 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
               <span className="text-slate-600 dark:text-zinc-400">Search items...</span>
             </span>
             <kbd className="px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-white/[0.05] border border-slate-300/70 dark:border-white/[0.08] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
-              Ctrl+K
+              {formatShortcut('K')}
             </kbd>
           </button>
         </div>

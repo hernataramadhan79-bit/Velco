@@ -49,6 +49,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "Productivity",
+    "shortDescription": "The Local-First Context-Bound AI Workstation",
+    "longDescription": "Velco is a local-first, context-bound AI workstation with SQLite storage, P2P sync, and zero-leak privacy.",
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.15",
+      "entitlements": "Entitlements.plist"
+    }
   }
 }

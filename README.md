@@ -110,10 +110,11 @@ Velco operates in two dedicated modes:
 
 | Shortcut | Action | Scope |
 | :--- | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>Cmd</kbd> + <kbd>K</kbd> | Toggle Global Search (FTS5) | Global |
-| <kbd>Ctrl</kbd> + <kbd>J</kbd> / <kbd>Cmd</kbd> + <kbd>J</kbd> | Toggle Studio Workbench (The Foundry) | Global |
-| <kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>Cmd</kbd> + <kbd>B</kbd> | Toggle Left Sidebar | Personal Mode |
-| <kbd>Ctrl</kbd> + <kbd>,</kbd> | Open Settings & Workstation | Global |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd> | Toggle Global Search (FTS5) | Global |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>J</kbd> | Toggle Studio Workbench (The Foundry) | Global |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>B</kbd> | Toggle Left Sidebar | Personal Mode |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd> | Toggle Global Spotlight Fast Capture | System-wide Hotkey |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>,</kbd> | Open Settings & Workstation | Global |
 | <kbd>Esc</kbd> | Close Modal / Return to Workspace | Global |
 | <kbd>Enter</kbd> | Send Chat Prompt / Confirm Action | Inputs & Chat |
 | <kbd>Shift</kbd> + <kbd>Enter</kbd> | Insert Newline | Multiline Editors |
@@ -125,7 +126,10 @@ Velco operates in two dedicated modes:
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18.0 or newer)
 - [Rust](https://rustup.rs/) (latest stable toolchain)
-- Platform C++ build tools (e.g., Visual Studio C++ Build Tools on Windows, Xcode Command Line Tools on macOS)
+- Platform C++ build tools:
+  - **Windows**: Visual Studio C++ Build Tools
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux**: `build-essential`, `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`
 
 ### Installation & Development
 
@@ -143,18 +147,28 @@ npm run tauri dev
 
 ### Production Compilation
 
+#### Windows
 ```bash
-# Type check and build frontend assets
-npm run build
-
-# Build standard desktop production installer (MSI / NSIS / DMG / AppImage)
+# Build standard desktop production installer (MSI / NSIS)
 npm run tauri build
 
 # Build standalone portable Windows binary (generates ./velco.exe)
 npm run build:exe
 ```
-
 The compiled standalone executable is emitted at the project root as `velco.exe`.
+
+#### macOS (MacBook M-Series Apple Silicon & Intel)
+```bash
+# Build native macOS package (.dmg & .app) on host architecture
+npm run build:mac
+
+# Build universal macOS binary (supports both Apple Silicon M1-M4 & Intel x86_64)
+npm run build:mac:universal
+```
+Compiled `.dmg` installers and `.app` bundles are emitted into `src-tauri/target/release/bundle/dmg/` and `bundle/macos/`.
+
+> [!TIP]
+> **Automated Cloud Builds**: A dedicated GitHub Actions workflow is preconfigured at `.github/workflows/build-mac.yml`. Every release or push to `main` can automatically build and package signed `.dmg` installers for both `aarch64-apple-darwin` and `x86_64-apple-darwin` runners without needing a local Mac.
 
 ---
 
@@ -162,6 +176,9 @@ The compiled standalone executable is emitted at the project root as `velco.exe`
 
 ```
 Velco/
+├── .github/                      # CI/CD Workflows
+│   └── workflows/
+│       └── build-mac.yml         # macOS automated CI bundle builder (.dmg / .app)
 ├── src/                          # React 19 + TypeScript Frontend
 │   ├── components/               # Modular UI components
 │   │   ├── capture/              # Universal Capture Dock & Spotlight
@@ -187,7 +204,7 @@ Velco/
 │   ├── services/                 # AI streaming service, reminders, IPC callers
 │   ├── stores/                   # Zustand stores (items, capsule, chat, settings)
 │   ├── types/                    # Domain data contracts (capsule, item, provider)
-│   ├── utils/                    # Date formatters, token heuristics, sanitizers
+│   ├── utils/                    # Date formatters, token heuristics, sanitizers, platformUtils
 │   ├── index.css                 # Design tokens, scroll containment, Tailwind v4
 │   └── App.tsx                   # Workstation root application shell
 ├── src-tauri/                    # Rust Native Core
@@ -207,6 +224,7 @@ Velco/
 │   │   ├── filesystem/           # Secure local file storage management
 │   │   ├── p2p/                  # UDP discovery & TCP peer session sync engine
 │   │   └── lib.rs                # Tauri runtime bootstrap & plugin registration
+│   ├── Entitlements.plist        # macOS hardened runtime & network entitlements
 │   ├── Cargo.toml                # Rust crate definitions & profile optimizations
 │   └── tauri.conf.json           # Tauri security capabilities & build config
 ├── velco.exe                     # Standalone portable Windows executable

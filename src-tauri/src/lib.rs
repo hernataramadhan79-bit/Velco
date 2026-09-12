@@ -96,8 +96,13 @@ pub fn run() {
 
             // ── Global Shortcut: CmdOrCtrl+Shift+Space → Toggle Spotlight ──
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+            let primary_mod = if cfg!(target_os = "macos") {
+                Modifiers::SUPER
+            } else {
+                Modifiers::CONTROL
+            };
             let shortcut = Shortcut::new(
-                Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                Some(primary_mod | Modifiers::SHIFT),
                 Code::Space,
             );
             let app_handle2 = app.handle().clone();
