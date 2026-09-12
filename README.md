@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>The Local-First, Context-Bound AI Workstation &amp; Knowledge OS</strong><br>
-  <em>Grounded synthesis. Local SQLite storage. Zero-emoji industrial minimalist design.</em>
+  <em>Grounded synthesis. Local SQLite storage. P2P air-gapped sync. Zero-emoji industrial minimalist design.</em>
 </p>
 
 <p align="center">
@@ -13,72 +13,96 @@
   <img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square" alt="TypeScript">
   <img src="https://img.shields.io/badge/TailwindCSS-v4-38bdf8?style=flat-square" alt="Tailwind CSS v4">
   <img src="https://img.shields.io/badge/Database-SQLite%20(FTS5)-003b57?style=flat-square" alt="SQLite">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </p>
 
 ---
 
 ## 1. Overview
 
-**Velco** is a high-performance desktop workstation designed for developers, researchers, and power users who demand total privacy, instantaneous responsiveness, and deliberate, context-bound AI interactions.
+**Velco** is a high-performance desktop workstation engineered for developers, researchers, and technical power users who require total data privacy, instantaneous responsiveness, and deliberate, context-bound AI interaction.
 
-Inspired by the design standards of **LM Studio, Linear, Raycast, and Cursor**, Velco replaces visual clutter, cartoonish widgets, and decorative emojis with a razor-sharp, whisper-quiet industrial minimalist interface. All data remains 100% on your physical machine in an optimized SQLite database with FTS5 full-text indexing.
+Inspired by the precision aesthetics of **Linear, Cursor, Raycast, and LM Studio**, Velco replaces web-bloat, decorative emojis, and generic chatbots with a focused, industrial minimalist desktop experience. All data remains 100% local on your physical drive in an embedded SQLite database optimized with FTS5 tokenized full-text indexing, WAL mode, and connection pooling.
+
+Velco operates in two dedicated modes:
+1. **Personal Workspace**: Rapid-capture inbox, date-partitioned streams, task triage, markdown documentation, and drag-and-drop file vaulting.
+2. **Context Hub (The Bridge)**: Project-scoped context encapsulation via **Capsules**, 3-column Kanban workflow boards, split-pane Markdown documentation, AI synthesis recipes, encrypted `.vctx` packaging, and local P2P LAN collaboration.
 
 ---
 
 ## 2. Core Capabilities
 
+### 🌉 Context Hub (The Bridge)
+- **Isolated Project Capsules**: Encapsulate notes, deliverables, files, and intelligence into self-contained project units with role boundaries and encryption keys.
+- **Kanban Board & High-Density Task Lists**:
+  - 3-column board (`To Do`, `Priority / In Progress`, `Completed`) or unified list view.
+  - Granular priority management (`Low`, `Medium`, `High`, `Urgent`) with inline quick-add, due date pickers, and instant completion toggles.
+- **Briefs & Docs (Split Reader & Full Editor)**:
+  - Dual-pane navigation with real-time markdown rendering and split full editor.
+  - Zero content truncation: displays and edits complete markdown specifications with syntax-highlighted code blocks, tables, and task lists.
+- **Capsule Intelligence Recipes**:
+  - **Multi-Perspective Synthesis**: Synthesizes all staged capsule assets into structured executive briefings.
+  - **Action Matrix Extraction**: Mines deliverables, milestones, and dependencies across all capsule items.
+  - **Gap Analysis**: Detects blindspots, unassigned requirements, and technical inconsistencies.
+  - Direct 1-click writeback as a permanent note inside the active capsule.
+- **Lossless Encrypted Capsules (`.vctx`)**:
+  - Export and import standalone `.vctx` bundles with ChaCha20-Poly1305 / Argon2 encryption.
+  - Retains 100% fidelity: full note contents, task states, due dates, priority tiers, and attachments without data loss.
+- **Air-Gapped P2P LAN Collaboration**:
+  - Zero-cloud local mesh sync powered by native Rust UDP multicast discovery and encrypted TCP session streaming.
+  - Real-time peer counter and port telemetry for private team sessions.
+
 ### ⚡ Context-Bound Grounded Intelligence
-- **Context Cart & Queue**: Multi-select notes, tasks, documents, and web links into an active context staging deck with real-time token budgeting (~4 characters/token heuristic).
-- **Studio Workbench (The Foundry)**: Execute structured AI recipes against staged context:
-  - **Synthesize & Cross-Examine**: Unify disparate notes and documents into structured markdown briefings.
-  - **Task Mining & Extraction**: Automatically detect deliverables, deadlines, and priorities from freeform thoughts.
-  - **Taxonomy Triage**: Suggest high-density categorized tags and organize library clutter.
-  - **Custom Bespoke Instructions**: Direct the AI engine with tailored analytical prompts.
-- **Relational Entity Write-Back**: Synthesis artifacts write back directly into SQLite tables (`items`, `tasks`, `tags`, `item_tags`, `items_fts`) via native Rust commands.
+- **Context Cart & Staging Deck**: Multi-select any combination of notes, tasks, files, and web links into an active staging tray with real-time token budgeting (~4 chars/token heuristic).
+- **Studio Workbench (The Foundry)**:
+  - Dockable or expandable dual-pane workbench (`Ctrl+J`) for continuous AI collaboration.
+  - Run structured recipes (Synthesis, Task Mining, Taxonomy Triage, Custom Prompts) bounded exclusively to staged context.
+- **Relational Entity Write-Back**: Generated tasks, notes, and tags write back directly into SQLite tables (`items`, `tasks`, `tags`, `items_fts`) via native Rust commands.
 
-### 🛡️ Ironclad AI Toggle & Defense-in-Depth
-- **Strict Master Switch**: When AI features are toggled off in Settings or the header telemetry badge, **no network calls or IPC requests are dispatched to any model**.
-- **Offline Heuristic Fail-Safe**: When AI is offline or disabled, task extraction and tagging seamlessly fall back to deterministic offline regex heuristics without disrupting your workflow.
-
-### 🤖 Bring Your Own AI (Local + Cloud)
+### 🤖 Bring Your Own AI (Local + Cloud + Multimodal)
 - **100% On-Device Private Inference**:
-  - **Ollama** (Default port `11434`) — completely air-gapped, zero external egress.
-  - **LM Studio** (Default port `1234`) — local OpenAI-compatible inference server.
-- **Cloud AI via Native Rust Streaming**:
-  - **OpenRouter**: Access hundreds of models with live pricing, context window metrics, and curated free tiers.
-  - **Google Gemini, OpenAI, Anthropic Claude**, and arbitrary OpenAI-compatible custom endpoints.
+  - **Ollama** (`http://127.0.0.1:11434`) — completely air-gapped, zero external egress.
+  - **LM Studio** (`http://127.0.0.1:1234`) — OpenAI-compatible local server.
+- **Cloud AI Providers**:
+  - **OpenRouter**: Access hundreds of models with live pricing, context metrics, and curated free models.
+  - **OpenAI, Google Gemini, Anthropic Claude, Groq**, or any custom OpenAI-compatible endpoint.
+- **Multimodal Vision AI**:
+  - Drag and drop images or paste clipboard screenshots directly into chat for visual context analysis.
+- **Defense-in-Depth Privacy Switch**:
+  - Hardware-level AI Master Switch in Settings and header telemetry badge.
+  - When disabled, **zero IPC requests or outbound network packets** are dispatched to any model.
+  - Deterministic offline heuristics automatically take over task extraction and URL parsing.
 
 ### 📥 Universal Fast Capture
-- **Rapid Ingestion Dock**: Capture notes, tasks, links, and binary files with zero AI blocking.
-- **Rule-Based Heuristic Classifier**: Instantly detects markdown checkboxes, task directives, and URLs without waiting for cloud round-trips.
-- **File Dropzone**: Drag-and-drop file attachments directly into your local library.
-
-### 🎨 Dual-Theme Industrial Minimalist Design
-- **Obsidian Dark & Crisp Light**: Deep obsidian layering (`#09090b`, `#0d0d10`, `#141418`) paired with a high-contrast, clean light mode.
-- **Tailwind CSS v4 Native Engine**: Powered by `@custom-variant dark` and custom 5px dual-theme scrollbars.
-- **Zero-Emoji Architecture**: 100% vector iconography via `lucide-react`, monospaced token badges, and structured typographic hierarchy.
+- **Rapid Ingestion Dock**: Capture notes, tasks, code snippets, links, and binary attachments without waiting for AI processing.
+- **Heuristic Classifier**: Instantly detects markdown checkboxes, task deadlines, and URLs locally via regex before database insertion.
+- **File Vault**: Drag-and-drop file attachments with automatic file-hash verification, size tracking, and local storage isolation.
 
 ### 🔍 Instant Full-Text Search (FTS5)
-- Tokenized, zero-latency full-text search across all titles, notes, task contents, and metadata.
-- Triggerable globally with `Ctrl+K` / `Cmd+K`.
+- Zero-latency, tokenized full-text search across titles, notes, task contents, and tag taxonomy.
+- Global trigger via `Ctrl+K` / `Cmd+K`.
 
-### 🌉 The Bridge (Preview)
-- Context capsule bundling, team action matrices, peer review protocol, and local isolation verification.
+### 🎨 Dual-Theme Industrial Minimalist Design
+- **Obsidian Dark & Crisp Light**: Deep obsidian palette (`#09090b`, `#0d0d10`, `#141418`) paired with a high-contrast, clean light mode.
+- **Tailwind CSS v4 Native Engine**: Modern `@custom-variant dark`, minimalist 5px scrollbars, and zero-emoji vector iconography via `lucide-react`.
+- **Viewport & Scroll Lockdown**: Strict horizontal overflow containment across all views and modals prevents layout shifting or horizontal wobble during vertical scroll.
 
 ---
 
 ## 3. Tech Stack
 
-| Layer | Technology |
-| :--- | :--- |
-| **Desktop Shell** | [Tauri v2](https://v2.tauri.app/) (Rust 2021) |
-| **Frontend Framework** | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
-| **Styling & Design** | [Tailwind CSS v4](https://tailwindcss.com/) + Custom Design Tokens |
-| **Icons & Symbols** | [Lucide React](https://lucide.dev/) (Zero Emoji Standard) |
-| **State Management** | [Zustand](https://zustand-demo.pmnd.rs/) with persistent storage |
-| **Embedded Database** | SQLite via [Rusqlite](https://github.com/rusqlite/rusqlite) with FTS5 |
-| **HTTP & Streaming** | [Reqwest](https://github.com/seanmonstar/reqwest) with Server-Sent Events (SSE) |
-| **Build & Bundler** | [Vite](https://vite.dev/) + [Cargo](https://doc.rust-lang.org/cargo/) |
+| Layer | Technology | Description |
+| :--- | :--- | :--- |
+| **Desktop Shell** | [Tauri v2](https://v2.tauri.app/) (Rust 2021) | Native OS wrapper, low memory footprint, zero Chromium overhead |
+| **Frontend Framework** | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) | Concurrent rendering, type safety, modular component hierarchy |
+| **Styling & Design** | [Tailwind CSS v4](https://tailwindcss.com/) | Native CSS engine, design tokens, dual-theme dark/light variants |
+| **Icons & Symbols** | [Lucide React](https://lucide.dev/) | Consistent, crisp 1.5px stroke vector icons (Zero Emoji standard) |
+| **State Management** | [Zustand](https://zustand-demo.pmnd.rs/) | Lightweight, decoupled global stores with local persistence |
+| **Database & Search** | [SQLite](https://sqlite.org/) via [Rusqlite](https://github.com/rusqlite/rusqlite) | Embedded local storage with FTS5 tokenization, WAL mode, r2d2 pool |
+| **Networking & Streaming** | [Reqwest](https://github.com/seanmonstar/reqwest) + [Tokio](https://tokio.rs/) | Async runtime, Server-Sent Events (SSE) AI streaming |
+| **P2P Collaboration** | Native Rust UDP & TCP | Multicast LAN peer discovery and encrypted socket communication |
+| **Security & Vault** | [Keyring](https://crates.io/crates/keyring) + ChaCha20 | OS credential storage and encrypted `.vctx` archive packaging |
+| **Bundler & Tooling** | [Vite](https://vite.dev/) + [Cargo](https://doc.rust-lang.org/cargo/) | Instant HMR development and optimized production compilation |
 
 ---
 
@@ -86,12 +110,13 @@ Inspired by the design standards of **LM Studio, Linear, Raycast, and Cursor**, 
 
 | Shortcut | Action | Scope |
 | :--- | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>K</kbd> | Open Global Search | Global |
-| <kbd>Ctrl</kbd> + <kbd>N</kbd> | Universal Quick Capture | Global |
+| <kbd>Ctrl</kbd> + <kbd>K</kbd> / <kbd>Cmd</kbd> + <kbd>K</kbd> | Toggle Global Search (FTS5) | Global |
+| <kbd>Ctrl</kbd> + <kbd>J</kbd> / <kbd>Cmd</kbd> + <kbd>J</kbd> | Toggle Studio Workbench (The Foundry) | Global |
+| <kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>Cmd</kbd> + <kbd>B</kbd> | Toggle Left Sidebar | Personal Mode |
 | <kbd>Ctrl</kbd> + <kbd>,</kbd> | Open Settings & Workstation | Global |
-| <kbd>Esc</kbd> | Close Modal / Return to Workspace | Modal / Settings |
-| <kbd>Enter</kbd> | Send Chat Prompt / Confirm Dialog | Chat / Input |
-| <kbd>Shift</kbd> + <kbd>Enter</kbd> | Newline in Multiline Textarea | Chat / Editor |
+| <kbd>Esc</kbd> | Close Modal / Return to Workspace | Global |
+| <kbd>Enter</kbd> | Send Chat Prompt / Confirm Action | Inputs & Chat |
+| <kbd>Shift</kbd> + <kbd>Enter</kbd> | Insert Newline | Multiline Editors |
 
 ---
 
@@ -100,7 +125,7 @@ Inspired by the design standards of **LM Studio, Linear, Raycast, and Cursor**, 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18.0 or newer)
 - [Rust](https://rustup.rs/) (latest stable toolchain)
-- Build tools (e.g. Visual Studio C++ Build Tools on Windows)
+- Platform C++ build tools (e.g., Visual Studio C++ Build Tools on Windows, Xcode Command Line Tools on macOS)
 
 ### Installation & Development
 
@@ -112,62 +137,85 @@ cd Velco
 # Install dependencies
 npm install
 
-# Run application in desktop development mode (Tauri v2 + Vite HMR)
+# Run in desktop development mode (Tauri v2 + Vite HMR)
 npm run tauri dev
 ```
 
-### Production Builds
+### Production Compilation
 
 ```bash
 # Type check and build frontend assets
 npm run build
 
-# Build standard desktop production installer
+# Build standard desktop production installer (MSI / NSIS / DMG / AppImage)
 npm run tauri build
 
-# Build portable standalone Windows executable (velco.exe)
+# Build standalone portable Windows binary (generates ./velco.exe)
 npm run build:exe
 ```
 
-The compiled standalone release binary is generated directly at the project root as `velco.exe`.
+The compiled standalone executable is emitted at the project root as `velco.exe`.
 
 ---
 
-## 6. Project Structure
+## 6. Architecture & Directory Structure
 
 ```
 Velco/
-├── src/                          # React + TypeScript Frontend
-│   ├── components/               # Reusable UI components & layouts
-│   │   ├── capture/              # Universal Capture Dock
-│   │   ├── chat/                 # Landing Hero AI Chat
-│   │   ├── common/               # Modals, buttons, badges, markdown viewer
-│   │   ├── inbox/                # Date-grouped inbox & filter views
+├── src/                          # React 19 + TypeScript Frontend
+│   ├── components/               # Modular UI components
+│   │   ├── capture/              # Universal Capture Dock & Spotlight
+│   │   ├── chat/                 # Landing Hero AI Chat & streaming UI
+│   │   ├── common/               # Modals, MarkdownViewer, FocusTrap, EmptyStates
+│   │   ├── inbox/                # Date-grouped inbox stream & filters
 │   │   ├── items/                # Item cards, detail modal, tag recommender
-│   │   ├── layout/               # Header, Sidebar, AIPrivacyBadge
-│   │   ├── tasks/                # Task extraction modal, due date picker
-│   │   └── workstation/          # The Foundry (Studio Workbench)
-│   ├── features/                 # Modular feature views (Notes, Tasks, Settings, etc.)
-│   ├── services/                 # Database, AI service IPC, Reminder service
-│   ├── stores/                   # Zustand stores (items, context, chat, settings)
-│   ├── types/                    # Domain data contracts & interfaces
-│   ├── utils/                    # AI provider config, date formatters, token heuristics
-│   ├── index.css                 # Design tokens, @custom-variant dark, scrollbars
-│   └── App.tsx                   # Main workstation application layout
+│   │   ├── layout/               # Header, Sidebar, AIPrivacyBadge, AppLayout
+│   │   ├── tasks/                # Task extraction modal, due date pickers
+│   │   └── workstation/          # The Foundry (Studio Workbench context deck)
+│   ├── features/                 # Flagship workstation views
+│   │   ├── archive/              # Archived items browser
+│   │   ├── bridge/               # Context Hub (The Bridge): Capsules, Kanban, Notes
+│   │   ├── files/                # File vault & lightbox viewer
+│   │   ├── inbox/                # Ingestion view & chat stream
+│   │   ├── notes/                # Long-form markdown notes view
+│   │   ├── playground/           # Unbound AI playground canvas
+│   │   ├── search/               # Global FTS5 search modal
+│   │   ├── settings/             # Settings, BYOK keys, model selector
+│   │   ├── tags/                 # Tag taxonomy manager
+│   │   └── trash/                # Soft-delete trash manager
+│   ├── hooks/                    # Custom React hooks (useDebounce, useFocusTrap)
+│   ├── services/                 # AI streaming service, reminders, IPC callers
+│   ├── stores/                   # Zustand stores (items, capsule, chat, settings)
+│   ├── types/                    # Domain data contracts (capsule, item, provider)
+│   ├── utils/                    # Date formatters, token heuristics, sanitizers
+│   ├── index.css                 # Design tokens, scroll containment, Tailwind v4
+│   └── App.tsx                   # Workstation root application shell
 ├── src-tauri/                    # Rust Native Core
 │   ├── src/
-│   │   ├── ai/                   # Ollama & OpenRouter HTTP clients
-│   │   ├── commands/             # Tauri IPC commands (ai, items, search, tags)
-│   │   ├── db/                   # SQLite Rusqlite schema & migrations (FTS5)
-│   │   └── lib.rs                # Application runtime setup & command registration
-│   ├── Cargo.toml                # Rust dependencies (rusqlite, reqwest, tauri)
-│   └── tauri.conf.json           # Tauri window, security & build configuration
-├── velco.exe                     # Portable standalone production executable
-└── package.json                  # Node.js project manifest & scripts
+│   │   ├── ai/                   # Multi-provider streaming HTTP engine & state
+│   │   ├── commands/             # Tauri IPC command controllers
+│   │   │   ├── ai.rs             # AI prompt execution & model listing
+│   │   │   ├── backup.rs         # Database backup & restore routines
+│   │   │   ├── capsules.rs       # Capsule SQLite schema & .vctx packaging
+│   │   │   ├── filesystem.rs     # Local file attachments & path resolution
+│   │   │   ├── items.rs          # Items CRUD, transactions, batch operations
+│   │   │   ├── p2p.rs            # P2P session & discovery command bindings
+│   │   │   ├── search.rs         # SQLite FTS5 query runner
+│   │   │   ├── tags.rs           # Taxonomy management
+│   │   │   └── tasks.rs          # Task status & due-date triggers
+│   │   ├── database/             # SQLite connection pooling & schema migrations
+│   │   ├── filesystem/           # Secure local file storage management
+│   │   ├── p2p/                  # UDP discovery & TCP peer session sync engine
+│   │   └── lib.rs                # Tauri runtime bootstrap & plugin registration
+│   ├── Cargo.toml                # Rust crate definitions & profile optimizations
+│   └── tauri.conf.json           # Tauri security capabilities & build config
+├── velco.exe                     # Standalone portable Windows executable
+├── package.json                  # Node.js project manifest & scripts
+└── README.md
 ```
 
 ---
 
 ## 7. License
 
-Distributed under the **MIT License**. See `LICENSE` for details.
+Velco is open-source software licensed under the **[MIT License](LICENSE)**.
