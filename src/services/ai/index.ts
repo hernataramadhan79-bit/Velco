@@ -87,4 +87,16 @@ export const aiService = {
       providerConfig: providerConfig || null,
     });
   },
+
+  /** Securely store provider API secret in OS Keyring */
+  setCredential: (provider: string, apiKey: string) =>
+    invoke<void>('set_ai_credential', { provider, apiKey }),
+
+  /** Retrieve provider API secret from OS Keyring */
+  getCredential: (provider: string) =>
+    invoke<string | null>('get_ai_credential', { provider }),
+
+  /** Clear provider API secret from OS Keyring */
+  deleteCredential: (provider: string) =>
+    invoke<void>('delete_ai_credential', { provider }),
 };

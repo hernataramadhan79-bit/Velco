@@ -174,7 +174,7 @@ export const TaskExtractionModal: React.FC<TaskExtractionModalProps> = ({
         </div>
 
         {/* Scrollable Tasks Review List */}
-        <div className="overflow-y-auto p-4 space-y-2.5 flex-1">
+        <div className="overflow-y-auto overflow-x-hidden p-4 space-y-2.5 flex-1">
           {tasks.length === 0 ? (
             <div className="text-center py-12 text-xs font-mono text-slate-400 dark:text-zinc-500">
               No actionable tasks detected. Click "+ Add Task" to create one manually.

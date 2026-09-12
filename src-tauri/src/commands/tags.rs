@@ -14,7 +14,7 @@ pub struct TagRecord {
 
 #[tauri::command]
 pub fn get_tags(db: State<'_, Database>) -> Result<Vec<TagRecord>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT id, name, color, created_at FROM tags ORDER BY name ASC")
         .map_err(|e| e.to_string())?;
@@ -39,7 +39,7 @@ pub fn get_tags(db: State<'_, Database>) -> Result<Vec<TagRecord>, String> {
 
 #[tauri::command]
 pub fn create_tag(db: State<'_, Database>, name: String, color: String) -> Result<TagRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let trimmed_name = name.trim();
     if trimmed_name.is_empty() {
         return Err("Tag name cannot be empty".to_string());
@@ -82,7 +82,7 @@ pub fn create_tag(db: State<'_, Database>, name: String, color: String) -> Resul
 
 #[tauri::command]
 pub fn assign_tag(app: tauri::AppHandle, db: State<'_, Database>, item_id: String, tag_id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)",
         params![item_id, tag_id],
@@ -94,7 +94,7 @@ pub fn assign_tag(app: tauri::AppHandle, db: State<'_, Database>, item_id: Strin
 
 #[tauri::command]
 pub fn remove_tag(app: tauri::AppHandle, db: State<'_, Database>, item_id: String, tag_id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "DELETE FROM item_tags WHERE item_id = ?1 AND tag_id = ?2",
         params![item_id, tag_id],
@@ -106,7 +106,7 @@ pub fn remove_tag(app: tauri::AppHandle, db: State<'_, Database>, item_id: Strin
 
 #[tauri::command]
 pub fn delete_tag(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM item_tags WHERE tag_id = ?1", params![id]).ok();
     conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;

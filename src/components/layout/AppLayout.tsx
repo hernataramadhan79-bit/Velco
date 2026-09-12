@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from 'react';
 import { Upload, Bell, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './Sidebar';
@@ -130,6 +130,7 @@ NotificationToast.displayName = 'NotificationToast';
 export const AppLayout: React.FC = () => {
   // ── Zustand selectors (granular subscriptions) ───────────
   const currentView = useItemStore((s) => s.currentView);
+  const appMode = useItemStore((s) => s.appMode);
   const items = useItemStore((s) => s.items);
   const selectedItemId = useItemStore((s) => s.selectedItemId);
   const itemCounts = useItemStore((s) => s.itemCounts);
@@ -162,7 +163,6 @@ export const AppLayout: React.FC = () => {
   const [isFoundryExpanded, setIsFoundryExpanded] = useState(false);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [overdueCount, setOverdueCount] = useState(0);
   const previousViewRef = useRef<NavigationView>('inbox');
 
   const navigateToView = useCallback((view: NavigationView) => {
@@ -184,7 +184,6 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     refreshItems();
     refreshCounts();
-    // Load tags global (zustand store — sebelumnya hook lokal tanpa fetch global)
     try {
       useTagStore.getState().refreshTags();
     } catch {
@@ -192,23 +191,37 @@ export const AppLayout: React.FC = () => {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Keep overdue count accurate ──────────────────────────
-  useEffect(() => {
-    let isMounted = true;
-    db.getItems({ type: 'task' })
-      .then((tasks) => {
-        if (!isMounted) return;
-        const count = tasks.filter(
-          (t) => !t.task?.completed && isTaskOverdue(t.task?.dueDate)
-        ).length;
-        setOverdueCount(count);
-      })
-      .catch(() => {});
+  // Memoized categorized lists — avoids visual glitches and zero re-renders across views
+  const tasksList = useMemo(
+    () => items.filter((i) => i.type === 'task' && !i.archived && !i.trashed),
+    [items]
+  );
+  const notesList = useMemo(
+    () => items.filter((i) => (i.type === 'note' || i.type === 'text') && !i.archived && !i.trashed),
+    [items]
+  );
+  const filesList = useMemo(
+    () =>
+      items.filter(
+        (i) =>
+          (i.type === 'file' ||
+            i.type === 'image' ||
+            i.type === 'audio' ||
+            (i.attachmentsCount && i.attachmentsCount > 0)) &&
+          !i.archived &&
+          !i.trashed
+      ),
+    [items]
+  );
+  const linksList = useMemo(
+    () => items.filter((i) => i.type === 'link' && !i.archived && !i.trashed),
+    [items]
+  );
 
-    return () => {
-      isMounted = false;
-    };
-  }, [itemCounts.tasks, items]);
+  // In-memory overdue tasks count (0ms, zero IPC overhead)
+  const overdueCount = useMemo(() => {
+    return tasksList.filter((t) => !t.task?.completed && isTaskOverdue(t.task?.dueDate)).length;
+  }, [tasksList]);
 
   // ── Background Reminder Service ──────────────────────────
   useEffect(() => {
@@ -302,7 +315,7 @@ export const AppLayout: React.FC = () => {
   // ── Settings View (full-screen) ──────────────────────────
   if (currentView === 'settings') {
     return (
-      <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
+      <div className="flex h-full w-full max-w-full bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
         <ErrorBoundary onReset={() => setCurrentView('inbox')}>
           <Suspense fallback={<ViewSkeleton />}>
             <SettingsView
@@ -340,54 +353,59 @@ export const AppLayout: React.FC = () => {
 
   // ── Main Layout ──────────────────────────────────────────
   return (
-    <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
+    <div className="flex h-full w-full max-w-full bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
       {/* Pane 1: Collapsible Sidebar */}
-      <div
-        className={`transition-all duration-200 ease-in-out flex shrink-0 overflow-hidden ${
-          isSidebarOpen ? 'w-64' : 'w-0'
-        }`}
-      >
-        <Sidebar
-          currentView={currentView}
-          onSelectView={navigateToView}
-          itemCounts={itemCounts}
-          overdueCount={overdueCount}
-          tags={tagStore.tags}
-          selectedTagId={tagStore.selectedTagId}
-          onSelectTag={(tagId) => {
-            tagStore.setSelectedTagId(tagId);
-            setActiveTagId(tagId);
-          }}
-          onOpenSearch={() => setIsSearchOpen(true)}
-          onToggleSidebar={() => setIsSidebarOpen(false)}
-        />
-      </div>
+      {appMode === 'personal' && (
+        <div
+          className={`transition-all duration-200 ease-in-out flex shrink-0 overflow-hidden ${
+            isSidebarOpen ? 'w-64' : 'w-0'
+          }`}
+        >
+          <Sidebar
+            currentView={currentView}
+            onSelectView={navigateToView}
+            itemCounts={itemCounts}
+            overdueCount={overdueCount}
+            tags={tagStore.tags}
+            selectedTagId={tagStore.selectedTagId}
+            onSelectTag={(tagId) => {
+              tagStore.setSelectedTagId(tagId);
+              setActiveTagId(tagId);
+            }}
+            onOpenSearch={() => setIsSearchOpen(true)}
+            onToggleSidebar={() => setIsSidebarOpen(false)}
+          />
+        </div>
+      )}
 
       {/* Pane 2: Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-50 dark:bg-[#09090b]">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full h-full overflow-hidden bg-slate-50 dark:bg-[#09090b]">
         <Header
           currentView={currentView}
           onNewCaptureClick={() => navigateToView('inbox')}
           isFoundryOpen={isFoundryOpen}
           onToggleFoundry={() => setIsFoundryOpen((prev) => !prev)}
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          isSidebarOpen={appMode === 'personal' ? isSidebarOpen : true}
+          onToggleSidebar={appMode === 'personal' ? () => setIsSidebarOpen((prev) => !prev) : undefined}
           onOpenSearch={() => setIsSearchOpen(true)}
         />
 
         {/* Scrollable View Content */}
         <main
-          className={`flex-1 min-h-0 ${
-            currentView === 'bridge' || currentView === 'playground'
+          className={`flex-1 min-h-0 min-w-0 max-w-full ${
+            currentView === 'playground' || appMode === 'context-hub'
               ? 'p-0 flex flex-col overflow-hidden'
               : 'overflow-y-auto overflow-x-hidden px-8 py-6'
           }`}
         >
           <ErrorBoundary onReset={() => refreshItems()}>
             <Suspense fallback={<ViewSkeleton />}>
+              {appMode === 'context-hub' ? (
+                <TheBridgeView onNotify={(msg, type) => notify(msg, type)} />
+              ) : (
               <div
                 className={`view-enter ${
-                  currentView === 'bridge' || currentView === 'playground'
+                  currentView === 'playground'
                     ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden'
                     : ''
                 }`}
@@ -395,7 +413,7 @@ export const AppLayout: React.FC = () => {
               >
               {currentView === 'inbox' && (
                 <InboxView
-                  items={items}
+                  
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleTask={toggleTask}
@@ -412,7 +430,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'tasks' && (
                 <TasksView
-                  tasks={items}
+                  tasks={tasksList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleTask={toggleTask}
@@ -423,7 +441,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'notes' && (
                 <NotesView
-                  notes={items}
+                  notes={notesList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
@@ -433,7 +451,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'files' && (
                 <FilesView
-                  files={items}
+                  files={filesList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
@@ -444,7 +462,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'links' && (
                 <LinksView
-                  links={items}
+                  links={linksList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
@@ -455,7 +473,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'tags' && (
                 <TagsView
                   tags={tagStore.tags}
-                  items={items}
+                  
                   selectedTagId={tagStore.selectedTagId}
                   onSelectTag={(tagId) => {
                     tagStore.setSelectedTagId(tagId);
@@ -472,7 +490,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'archive' && (
                 <ArchiveView
-                  items={items}
+                  
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
@@ -482,7 +500,7 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'trash' && (
                 <TrashView
-                  items={items}
+                  
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onRestore={restoreItem}
                   onPermanentDelete={permanentDeleteItem}
@@ -490,11 +508,7 @@ export const AppLayout: React.FC = () => {
                 />
               )}
 
-              {currentView === 'bridge' && (
-                <TheBridgeView
-                  onNotify={(msg, type) => notify(msg, type)}
-                />
-              )}
+              {/* TheBridgeView is now rendered exclusively in Context Hub mode */}
 
               {currentView === 'playground' && (
                 <PlaygroundView
@@ -506,10 +520,11 @@ export const AppLayout: React.FC = () => {
                   }}
                 />
               )}
-            </div>
-          </Suspense>
-        </ErrorBoundary>
-      </main>
+              </div>
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        </main>
       </div>
 
       {/* Pane 3: The Foundry (Context Workstation) */}
@@ -566,7 +581,7 @@ export const AppLayout: React.FC = () => {
 
       {/* Global Multi-Select Action Bar */}
       <SelectionActionBar
-        items={items}
+        
         onOpenFoundry={() => setIsFoundryOpen(true)}
         onFocusChat={() => {
           navigateToView('inbox');

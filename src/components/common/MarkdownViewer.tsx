@@ -130,8 +130,8 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
   };
 
   return (
-    <div className="group relative my-3 rounded-xl border border-slate-800 dark:border-white/[0.1] bg-[#0d0e12] dark:bg-[#111216] text-xs font-mono shadow-sm">
-      {/* Gemini-Style Sticky Header Bar */}
+    <div className="group relative my-3 first:mt-0 last:mb-0 rounded-xl border border-slate-800 dark:border-white/[0.1] bg-[#0d0e12] dark:bg-[#111216] text-xs font-mono shadow-sm">
+      {/* Gemini-Style Sticky Header Bar - Tetap terlihat selagi konten markdownview belum habis */}
       <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-2 bg-slate-900 dark:bg-[#16171c] border-b border-slate-800 dark:border-white/[0.08] rounded-t-xl select-none shadow-xs">
         <span className="font-sans text-xs font-medium text-slate-300 dark:text-zinc-300">
           {formatLanguageName(language)}

@@ -8,9 +8,9 @@ import {
   InboxCategoryFilter,
 } from '../../components/inbox/InboxDropdownFilter';
 import { Item, ItemSummary, CreateItemInput } from '../../types/item';
+import { useItemStore } from "../../stores/itemStore";
 
 interface InboxViewProps {
-  items: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
   onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
@@ -21,7 +21,6 @@ interface InboxViewProps {
 }
 
 export const InboxView: React.FC<InboxViewProps> = ({
-  items,
   onCapture,
   onSelect,
   onToggleTask,
@@ -30,24 +29,30 @@ export const InboxView: React.FC<InboxViewProps> = ({
   onOpenSettings,
   onArtifactCreated,
 }) => {
+  const items = useItemStore((s) => s.items);
   const [activeTab, setActiveTab] = useState<'capture' | 'chat'>('capture');
   const [categoryFilter, setCategoryFilter] = useState<InboxCategoryFilter>('all');
 
   // Filter items based on selected category dropdown
   const filteredItems = useMemo(() => {
-    if (categoryFilter === 'all') return items;
-    if (categoryFilter === 'tasks') return items.filter((i) => i.type === 'task');
-    if (categoryFilter === 'notes') return items.filter((i) => i.type === 'note');
+    const active = items.filter((i) => !i.archived && !i.trashed);
+    if (categoryFilter === 'all') return active;
+    if (categoryFilter === 'tasks') return active.filter((i) => i.type === 'task');
+    if (categoryFilter === 'notes') return active.filter((i) => i.type === 'note' || i.type === 'text');
     if (categoryFilter === 'files') {
-      return items.filter(
-        (i) => i.type === 'file' || i.type === 'image' || i.type === 'audio'
+      return active.filter(
+        (i) =>
+          i.type === 'file' ||
+          i.type === 'image' ||
+          i.type === 'audio' ||
+          (i.attachmentsCount && i.attachmentsCount > 0)
       );
     }
-    if (categoryFilter === 'links') return items.filter((i) => i.type === 'link');
+    if (categoryFilter === 'links') return active.filter((i) => i.type === 'link');
     if (categoryFilter === 'uncategorized') {
-      return items.filter((i) => i.type === 'text');
+      return active.filter((i) => i.type === 'text');
     }
-    return items;
+    return active;
   }, [items, categoryFilter]);
 
   return (

@@ -79,7 +79,7 @@ export const ItemTagsEditor: React.FC<ItemTagsEditorProps> = ({
                 autoFocus
               />
 
-              <div className="max-h-36 overflow-y-auto space-y-1">
+              <div className="max-h-36 overflow-y-auto overflow-x-hidden space-y-1">
                 {availableTags.map((tag) => (
                   <button
                     key={tag.id}

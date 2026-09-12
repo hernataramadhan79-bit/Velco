@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Layers,
   Zap,
@@ -11,16 +11,17 @@ import { useItemStore } from '../../stores/itemStore';
 import { Item, ItemSummary } from '../../types/item';
 
 interface SelectionActionBarProps {
-  items: ItemSummary[];
   onOpenFoundry?: () => void;
   onFocusChat?: () => void;
 }
 
 export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
-  items,
   onOpenFoundry,
   onFocusChat,
 }) => {
+  const items = useItemStore((s) => s.items);
+  const archiveItems = useItemStore((s) => s.archiveItems);
+  const trashItems = useItemStore((s) => s.trashItems);
   const { selectedIds, clearSelection } = useSelectionStore();
   const { addChatContextItems, addFoundryItems } = useContextStore();
   const { notify, trashItem } = useItemStore();
@@ -28,7 +29,10 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
   const selectedCount = selectedIds.size;
   if (selectedCount === 0) return null;
 
-  const selectedItems = items.filter((item) => selectedIds.has(item.id));
+  const selectedItems = useMemo(() => {
+    const all = [...items, ...archiveItems, ...trashItems];
+    return all.filter((item) => selectedIds.has(item.id));
+  }, [items, archiveItems, trashItems, selectedIds]);
 
   const handleAddToChatContext = () => {
     if (selectedItems.length === 0) return;

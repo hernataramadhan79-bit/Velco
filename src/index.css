@@ -61,16 +61,28 @@
     color: #ffffff;
   }
 
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
+    touch-action: pan-y;
+  }
+
   body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
     user-select: none;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-    height: 100vh;
-    width: 100vw;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -149,5 +161,23 @@
 
 .view-enter {
   animation: view-enter 200ms ease-out;
+}
+
+/* ── Overflow & Scroll Containment ─────────────────────── */
+.overflow-y-auto {
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+}
+
+/* Unless explicitly declared as horizontally scrollable, vertical scroll containers must lock horizontal overflow */
+.overflow-y-auto:not(.overflow-x-auto):not(.overflow-x-scroll) {
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+/* Explicit horizontal scroll areas (code blocks, wide tables) contain their own gestures */
+.overflow-x-auto {
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
 }
 

@@ -481,7 +481,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
               )}
 
               {/* Items List (Smoothly scrollable, NO hardcoded limits) */}
-              <div className="max-h-64 overflow-y-auto space-y-1 pr-1 overscroll-contain">
+              <div className="max-h-64 overflow-y-auto overflow-x-hidden space-y-1 pr-1 overscroll-contain">
                 {isLoadingItems && workspaceItems.length === 0 ? (
                   <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400 dark:text-zinc-500 text-xs">
                     <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />

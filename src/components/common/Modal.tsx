@@ -49,7 +49,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-hidden="true"
       />
       <div
-        className={`relative w-full ${maxWidthClass} bg-white dark:bg-[#141418] rounded-xl shadow-2xl border border-slate-200 dark:border-white/[0.1] overflow-hidden flex flex-col max-h-[90vh] z-10 text-slate-900 dark:text-zinc-100`}
+        className={`relative w-full max-w-full ${maxWidthClass} bg-white dark:bg-[#141418] rounded-xl shadow-2xl border border-slate-200 dark:border-white/[0.1] overflow-hidden flex flex-col max-h-[90vh] z-10 text-slate-900 dark:text-zinc-100`}
       >
         {title && (
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-[#101014]">
@@ -64,7 +64,9 @@ export const Modal: React.FC<ModalProps> = ({
             </button>
           </div>
         )}
-        <div className={`overflow-y-auto flex-1 text-xs ${bodyClassName}`}>{children}</div>
+        <div className="overflow-y-auto overflow-x-hidden flex-1 text-xs">
+          <div className={bodyClassName}>{children}</div>
+        </div>
       </div>
     </div>
   );

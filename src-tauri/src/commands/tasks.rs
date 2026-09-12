@@ -10,7 +10,7 @@ pub fn toggle_task_complete(
     item_id: String,
     completed: bool,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let completed_at = if completed {
         Some(chrono::Utc::now().to_rfc3339())
     } else {
@@ -41,7 +41,7 @@ pub fn reset_task_notified(
     db: State<'_, Database>,
     item_id: String,
 ) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "UPDATE tasks SET notified = 0 WHERE item_id = ?1",
         params![item_id],

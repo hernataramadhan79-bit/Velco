@@ -2,15 +2,20 @@ pub mod ai;
 pub mod commands;
 pub mod database;
 pub mod filesystem;
+pub mod p2p;
 
 use database::Database;
 use filesystem::StorageManager;
+use ai::state::AiState;
+use p2p::P2PState;
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub fn run() {
     let storage = StorageManager::new(None);
     let db_path = storage.db_path();
+    let ai_state = AiState::default();
+    let p2p_state = P2PState::default();
     let db = match Database::new(&db_path) {
         Ok(d) => d,
         Err(e) => {
@@ -75,6 +80,9 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(storage)
         .manage(db)
+        .manage(ai_state)
+        .manage(p2p_state)
+        .manage(reqwest::Client::builder().timeout(Duration::from_secs(180)).build().expect("failed to build http client"))
         .setup(|app| {
             // ── Background Reminder Worker ─────────────────────────────
             let app_handle = app.handle().clone();
@@ -168,6 +176,26 @@ pub fn run() {
             commands::ai::apply_recipe_artifacts,
             commands::ai::execute_context_chat,
             commands::ai::cancel_chat,
+            commands::ai::set_ai_credential,
+            commands::ai::get_ai_credential,
+            commands::ai::delete_ai_credential,
+            // Capsules (Context Hub)
+            commands::capsules::get_capsules,
+            commands::capsules::create_capsule,
+            commands::capsules::update_capsule,
+            commands::capsules::delete_capsule,
+            commands::capsules::add_item_to_capsule,
+            commands::capsules::remove_item_from_capsule,
+            commands::capsules::get_capsule_items,
+            commands::capsules::export_capsule,
+            commands::capsules::import_capsule,
+            // P2P Real-Time LAN Sync
+            commands::p2p::start_p2p_session,
+            commands::p2p::stop_p2p_session,
+            commands::p2p::get_p2p_status,
+            commands::p2p::broadcast_p2p_item_upsert,
+            commands::p2p::broadcast_p2p_task_toggle,
+            commands::p2p::broadcast_p2p_item_removed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Velco application");
@@ -184,7 +212,7 @@ fn check_and_send_reminders(app: &tauri::AppHandle) {
 
     // 1. Ambil tasks yang due dan update notified = 1, lalu LEPASKAN db lock secepatnya
     let tasks: Vec<(String, String, String, String, String, String)> = {
-        let conn = match db.conn.lock() {
+        let conn = match db.write_conn.lock() {
             Ok(c) => c,
             Err(_) => return,
         };
@@ -250,5 +278,15 @@ fn check_and_send_reminders(app: &tauri::AppHandle) {
             .title(&notif_title)
             .body(&notif_body)
             .show();
+
+        let _ = app.emit_to(
+            "main",
+            "velco://reminder-fired",
+            serde_json::json!({
+                "title": notif_title,
+                "body": notif_body,
+                "priority": priority
+            }),
+        );
     }
 }

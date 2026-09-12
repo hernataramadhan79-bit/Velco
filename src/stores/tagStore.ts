@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Tag } from '../types/item';
 import { db } from '../services/database';
+import { useItemStore } from './itemStore';
 
 interface TagState {
   tags: Tag[];
@@ -59,13 +60,7 @@ export const useTagStore = create<TagState>()((set, get) => ({
     }));
     try {
       await db.deleteTag(id);
-      // Bersihkan referensi di itemStore (di-load lazy agar hindari circular import)
-      try {
-        const { useItemStore } = await import('./itemStore');
-        useItemStore.getState().removeTagFromItems(id);
-      } catch {
-        /* ignore — itemStore mungkin belum siap */
-      }
+      useItemStore.getState().removeTagFromItems(id);
     } catch (err) {
       // Rollback
       set({ tags: prev });

@@ -235,7 +235,7 @@ export const DynamicModelSelector: React.FC<DynamicModelSelectorProps> = ({
             </div>
 
             {/* Scrollable list */}
-            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+            <div className="max-h-48 overflow-y-auto overflow-x-hidden space-y-1 pr-1 custom-scrollbar">
               {filteredModels.length === 0 ? (
                 <div className="py-4 text-center text-xs text-slate-400 dark:text-zinc-500">
                   No models matching &ldquo;{searchQuery}&rdquo;

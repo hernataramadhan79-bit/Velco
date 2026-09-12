@@ -670,7 +670,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
               />
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-1">
+            <div className="max-h-60 overflow-y-auto overflow-x-hidden space-y-1">
               {workspaceItems
                 .filter((item) => {
                   if (!contextSearch.trim()) return true;

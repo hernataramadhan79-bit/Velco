@@ -1,3 +1,4 @@
+use tokio_util::sync::CancellationToken;
 use tauri::{Emitter, Manager};
 use crate::ai::ollama::{ConnectionTestResult, DetailedModelInfo, OllamaClient};
 use crate::ai::{LlmProviderConfig, RecipeOutput};
@@ -51,15 +52,48 @@ pub async fn generate_ai_completion(
 
 #[tauri::command]
 pub async fn test_ai_connection(
+    app: tauri::AppHandle,
     base_url: Option<String>,
     api_key: Option<String>,
     provider: Option<String>,
     model: Option<String>,
 ) -> Result<ConnectionTestResult, String> {
-    let client = OllamaClient::new(base_url, api_key);
+    let resolved_key = api_key.filter(|k| !k.is_empty()).or_else(|| {
+        let ai_state = app.state::<crate::ai::state::AiState>();
+        provider.as_deref().and_then(|p| ai_state.get_api_key(p))
+    });
+    let client = OllamaClient::new(base_url, resolved_key);
     client
         .test_connection(provider.as_deref(), model.as_deref())
         .await
+}
+
+#[tauri::command]
+pub fn set_ai_credential(
+    app: tauri::AppHandle,
+    provider: String,
+    api_key: String,
+) -> Result<(), String> {
+    let ai_state = app.state::<crate::ai::state::AiState>();
+    ai_state.set_api_key(&provider, &api_key)
+}
+
+#[tauri::command]
+pub fn get_ai_credential(
+    app: tauri::AppHandle,
+    provider: String,
+) -> Result<Option<String>, String> {
+    let ai_state = app.state::<crate::ai::state::AiState>();
+    Ok(ai_state.get_api_key(&provider))
+}
+
+#[tauri::command]
+pub fn delete_ai_credential(
+    app: tauri::AppHandle,
+    provider: String,
+) -> Result<(), String> {
+    let ai_state = app.state::<crate::ai::state::AiState>();
+    ai_state.clear_api_key(&provider)
 }
 
 // ============================================================================
@@ -146,11 +180,9 @@ fn extract_text_from_file_bytes(bytes: &[u8], ext: &str, mime_type: &str) -> Opt
             | "ps1" | "env" | "ini" | "conf" | "properties" | "toml" | "diff" | "patch"
     ) || mime_type.starts_with("text/") || mime_type.contains("json") || mime_type.contains("xml") || mime_type.contains("javascript");
 
-    if is_text_type {
-        if bytes.len() <= 10 * 1024 * 1024 {
-            let s = String::from_utf8_lossy(bytes);
-            return Some(s.chars().take(80_000).collect());
-        }
+    if is_text_type && bytes.len() <= 10 * 1024 * 1024 {
+        let s = String::from_utf8_lossy(bytes);
+        return Some(s.chars().take(80_000).collect());
     }
 
     // 4. PDF heuristic text stream extraction
@@ -250,12 +282,11 @@ fn extract_image_base64(
     data_url: Option<&str>,
     storage: &StorageManager,
     file_path: &str,
-    safe_name: &str,
 ) -> Option<String> {
-    // 1. Dari data_url jika ada di SQLite
-    if let Some(url) = data_url {
-        let trimmed = url.trim();
-        if trimmed.starts_with("data:") {
+    // 1. Dari data URL
+    if let Some(data) = data_url {
+        let trimmed = data.trim();
+        if trimmed.starts_with("data:image/") {
             if let Some((_, b64)) = trimmed.split_once(',') {
                 let clean_b64 = b64.trim();
                 if !clean_b64.is_empty() {
@@ -268,7 +299,7 @@ fn extract_image_base64(
     }
 
     // 2. Dari file fisik di disk via storage manager
-    if let Some(p) = storage.resolve_attachment_path(file_path, safe_name) {
+    if let Ok(p) = storage.resolve_attachment_path(file_path) {
         if let Ok(meta) = std::fs::metadata(&p) {
             // Batas 20MB per gambar agar aman dari OOM
             if meta.len() <= 20 * 1024 * 1024 && p.is_file() {
@@ -289,7 +320,7 @@ fn fetch_item_contexts(
     item_ids: &[String],
 ) -> Result<ContextFetchResult, String> {
     let conn = db
-        .conn
+        .write_conn
         .lock()
         .map_err(|e| format!("Database lock error: {}", e))?;
 
@@ -352,7 +383,7 @@ fn fetch_item_contexts(
             let mut item_images = Vec::new();
 
             for (_att_id, file_name, file_path, mime_type, _file_size, data_url) in att_rows {
-                let safe_name = StorageManager::sanitize_file_name(&file_name);
+                let _safe_name = StorageManager::sanitize_file_name(&file_name);
                 let ext = std::path::Path::new(&file_name)
                     .extension()
                     .and_then(|e| e.to_str())
@@ -360,7 +391,7 @@ fn fetch_item_contexts(
                     .to_lowercase();
 
                 if is_image_file_type(&mime_type, &ext) {
-                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path, &safe_name) {
+                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path) {
                         let norm_mime = normalize_image_mime(&mime_type, &ext);
                         item_images.push(ExtractedImage {
                             file_name: file_name.clone(),
@@ -372,7 +403,7 @@ fn fetch_item_contexts(
                             file_name, norm_mime
                         ));
                     }
-                } else if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+                } else if let Ok(resolved_path) = storage.resolve_attachment_path(&file_path) {
                     if let Ok(bytes) = std::fs::read(&resolved_path) {
                         if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
                             if !extracted.trim().is_empty() {
@@ -448,7 +479,7 @@ fn fetch_item_contexts(
                 .ok();
 
             if let Some((_item_id, file_name, file_path, mime_type, _file_size, data_url, title)) = att_opt {
-                let safe_name = StorageManager::sanitize_file_name(&file_name);
+                let _safe_name = StorageManager::sanitize_file_name(&file_name);
                 let ext = std::path::Path::new(&file_name)
                     .extension()
                     .and_then(|e| e.to_str())
@@ -458,7 +489,7 @@ fn fetch_item_contexts(
                 let mut content = format!("Attached File: {}", file_name);
 
                 if is_image_file_type(&mime_type, &ext) {
-                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path, &safe_name) {
+                    if let Some(b64) = extract_image_base64(data_url.as_deref(), storage, &file_path) {
                         let norm_mime = normalize_image_mime(&mime_type, &ext);
                         result.images.push(ExtractedImage {
                             file_name: file_name.clone(),
@@ -470,7 +501,7 @@ fn fetch_item_contexts(
                             file_name, norm_mime
                         );
                     }
-                } else if let Some(resolved_path) = storage.resolve_attachment_path(&file_path, &safe_name) {
+                } else if let Ok(resolved_path) = storage.resolve_attachment_path(&file_path) {
                     if let Ok(bytes) = std::fs::read(&resolved_path) {
                         if let Some(extracted) = extract_text_from_file_bytes(&bytes, &ext, &mime_type) {
                             if !extracted.trim().is_empty() {
@@ -501,16 +532,14 @@ fn build_context_prompt(items: &[(String, String)]) -> String {
 }
 
 /// Calls the LLM via reqwest and parses the JSON response.
-async fn call_llm(
+async fn dispatch_llm_request(
+    client: &reqwest::Client,
     provider_config: &LlmProviderConfig,
     system_prompt: &str,
     user_prompt: &str,
     images: &[ExtractedImage],
 ) -> Result<RecipeOutput, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
 
     let raw_response = match provider_config {
         LlmProviderConfig::Ollama { base_url, model } => {
@@ -910,7 +939,28 @@ pub async fn execute_context_recipe(
     let user_prompt = build_context_prompt(&context_data.items);
 
     // 3. Call the LLM
-    let output = call_llm(&provider_config, &system_prompt, &user_prompt, &context_data.images).await?;
+    let client = app.state::<reqwest::Client>().inner();
+    let ai_state = app.state::<crate::ai::state::AiState>();
+    let mut resolved_config = provider_config;
+    if let LlmProviderConfig::OpenAiCompatible { ref base_url, ref mut api_key, .. } = resolved_config {
+        if api_key.trim().is_empty() {
+            let provider_id = if base_url.contains("anthropic") {
+                "anthropic"
+            } else if base_url.contains("openai") {
+                "openai"
+            } else if base_url.contains("openrouter") {
+                "openrouter"
+            } else if base_url.contains("gemini") || base_url.contains("generativelanguage") {
+                "gemini"
+            } else {
+                "custom"
+            };
+            if let Some(key) = ai_state.get_api_key(provider_id) {
+                *api_key = key;
+            }
+        }
+    }
+    let output = dispatch_llm_request(client, &resolved_config, &system_prompt, &user_prompt, &context_data.images).await?;
 
     Ok(output)
 }
@@ -969,7 +1019,7 @@ fn apply_recipe_artifacts_blocking(
     use tauri::Manager;
     let db = app.state::<crate::database::Database>();
     let mut conn = db
-        .conn
+        .write_conn
         .lock()
         .map_err(|e| format!("Database lock error: {}", e))?;
     let tx = conn
@@ -1104,8 +1154,31 @@ fn apply_recipe_artifacts_blocking(
 static CANCELLED_CHAT_REQUESTS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
     std::sync::OnceLock::new();
 
+static ACTIVE_CHAT_TOKENS: std::sync::OnceLock<parking_lot::RwLock<std::collections::HashMap<String, CancellationToken>>> =
+    std::sync::OnceLock::new();
+
 fn cancelled_requests() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
     CANCELLED_CHAT_REQUESTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+fn chat_tokens() -> &'static parking_lot::RwLock<std::collections::HashMap<String, CancellationToken>> {
+    ACTIVE_CHAT_TOKENS.get_or_init(|| parking_lot::RwLock::new(std::collections::HashMap::new()))
+}
+
+fn register_chat_token(request_id: &str) -> CancellationToken {
+    let token = CancellationToken::new();
+    let mut map = chat_tokens().write();
+    map.insert(request_id.to_string(), token.clone());
+    if map.len() > 100 {
+        if let Some(old) = map.keys().next().cloned() {
+            map.remove(&old);
+        }
+    }
+    token
+}
+
+fn unregister_chat_token(request_id: &str) {
+    chat_tokens().write().remove(request_id);
 }
 
 fn is_chat_cancelled(request_id: &str) -> bool {
@@ -1123,13 +1196,15 @@ pub fn cancel_chat(request_id: String) -> Result<(), String> {
         return Err("request_id cannot be empty".to_string());
     }
     if let Ok(mut set) = cancelled_requests().lock() {
-        set.insert(request_id);
-        // Batasi ukuran set agar tidak tumbuh tanpa batas (LRU sederhana)
+        set.insert(request_id.clone());
         if set.len() > 100 {
             if let Some(old) = set.iter().next().cloned() {
                 set.remove(&old);
             }
         }
+    }
+    if let Some(token) = chat_tokens().read().get(&request_id) {
+        token.cancel();
     }
     Ok(())
 }
@@ -1197,14 +1272,34 @@ pub async fn execute_context_chat(
         );
     }
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(180))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = app.state::<reqwest::Client>().inner();
+    let ai_state = app.state::<crate::ai::state::AiState>();
+    let mut resolved_config = provider_config;
+    if let LlmProviderConfig::OpenAiCompatible { ref base_url, ref mut api_key, .. } = resolved_config {
+        if api_key.trim().is_empty() {
+            let provider_id = if base_url.contains("anthropic") {
+                "anthropic"
+            } else if base_url.contains("openai") {
+                "openai"
+            } else if base_url.contains("openrouter") {
+                "openrouter"
+            } else if base_url.contains("gemini") || base_url.contains("generativelanguage") {
+                "gemini"
+            } else {
+                "custom"
+            };
+            if let Some(key) = ai_state.get_api_key(provider_id) {
+                *api_key = key;
+            }
+        }
+    }
 
+    let cancel_token = register_chat_token(&request_id);
     let mut full_text = String::new();
+    let mut chunk_buffer = String::new();
+    let mut last_emit = std::time::Instant::now();
 
-    match provider_config {
+    match resolved_config {
         LlmProviderConfig::Ollama { base_url, model } => {
             let chat_url = format!("{}/api/chat", base_url.trim_end_matches('/'));
 
@@ -1244,7 +1339,8 @@ pub async fn execute_context_chat(
                 .await
                 .map_err(|e| {
                     let err = format!("Ollama connection error: {}", e);
-                    let _ = app.emit(
+                    let _ = app.emit_to(
+                        "main",
                         "ai-chat-chunk",
                         ChatChunkEvent {
                             request_id: request_id.clone(),
@@ -1260,7 +1356,8 @@ pub async fn execute_context_chat(
                 let status = resp.status();
                 let err_text = resp.text().await.unwrap_or_default();
                 let err_msg = format!("Ollama returned HTTP {}: {}", status, err_text);
-                let _ = app.emit(
+                let _ = app.emit_to(
+                    "main",
                     "ai-chat-chunk",
                     ChatChunkEvent {
                         request_id: request_id.clone(),
@@ -1273,7 +1370,10 @@ pub async fn execute_context_chat(
             }
 
             let mut line_buffer = String::new();
-            while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+            while let Some(chunk) = tokio::select! {
+                _ = cancel_token.cancelled() => None,
+                res = resp.chunk() => res.map_err(|e| e.to_string())?,
+            } {
                 // Hormati pembatalan user — berhenti segera tanpa emit lanjutan.
                 if is_chat_cancelled(&request_id) {
                     break;
@@ -1297,15 +1397,20 @@ pub async fn execute_context_chat(
                         {
                             if !content.is_empty() {
                                 full_text.push_str(content);
-                                let _ = app.emit(
-                                    "ai-chat-chunk",
-                                    ChatChunkEvent {
-                                        request_id: request_id.clone(),
-                                        delta: content.to_string(),
-                                        done: false,
-                                        error: None,
-                                    },
-                                );
+                                chunk_buffer.push_str(content);
+                                if chunk_buffer.len() > 15 || last_emit.elapsed().as_millis() > 50 {
+                                    let _ = app.emit_to(
+                                        "main", "ai-chat-chunk",
+                                        ChatChunkEvent {
+                                            request_id: request_id.clone(),
+                                            delta: chunk_buffer.clone(),
+                                            done: false,
+                                            error: None,
+                                        },
+                                    );
+                                    chunk_buffer.clear();
+                                    last_emit = std::time::Instant::now();
+                                }
                             }
                         }
 
@@ -1441,7 +1546,8 @@ pub async fn execute_context_chat(
 
             let mut resp = req.send().await.map_err(|e| {
                 let err = format!("AI request failed: {}", e);
-                let _ = app.emit(
+                let _ = app.emit_to(
+                    "main",
                     "ai-chat-chunk",
                     ChatChunkEvent {
                         request_id: request_id.clone(),
@@ -1466,7 +1572,8 @@ pub async fn execute_context_chat(
                     })
                     .unwrap_or(err_text);
                 let full_err = format!("AI provider error (HTTP {}): {}", status, err_msg);
-                let _ = app.emit(
+                let _ = app.emit_to(
+                    "main",
                     "ai-chat-chunk",
                     ChatChunkEvent {
                         request_id: request_id.clone(),
@@ -1479,7 +1586,10 @@ pub async fn execute_context_chat(
             }
 
             let mut line_buffer = String::new();
-            while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+            while let Some(chunk) = tokio::select! {
+                _ = cancel_token.cancelled() => None,
+                res = resp.chunk() => res.map_err(|e| e.to_string())?,
+            } {
                 if is_chat_cancelled(&request_id) {
                     break;
                 }
@@ -1548,7 +1658,22 @@ pub async fn execute_context_chat(
         }
     }
 
+        // Flush any remaining buffer
+    if !chunk_buffer.is_empty() {
+        let _ = app.emit_to(
+            "main", "ai-chat-chunk",
+            ChatChunkEvent {
+                request_id: request_id.clone(),
+                delta: chunk_buffer.clone(),
+                done: false,
+                error: None,
+            },
+        );
+        chunk_buffer.clear();
+    }
+
     // Bersihkan registry cancel + emit final completion event
+        unregister_chat_token(&request_id);
     if let Ok(mut set) = cancelled_requests().lock() {
         set.remove(&request_id);
     }
@@ -1592,7 +1717,7 @@ mod tests {
         let sample_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
         let data_url = format!("data:image/png;base64,{}", sample_b64);
 
-        let extracted = extract_image_base64(Some(&data_url), &storage, "", "test.png");
+        let extracted = extract_image_base64(Some(&data_url), &storage, "");
         assert_eq!(extracted, Some(sample_b64.to_string()));
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
@@ -1606,7 +1731,7 @@ mod tests {
         let (saved_path, _, _) = storage.save_attachment("test_photo.jpg", raw_bytes).unwrap();
         let file_path = saved_path.to_string_lossy().to_string();
 
-        let extracted = extract_image_base64(None, &storage, &file_path, "test_photo.jpg");
+        let extracted = extract_image_base64(None, &storage, &file_path);
         assert!(extracted.is_some());
         let decoded = base64::engine::general_purpose::STANDARD.decode(extracted.unwrap()).unwrap();
         assert_eq!(decoded, raw_bytes);
@@ -1619,9 +1744,7 @@ mod tests {
         let _ = std::fs::create_dir_all(&temp_dir);
         let storage = StorageManager::new(Some(temp_dir.clone()));
         let db_path = temp_dir.join("test.db");
-        let conn = rusqlite::Connection::open(&db_path).unwrap();
-        crate::database::schema::run_migrations(&conn).unwrap();
-        let db = Database { conn: std::sync::Mutex::new(conn) };
+        let db = Database::new(&db_path).unwrap();
 
         let item_id = "test-item-123";
         let att_id = "test-att-456";
@@ -1629,7 +1752,7 @@ mod tests {
         let data_url = format!("data:image/png;base64,{}", sample_b64);
 
         {
-            let conn = db.conn.lock().unwrap();
+            let conn = db.write_conn.lock().unwrap();
             conn.execute(
                 "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at) \
                  VALUES (?1, 'image', 'Screenshot Diagram', '', 'upload', 'inbox', 0, 0, '2026-09-10', '2026-09-10')",

@@ -30,6 +30,12 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
 base64 = "0.22"
 zip = "8.6.0"
+keyring = "4.2.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.24"
+image = "0.25.10"
+parking_lot = "0.12.5"
+tokio-util = "0.7.19"
 
 [profile.release]
 incremental = false

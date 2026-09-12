@@ -2,8 +2,8 @@ import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
-import { Sun, Moon, Laptop, PanelLeft, Search, Zap, Cpu } from 'lucide-react';
-import { NavigationView } from '../../stores/itemStore';
+import { PanelLeft, Search, Zap } from 'lucide-react';
+import { useItemStore, NavigationView } from '../../stores/itemStore';
 
 interface HeaderProps {
   currentView: NavigationView;
@@ -26,6 +26,8 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 }) => {
   const { settings, updateSettings } = useSettings();
   const stagedCount = useContextStore((state) => state.stagedItems.length);
+  const appMode = useItemStore((s) => s.appMode);
+  const setAppMode = useItemStore((s) => s.setAppMode);
 
   const breadcrumbs: Record<NavigationView, string> = {
     inbox: 'VELCO / WORKSTATION / INBOX',
@@ -42,11 +44,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     settings: 'VELCO / SYSTEM / SETTINGS',
   };
 
-  const cycleTheme = () => {
-    const themes: ('system' | 'light' | 'dark')[] = ['system', 'light', 'dark'];
-    const nextIdx = (themes.indexOf(settings.theme) + 1) % themes.length;
-    updateSettings({ theme: themes[nextIdx] });
-  };
+
 
   return (
     <header
@@ -66,7 +64,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
         )}
 
         <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400 dark:text-zinc-500 tracking-wider truncate" data-tauri-drag-region>
-          <span className="text-slate-800 dark:text-zinc-300 font-semibold">{breadcrumbs[currentView] || 'VELCO'}</span>
+          <span className="text-slate-800 dark:text-zinc-300 font-semibold">
+            {appMode === 'context-hub' ? 'VELCO / CONTEXT HUB' : (breadcrumbs[currentView] || 'VELCO')}
+          </span>
         </div>
       </div>
 
@@ -92,41 +92,50 @@ export const Header: React.FC<HeaderProps> = React.memo(({
       <div className="flex items-center gap-2 shrink-0">
         <AIPrivacyBadge />
 
-        {/* Studio / Workbench Toggle */}
+        {/* App Mode Toggle (Personal vs Context Hub) */}
+        <div className="flex items-center bg-slate-100 dark:bg-[#141418] p-0.5 rounded-md border border-slate-200 dark:border-white/[0.07]">
+          <button
+            onClick={() => setAppMode('personal')}
+            className={`px-2.5 py-1 rounded-[4px] text-[11px] font-mono transition-all cursor-pointer ${
+              appMode === 'personal'
+                ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-xs font-semibold'
+                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            Personal
+          </button>
+          <button
+            onClick={() => setAppMode('context-hub')}
+            className={`px-2.5 py-1 rounded-[4px] text-[11px] font-mono transition-all cursor-pointer ${
+              appMode === 'context-hub'
+                ? 'bg-blue-500 text-white shadow-xs font-semibold'
+                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            Context Hub
+          </button>
+        </div>
+
+        {/* Studio / Workbench Toggle (Replaced theme toggle, same size & shape) */}
         {onToggleFoundry && (
           <button
             onClick={onToggleFoundry}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono transition-all cursor-pointer ${
+            className={`relative p-1 rounded-md border border-slate-200 dark:border-white/[0.07] transition-colors cursor-pointer ${
               isFoundryOpen
-                ? 'bg-slate-200 dark:bg-white/[0.1] border-slate-300 dark:border-white/[0.2] text-slate-900 dark:text-zinc-100 shadow-xs font-semibold'
-                : 'bg-slate-100 dark:bg-[#141418] border-slate-200 dark:border-white/[0.07] text-slate-700 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-white/[0.14]'
+                ? 'bg-slate-200 dark:bg-white/[0.12] text-blue-500 border-blue-500/40 shadow-xs'
+                : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 bg-slate-100 dark:bg-[#141418] hover:bg-slate-200/80 dark:hover:bg-[#1a1a20]'
             }`}
             title="Toggle Studio Workbench (Ctrl+J)"
           >
-            <Zap className={`w-3 h-3 ${isFoundryOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
-            <span>Workbench</span>
+            <Zap className={`w-3.5 h-3.5 stroke-[1.5] ${isFoundryOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
             {stagedCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded bg-blue-600 text-white text-[10px] font-bold">
-                {stagedCount}
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
               </span>
             )}
           </button>
         )}
-
-        {/* Theme Switcher */}
-        <button
-          onClick={cycleTheme}
-          className="p-1 rounded-md border border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 bg-slate-100 dark:bg-[#141418] hover:bg-slate-200/80 dark:hover:bg-[#1a1a20] transition-colors cursor-pointer"
-          title={`Theme: ${settings.theme} (click to toggle)`}
-        >
-          {settings.theme === 'light' ? (
-            <Sun className="w-3.5 h-3.5 text-amber-500 stroke-[1.5]" />
-          ) : settings.theme === 'dark' ? (
-            <Moon className="w-3.5 h-3.5 text-blue-400 stroke-[1.5]" />
-          ) : (
-            <Laptop className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400 stroke-[1.5]" />
-          )}
-        </button>
       </div>
     </header>
   );

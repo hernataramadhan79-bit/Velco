@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
+import { useItemStore } from "../../stores/itemStore";
 
 interface TrashViewProps {
-  items: ItemSummary[];
   onSelect: (item: ItemSummary) => void;
   onRestore: (itemId: string) => void;
   onPermanentDelete: (itemId: string) => void;
@@ -13,12 +13,18 @@ interface TrashViewProps {
 }
 
 export const TrashView: React.FC<TrashViewProps> = ({
-  items,
   onSelect,
   onRestore,
   onPermanentDelete,
   onEmptyTrash,
 }) => {
+  const trashItems = useItemStore((s) => s.trashItems);
+  const rawItems = useItemStore((s) => s.items);
+
+  const items = useMemo(() => {
+    if (trashItems.length > 0) return trashItems;
+    return rawItems.filter((i) => i.trashed);
+  }, [trashItems, rawItems]);
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Trash Header Banner */}

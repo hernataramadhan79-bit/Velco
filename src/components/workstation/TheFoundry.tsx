@@ -398,7 +398,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
 
       {/* Staged Items Tray */}
       {stagedItems.length > 0 ? (
-        <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+        <div className="space-y-1 max-h-56 overflow-y-auto overflow-x-hidden pr-1">
           {stagedItems.map((item) => (
             <div
               key={item.id}
@@ -564,7 +564,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
             </div>
           </div>
 
-          <div className="p-3 rounded-md bg-white dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] max-h-72 overflow-y-auto text-xs text-slate-800 dark:text-zinc-200 leading-relaxed shadow-2xs">
+          <div className="p-3 rounded-md bg-white dark:bg-[#101014] border border-slate-200 dark:border-white/[0.07] max-h-72 overflow-y-auto overflow-x-hidden text-xs text-slate-800 dark:text-zinc-200 leading-relaxed shadow-2xs">
             <MarkdownViewer content={output.markdown_content || ''} />
           </div>
         </div>
@@ -612,7 +612,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
       </div>
 
       {/* Main Content Area: Dual-Pane if expanded, Stacked if normal */}
-      <div className="flex-1 overflow-y-auto p-3.5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3.5">
         {isExpanded ? (
           <div className="grid grid-cols-12 gap-4 h-full">
             <div className="col-span-5 border-r border-slate-200 dark:border-white/[0.06] pr-4">

@@ -71,8 +71,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
 
   const intelligenceNav: NavEntry[] = [
     { id: 'playground', label: 'Playground', icon: Bot },
-    { id: 'workbench', label: 'Workbench', icon: Zap },
-    { id: 'bridge', label: 'Context Hub', icon: GitBranch },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: itemCounts.tasks },
   ];
 
@@ -192,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
       </div>
 
       {/* Scrollable Center Navigation */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-2.5 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2.5 py-3 space-y-4">
         {/* Quick Search Trigger */}
         <div>
           <button
@@ -243,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
               </div>
             )}
 
-            <div className="space-y-0.5 max-h-36 overflow-y-auto px-1">
+            <div className="space-y-0.5 max-h-36 overflow-y-auto overflow-x-hidden px-1">
               {tags.slice(0, 8).map((tag) => {
                 const isSelected = selectedTagId === tag.id;
                 return (

@@ -35,7 +35,7 @@ pub fn export_notes_to_folder(
 
     // 1. Ambil rows di bawah lock singkat, lalu LEPASKAN lock sebelum I/O file.
     let rows_data: Vec<(String, String, String, String, String)> = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
         // Gunakan bound params untuk item_ids (hindari filter di Rust + hindari interpolasi SQL)
         let (sql, param_ids): (String, Vec<String>) = match &item_ids {
             Some(ids) if !ids.is_empty() => {
@@ -170,7 +170,7 @@ pub fn import_folder_as_notes(
     }
 
     // 2. Insert di bawah lock singkat + transaction.
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let mut imported = 0usize;
     let mut skipped = 0usize;
 
@@ -236,7 +236,7 @@ pub fn scan_orphan_files(
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
 ) -> Result<Vec<String>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let att_dir = storage.attachments_dir();
 
     // Ambil semua file_path + file_name dari DB, normalisasi ke file_name
@@ -300,10 +300,8 @@ pub fn cleanup_orphan_files(
         };
         // Double-check: hanya hapus bila file_name masih orphan (TOCTOU guard:
         // re-query cepat dilakukan di scan; di sini pastikan parent masih att_dir)
-        if jailed.is_file() {
-            if fs::remove_file(&jailed).is_ok() {
-                count += 1;
-            }
+        if jailed.is_file() && fs::remove_file(&jailed).is_ok() {
+            count += 1;
         }
     }
     Ok(count)
@@ -377,7 +375,7 @@ fn launch_file_sandboxed(path: &std::path::Path) -> Result<(), String> {
             cmd.arg("/select,").arg(path);
         }
         cmd.spawn().map_err(|e| format!("Failed to open file: {}", e))?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(target_os = "macos")]
     {
@@ -419,7 +417,7 @@ pub fn open_attachment_in_os(
 ) -> Result<(), String> {
     // 1. Ambil metadata di bawah lock singkat, lalu lepas sebelum I/O.
     let (file_name, file_path, data_url): (String, String, Option<String>) = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
         let query_res: rusqlite::Result<(String, String, Option<String>)> = conn.query_row(
             "SELECT file_name, file_path, data_url FROM attachments WHERE id = ?1 LIMIT 1",
             params![attachment_id],
@@ -438,37 +436,14 @@ pub fn open_attachment_in_os(
     };
 
     let safe_file_name = StorageManager::sanitize_file_name(&file_name);
-    let att_dir = storage.attachments_dir();
 
     // 2. Resolve path via jail helper (menolak absolut di luar sandbox).
-    if let Some(resolved) = storage.resolve_attachment_path(&file_path, &safe_file_name) {
-        if let Ok(jailed) = StorageManager::ensure_within_dir(&att_dir, &resolved) {
-            if jailed.is_file() {
-                return launch_file_sandboxed(&jailed);
-            }
+    if let Ok(jailed) = storage.resolve_attachment_path(&file_path) {
+        if jailed.is_file() {
+            return launch_file_sandboxed(&jailed);
         }
     }
 
-    // 3. Scan attachments folder untuk UUID prefix (tetap di dalam att_dir).
-    if let Ok(entries) = std::fs::read_dir(&att_dir) {
-        // Sanitasi suffix agar tidak bisa jadi pattern traversal
-        let suffix = format!("_{}", safe_file_name);
-        for entry in entries.flatten() {
-            let p = entry.path();
-            let is_file = entry.file_type().map(|f| f.is_file()).unwrap_or_else(|_| p.is_file());
-            if !is_file {
-                continue;
-            }
-            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if fname.ends_with(&suffix) || fname == safe_file_name {
-                if let Ok(jailed) = StorageManager::ensure_within_dir(&att_dir, &p) {
-                    if jailed.is_file() {
-                        return launch_file_sandboxed(&jailed);
-                    }
-                }
-            }
-        }
-    }
 
     // 4. Jika tidak ada di disk tapi punya base64 data_url, tulis ke cache (jail) dan launch.
     // Batasi 25MB agar tidak penuhi disk dari blob raksasa.

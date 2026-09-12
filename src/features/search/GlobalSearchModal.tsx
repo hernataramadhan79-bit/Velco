@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useDebounce } from '../../hooks/useDebounce';
 import { Search, X, FileText, CheckSquare, Link2, Folder, Star, ArrowRight, Loader2 } from 'lucide-react';
 import { Item, ItemType } from '../../types/item';
 import { db } from '../../services/database';
@@ -15,7 +16,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onClose,
   onSelectItem,
 }) => {
-  const [query, setQuery] = useState('');
+    const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 200);
   const [results, setResults] = useState<Item[]>([]);
   const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>('all');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,7 +65,6 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     if (isOpen) {
       const timer = setTimeout(() => {
         inputRef.current?.focus();
-        search('');
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -116,11 +117,16 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     }
   }, [selectedIndex]);
 
-  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
-    search(val);
   };
+
+    useEffect(() => {
+    if (isOpen) {
+      search(debouncedQuery);
+    }
+  }, [debouncedQuery, isOpen, search]);
 
   if (!isOpen) return null;
 
@@ -197,7 +203,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         {/* Search Results list */}
         <div
           ref={resultsContainerRef}
-          className="overflow-y-auto p-1.5 space-y-0.5"
+          className="overflow-y-auto overflow-x-hidden p-1.5 space-y-0.5"
         >
           {filteredResults.length === 0 ? (
             <div className="text-center py-10 text-xs text-slate-400 dark:text-zinc-500 font-mono">

@@ -553,7 +553,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   );
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans select-none">
+    <div className="flex h-full w-full max-w-full bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans select-none">
       {/* 1. INDUSTRIAL SETTINGS SIDEBAR */}
       <aside className="w-60 lg:w-64 shrink-0 border-r border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d10] flex flex-col justify-between p-3">
         <div className="space-y-3">
@@ -620,7 +620,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       </aside>
 
       {/* 2. FOCUSED SETTINGS WORKSPACE */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-slate-100/60 dark:bg-[#09090b]">
+      <div className="flex-1 flex flex-col h-full min-w-0 max-w-full overflow-hidden bg-slate-100/60 dark:bg-[#09090b]">
         {/* Top Header */}
         <header className="h-12 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d10] px-6 flex items-center shrink-0">
           <div className="flex items-center gap-2">
@@ -631,7 +631,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         </header>
 
         {/* Scrollable Section Content */}
-        <main className="flex-1 overflow-y-auto px-6 sm:px-12 py-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-6 sm:px-12 py-8">
           <div className="max-w-2xl mx-auto space-y-6 pb-12">
             {/* SECTION: AI & INTELLIGENCE */}
             {activeSection === 'ai' && (
@@ -839,7 +839,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                               </div>
                             </div>
 
-                            <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                            <div className="max-h-48 overflow-y-auto overflow-x-hidden space-y-1 pr-1 custom-scrollbar">
                               {filteredOpenRouterModels.map((m) => {
                                 const isSelected = settings.openrouterModel === m.id;
                                 return (

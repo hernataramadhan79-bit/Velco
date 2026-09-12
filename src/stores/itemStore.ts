@@ -25,9 +25,14 @@ interface Notification {
   type: NotificationType;
 }
 
+export type AppMode = 'personal' | 'context-hub';
+
 interface ItemState {
   // ── State ──────────────────────────────────────────────
+  appMode: AppMode;
   items: ItemSummary[];
+  archiveItems: ItemSummary[];
+  trashItems: ItemSummary[];
   activeItemDetail: ItemDetail | null;
   itemCounts: ItemCounts;
   loading: boolean;
@@ -39,6 +44,7 @@ interface ItemState {
   notification: Notification | null;
 
   // ── Actions ────────────────────────────────────────────
+  setAppMode: (mode: AppMode) => void;
   setCurrentView: (view: NavigationView) => void;
   setSelectedItemId: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
@@ -123,7 +129,10 @@ function mapToItemSummary(r: any): ItemSummary {
 
 export const useItemStore = create<ItemState>()((set, get) => ({
   // ── Initial State ────────────────────────────────────────
+  appMode: 'personal',
   items: [],
+  archiveItems: [],
+  trashItems: [],
   activeItemDetail: null,
   itemCounts: { inbox: 0, tasks: 0, notes: 0, files: 0, links: 0, archive: 0, trash: 0 },
   loading: true,
@@ -135,9 +144,45 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   notification: null,
 
   // ── Navigation Actions ───────────────────────────────────
+  setAppMode: (mode) => set({ appMode: mode }),
   setCurrentView: (view) => {
+    const prevView = get().currentView;
     set({ currentView: view, activeItemDetail: null });
-    // Paralel, bukan serial waterfall
+
+    const isActiveCategory = (v: NavigationView) =>
+      v === 'inbox' || v === 'notes' || v === 'tasks' || v === 'files' || v === 'links' || v === 'tags';
+
+    const fromActive = isActiveCategory(prevView);
+    const toActive = isActiveCategory(view);
+
+    // Fast-path 1: antar-kategori aktif transisi 0ms tanpa loading spinner bila data aktif sudah ada
+    if (fromActive && toActive && get().items.length > 0) {
+      void get().refreshCounts();
+      return;
+    }
+
+    // Fast-path 2: ke archive bila archiveItems sudah di-cache
+    if (view === 'archive' && get().archiveItems.length > 0) {
+      void get().refreshCounts();
+      void get().refreshItems();
+      return;
+    }
+
+    // Fast-path 3: ke trash bila trashItems sudah di-cache
+    if (view === 'trash' && get().trashItems.length > 0) {
+      void get().refreshCounts();
+      void get().refreshItems();
+      return;
+    }
+
+    // Fast-path 4: kembali ke aktif bila items sudah di-cache
+    if (toActive && get().items.length > 0) {
+      void get().refreshCounts();
+      void get().refreshItems();
+      return;
+    }
+
+    // Full refresh bila cache belum ada
     void Promise.all([get().refreshItems(), get().refreshCounts()]);
   },
 
@@ -258,57 +303,90 @@ export const useItemStore = create<ItemState>()((set, get) => ({
 
   refreshItems: async () => {
     const mySeq = ++refreshSeq;
-    set({ loading: true });
     const { currentView, searchQuery, activeTagId } = get();
+
+    // Hanya nyalakan spinner jika view ini belum punya data cache sama sekali
+    if (currentView === 'archive' && get().archiveItems.length === 0) {
+      set({ loading: true });
+    } else if (currentView === 'trash' && get().trashItems.length === 0) {
+      set({ loading: true });
+    } else if (get().items.length === 0) {
+      set({ loading: true });
+    }
 
     try {
       let rawItems: any[] = [];
 
       if (searchQuery.trim()) {
-        // Gunakan search_items_v2 yang baru
         const results = await invoke<any[]>('search_items_v2', { query: searchQuery });
-        // Buang bila sudah ada refresh lebih baru (ketik cepat)
         if (mySeq !== refreshSeq) return;
         rawItems = (results ?? []).map((r) => r.item ?? r);
-      } else {
-        // Gunakan get_items_summary untuk efisiensi
-        const opts: Record<string, any> = {};
-        if (currentView === 'trash') opts.includeTrash = true;
-        else if (currentView === 'archive') opts.includeArchived = true;
-        else if (currentView === 'notes') opts.filterType = 'note';
-        else if (currentView === 'tasks') opts.filterType = 'task';
-        else if (currentView === 'files') opts.filterType = 'file';
-        else if (currentView === 'links') opts.filterType = 'link';
-
-        rawItems = await invoke<any[]>('get_items_summary', {
-          filterType: opts.filterType ?? null,
-          includeTrash: opts.includeTrash ?? false,
-          includeArchived: opts.includeArchived ?? false,
-        });
+        let items = (rawItems ?? []).map(mapToItemSummary);
+        if (activeTagId) {
+          items = items.filter((i) => i.tags.some((t) => t.id === activeTagId));
+        }
         if (mySeq !== refreshSeq) return;
+        set({ items, loading: false });
+        return;
       }
 
-      let items = (rawItems ?? []).map(mapToItemSummary);
+      if (currentView === 'trash') {
+        rawItems = await invoke<any[]>('get_items_summary', {
+          filterType: null,
+          includeTrash: true,
+          includeArchived: false,
+        });
+        if (mySeq !== refreshSeq) return;
+        const trashItems = (rawItems ?? [])
+          .map(mapToItemSummary)
+          .filter((i) => i.trashed);
+        if (mySeq !== refreshSeq) return;
+        set({ trashItems, loading: false });
+        return;
+      }
 
-      // Filter by tag jika ada activeTagId
+      if (currentView === 'archive') {
+        rawItems = await invoke<any[]>('get_items_summary', {
+          filterType: null,
+          includeTrash: false,
+          includeArchived: true,
+        });
+        if (mySeq !== refreshSeq) return;
+        const archiveItems = (rawItems ?? [])
+          .map(mapToItemSummary)
+          .filter((i) => i.archived);
+        if (mySeq !== refreshSeq) return;
+        set({ archiveItems, loading: false });
+        return;
+      }
+
+      // Seluruh kategori aktif (inbox, tasks, notes, files, links, tags):
+      // Ambil SEMUA active items sekaligus sehingga in-memory cache selalu utuh dan konsisten
+      rawItems = await invoke<any[]>('get_items_summary', {
+        filterType: null,
+        includeTrash: false,
+        includeArchived: false,
+      });
+      if (mySeq !== refreshSeq) return;
+
+      let items = (rawItems ?? [])
+        .map(mapToItemSummary)
+        .filter((i) => !i.trashed && !i.archived);
+
       if (activeTagId) {
         items = items.filter((i) => i.tags.some((t) => t.id === activeTagId));
       }
 
-      // Filter archived untuk view archive
-      if (currentView === 'archive') {
-        items = items.filter((i) => i.archived);
-      }
-
       if (mySeq !== refreshSeq) return;
-      set({ items });
+      set({ items, loading: false });
     } catch (err: any) {
       if (mySeq !== refreshSeq) return;
       console.error('Failed to load items:', err);
       get().notify(`Could not load items: ${err.message ?? err}`, 'error');
     } finally {
-      // Hanya clear loading bila ini request terakhir
-      if (mySeq === refreshSeq) set({ loading: false });
+      if (mySeq === refreshSeq) {
+        set({ loading: false });
+      }
     }
   },
 
@@ -349,6 +427,38 @@ export const useItemStore = create<ItemState>()((set, get) => ({
               }
             : item
         ),
+        archiveItems: state.archiveItems.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                title: updates.title ?? item.title,
+                pinned: updates.favorite !== undefined ? updates.favorite : item.pinned,
+                archived: updates.archived ?? item.archived,
+                task: updates.task
+                  ? {
+                      ...(item.task || { priority: 'medium', completed: false }),
+                      ...updates.task,
+                    }
+                  : item.task,
+              }
+            : item
+        ),
+        trashItems: state.trashItems.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                title: updates.title ?? item.title,
+                pinned: updates.favorite !== undefined ? updates.favorite : item.pinned,
+                archived: updates.archived ?? item.archived,
+                task: updates.task
+                  ? {
+                      ...(item.task || { priority: 'medium', completed: false }),
+                      ...updates.task,
+                    }
+                  : item.task,
+              }
+            : item
+        ),
         // Sinkronisasi activeItemDetail jika sedang dibuka
         activeItemDetail:
           state.activeItemDetail?.id === id
@@ -374,18 +484,42 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   toggleFavorite: async (id) => {
-    const item = get().items.find((i) => i.id === id);
+    const item =
+      get().items.find((i) => i.id === id) ||
+      get().archiveItems.find((i) => i.id === id) ||
+      (get().activeItemDetail?.id === id ? (get().activeItemDetail as any) : null);
     if (!item) return;
-    await get().updateItem(id, { favorite: !item.pinned });
+    const newFav = !item.pinned;
+    await get().updateItem(id, { favorite: newFav });
+    get().notify(newFav ? 'Marked as favorite' : 'Removed from favorites', 'info');
   },
 
   toggleArchive: async (id) => {
-    const item = get().items.find((i) => i.id === id);
+    const item =
+      get().items.find((i) => i.id === id) ||
+      get().archiveItems.find((i) => i.id === id) ||
+      (get().activeItemDetail?.id === id ? (get().activeItemDetail as any) : null);
     if (!item) return;
     const newArchived = !item.archived;
-    await get().updateItem(id, { archived: newArchived });
-    get().notify(newArchived ? 'Item archived' : 'Item unarchived', 'info');
-    await Promise.all([get().refreshItems(), get().refreshCounts()]);
+    if (newArchived) {
+      set((state) => ({
+        items: state.items.filter((i) => i.id !== id),
+        archiveItems: [{ ...item, archived: true }, ...state.archiveItems.filter((i) => i.id !== id)],
+      }));
+    } else {
+      set((state) => ({
+        archiveItems: state.archiveItems.filter((i) => i.id !== id),
+        items: [{ ...item, archived: false }, ...state.items.filter((i) => i.id !== id)],
+      }));
+    }
+    try {
+      await db.updateItem(id, { archived: newArchived });
+      get().notify(newArchived ? 'Item archived' : 'Item unarchived', 'info');
+      await Promise.all([get().refreshItems(), get().refreshCounts()]);
+    } catch (err: any) {
+      get().notify(`Failed to update archive status: ${err.message}`, 'error');
+      await get().refreshItems();
+    }
   },
 
   toggleTask: async (itemId, completed) => {
@@ -439,12 +573,26 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   trashItem: async (id) => {
-    // Snapshot untuk rollback bila IPC gagal (sebelumnya item hilang di UI tanpa rollback)
+    // Snapshot untuk rollback bila IPC gagal
     const prevItems = get().items;
+    const prevArchiveItems = get().archiveItems;
+    const prevTrashItems = get().trashItems;
     const prevSelected = get().selectedItemId;
     const prevDetail = get().activeItemDetail;
+
+    const trashedItem =
+      prevItems.find((i) => i.id === id) ||
+      prevArchiveItems.find((i) => i.id === id) ||
+      (prevDetail?.id === id ? (prevDetail as any) : null);
+
     // Optimistic update
-    set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+    set((state) => ({
+      items: state.items.filter((i) => i.id !== id),
+      archiveItems: state.archiveItems.filter((i) => i.id !== id),
+      trashItems: trashedItem
+        ? [{ ...trashedItem, trashed: true }, ...state.trashItems.filter((i) => i.id !== id)]
+        : state.trashItems,
+    }));
     if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     try {
       await db.trashItem(id);
@@ -452,46 +600,75 @@ export const useItemStore = create<ItemState>()((set, get) => ({
       await get().refreshCounts();
     } catch (err: any) {
       // Rollback
-      set({ items: prevItems, selectedItemId: prevSelected, activeItemDetail: prevDetail });
+      set({
+        items: prevItems,
+        archiveItems: prevArchiveItems,
+        trashItems: prevTrashItems,
+        selectedItemId: prevSelected,
+        activeItemDetail: prevDetail,
+      });
       get().notify(`Failed to trash item: ${err.message}`, 'error');
     }
   },
 
   restoreItem: async (id) => {
+    const prevItems = get().items;
+    const prevTrashItems = get().trashItems;
+    const restoredItem = prevTrashItems.find((i) => i.id === id);
+    set((state) => ({
+      trashItems: state.trashItems.filter((i) => i.id !== id),
+      items: restoredItem
+        ? [{ ...restoredItem, trashed: false, archived: false }, ...state.items.filter((i) => i.id !== id)]
+        : state.items,
+    }));
     try {
       await db.restoreItem(id);
       get().notify('Restored item to Inbox', 'success');
       await Promise.all([get().refreshItems(), get().refreshCounts()]);
     } catch (err: any) {
+      set({ items: prevItems, trashItems: prevTrashItems });
       get().notify(`Failed to restore item: ${err.message}`, 'error');
     }
   },
 
   permanentDeleteItem: async (id) => {
     const prevItems = get().items;
+    const prevTrash = get().trashItems;
+    const prevArchive = get().archiveItems;
     const prevSelected = get().selectedItemId;
     const prevDetail = get().activeItemDetail;
-    set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+    set((state) => ({
+      trashItems: state.trashItems.filter((i) => i.id !== id),
+      items: state.items.filter((i) => i.id !== id),
+      archiveItems: state.archiveItems.filter((i) => i.id !== id),
+    }));
     if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
     try {
       await db.permanentDeleteItem(id);
       get().notify('Item permanently deleted', 'info');
       await get().refreshCounts();
     } catch (err: any) {
-      set({ items: prevItems, selectedItemId: prevSelected, activeItemDetail: prevDetail });
+      set({
+        items: prevItems,
+        trashItems: prevTrash,
+        archiveItems: prevArchive,
+        selectedItemId: prevSelected,
+        activeItemDetail: prevDetail,
+      });
       get().notify(`Failed to delete item: ${err.message}`, 'error');
     }
   },
 
   emptyTrash: async () => {
-    const prevItems = get().items;
+    const prevTrash = get().trashItems;
+    set({ trashItems: [] });
     try {
       await db.emptyTrash();
       get().notify('Trash emptied successfully', 'info');
       await Promise.all([get().refreshItems(), get().refreshCounts()]);
       set({ selectedItemId: null, activeItemDetail: null });
     } catch (err: any) {
-      set({ items: prevItems });
+      set({ trashItems: prevTrash });
       get().notify(`Failed to empty trash: ${err.message}`, 'error');
     }
   },
@@ -521,6 +698,14 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   removeTagFromItems: (tagId) => {
     set((state) => ({
       items: state.items.map((item) => ({
+        ...item,
+        tags: item.tags.filter((t) => t.id !== tagId),
+      })),
+      archiveItems: state.archiveItems.map((item) => ({
+        ...item,
+        tags: item.tags.filter((t) => t.id !== tagId),
+      })),
+      trashItems: state.trashItems.map((item) => ({
         ...item,
         tags: item.tags.filter((t) => t.id !== tagId),
       })),

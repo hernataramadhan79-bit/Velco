@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Archive } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
+import { useItemStore } from "../../stores/itemStore";
 
 interface ArchiveViewProps {
-  items: ItemSummary[];
   onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
   onTrash: (itemId: string) => void;
@@ -13,12 +13,18 @@ interface ArchiveViewProps {
 }
 
 export const ArchiveView: React.FC<ArchiveViewProps> = ({
-  items,
   onSelect,
   onToggleFavorite,
   onTrash,
   onToggleArchive,
 }) => {
+  const archiveItems = useItemStore((s) => s.archiveItems);
+  const rawItems = useItemStore((s) => s.items);
+
+  const items = useMemo(() => {
+    if (archiveItems.length > 0) return archiveItems;
+    return rawItems.filter((i) => i.archived && !i.trashed);
+  }, [archiveItems, rawItems]);
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       <div className="space-y-3">

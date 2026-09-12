@@ -144,60 +144,33 @@ impl StorageManager {
         }
     }
 
-    /// Resolve `file_path` dari DB menjadi path absolut di dalam attachments_dir.
-    /// Menolak absolut di luar sandbox dan traversal. Return None bila tidak valid.
-    pub fn resolve_attachment_path(&self, file_path: &str, file_name: &str) -> Option<PathBuf> {
-        let att_dir = self.attachments_dir();
-        let p = Path::new(file_path);
+    /// Resolve `stored_path` dari DB menjadi path absolut di dalam attachments_dir.
+    /// Menolak absolut di luar sandbox dan traversal.
+    pub fn resolve_attachment_path(&self, stored_path: &str) -> std::io::Result<PathBuf> {
+        let root = self.attachments_dir();
+        let raw = Path::new(stored_path);
 
-        // 1. Jika absolut
-        if p.is_absolute() {
-            if let Ok(jailed) = Self::ensure_within_dir(&att_dir, p) {
-                if jailed.exists() {
-                    return Some(jailed);
-                }
+        let candidate = if raw.is_absolute() {
+            raw.to_owned()
+        } else {
+            let relative = raw.strip_prefix("attachments").unwrap_or(raw);
+            if !relative.is_relative() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "Path is not relative",
+                ));
             }
-        }
+            root.join(relative)
+        };
 
-        // 2. Jika path diawali 'attachments/' atau 'attachments\'
-        if let Ok(rel) = p.strip_prefix("attachments") {
-            let cand = att_dir.join(rel);
-            if cand.exists() {
-                return Some(cand);
-            }
+        let jailed = Self::ensure_within_dir(&root, &candidate)?;
+        if !jailed.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Attachment not found or not a file",
+            ));
         }
-
-        // 3. Jika relatif langsung terhadap attachments_dir
-        if !file_path.contains("..") {
-            let cand = att_dir.join(p);
-            if cand.exists() {
-                return Some(cand);
-            }
-        }
-
-        // 4. Fallback dengan sanitized file_name
-        let safe = Self::sanitize_file_name(file_name);
-        let by_name = att_dir.join(&safe);
-        if by_name.exists() {
-            return Some(by_name);
-        }
-
-        // 5. Fallback mencari prefix {uuid}_{safe} di dalam attachments_dir
-        if let Ok(entries) = std::fs::read_dir(&att_dir) {
-            let suffix = format!("_{}", safe);
-            for entry in entries.flatten() {
-                let ep = entry.path();
-                if ep.is_file() {
-                    if let Some(n) = ep.file_name().and_then(|x| x.to_str()) {
-                        if n.ends_with(&suffix) || n == safe {
-                            return Some(ep);
-                        }
-                    }
-                }
-            }
-        }
-
-        None
+        Ok(jailed)
     }
 
     pub fn save_attachment(

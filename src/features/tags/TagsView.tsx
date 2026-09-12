@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Tag, Item, ItemSummary } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Tag as TagIcon, Plus, Trash2 } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
+import { useItemStore } from "../../stores/itemStore";
 
 interface TagsViewProps {
   tags: Tag[];
-  items: ItemSummary[];
   selectedTagId: string | null;
   onSelectTag: (tagId: string | null) => void;
   onAddTag: (name: string, color?: string) => Promise<Tag>;
@@ -29,7 +29,7 @@ const PRESET_COLORS = [
 
 export const TagsView: React.FC<TagsViewProps> = ({
   tags,
-  items,
+  
   selectedTagId,
   onSelectTag,
   onAddTag,
@@ -39,6 +39,7 @@ export const TagsView: React.FC<TagsViewProps> = ({
   onToggleFavorite,
   onTrash,
 }) => {
+  const items = useItemStore((s) => s.items);
   const [newTagName, setNewTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
 
@@ -50,9 +51,11 @@ export const TagsView: React.FC<TagsViewProps> = ({
   };
 
   const selectedTag = tags.find((t) => t.id === selectedTagId);
-  const filteredItems = selectedTagId
-    ? items.filter((i) => i.tags && i.tags.some((t) => t.id === selectedTagId))
-    : items;
+  const activeItems = useMemo(() => items.filter((i) => !i.archived && !i.trashed), [items]);
+  const filteredItems = useMemo(
+    () => (selectedTagId ? activeItems.filter((i) => i.tags && i.tags.some((t) => t.id === selectedTagId)) : activeItems),
+    [activeItems, selectedTagId]
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">

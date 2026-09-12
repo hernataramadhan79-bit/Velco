@@ -1,19 +1,20 @@
 pub mod schema;
 
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{Connection, Result};
 use std::path::Path;
 use std::sync::Mutex;
 
 pub struct Database {
-    pub conn: Mutex<Connection>,
+    pub write_conn: Mutex<Connection>,
+    pub read_pool: Pool<SqliteConnectionManager>,
 }
 
 impl Database {
-    pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let conn = Connection::open(path)?;
+        pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let conn = Connection::open(path.as_ref())?;
 
-        // Konfigurasi PRAGMA untuk performa dan ketahanan.
-        // Kegagalan PRAGMA kritis (WAL/foreign_keys) kini dilog ke stderr agar tidak fail-silent.
         apply_pragma(&conn, "PRAGMA journal_mode = WAL", true);
         apply_pragma(&conn, "PRAGMA synchronous = NORMAL", false);
         apply_pragma(&conn, "PRAGMA busy_timeout = 5000", false);
@@ -22,21 +23,31 @@ impl Database {
         apply_pragma(&conn, "PRAGMA temp_store = MEMORY", false);
         apply_pragma(&conn, "PRAGMA mmap_size = 268435456", false);
 
-        // Jalankan migrasi berbasis user_version
         schema::run_migrations(&conn)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(
                 format!("Migration failed: {}", e).into()
             ))?;
 
-        // Index tambahan untuk pencarian inisial & prefix cepat
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_items_title ON items(title)", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_name ON attachments(file_name)", []);
-
-        // Normalisasi item lawas bertipe 'text' agar menjadi 'note'
         let _ = conn.execute("UPDATE items SET type = 'note' WHERE type = 'text'", []);
 
+        let manager = SqliteConnectionManager::file(path.as_ref());
+        let pool = Pool::builder()
+            .max_size(4)
+            .build(manager)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(format!("Pool creation failed: {}", e).into()))?;
+
+        // Also configure pragmas for pool connections
+        let _ = pool.get().map(|pool_conn| {
+            apply_pragma(&pool_conn, "PRAGMA journal_mode = WAL", false);
+            apply_pragma(&pool_conn, "PRAGMA synchronous = NORMAL", false);
+            apply_pragma(&pool_conn, "PRAGMA busy_timeout = 5000", false);
+        });
+
         Ok(Self {
-            conn: Mutex::new(conn),
+            write_conn: Mutex::new(conn),
+            read_pool: pool,
         })
     }
 }

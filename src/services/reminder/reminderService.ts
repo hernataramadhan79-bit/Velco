@@ -3,6 +3,7 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Item } from '../../types/item';
 import { isTaskOverdue, isTaskDueToday, parseDueDate, hasSpecificTime } from '../../utils/dateUtils';
 import { playReminderChime } from '../../utils/audioUtils';
@@ -89,8 +90,10 @@ class ReminderService {
     }
   }
 
+  private unlistenReminder: UnlistenFn | null = null;
+
   /**
-   * Start periodic background checking (every 30 seconds)
+   * Start background reminder listener (backed by Rust native worker as single source of truth)
    */
   start(getItems: () => Promise<Item[]> | Item[], onInAppNotify?: (msg: string) => void) {
     this.getItemsFn = getItems;
@@ -99,17 +102,38 @@ class ReminderService {
     // Check permission status
     this.checkPermissionStatus().catch(() => {});
 
-    // Clear any existing timer
+    // If running in Tauri desktop, Rust is the single source of truth
+    const isTauriEnv = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+
+    if (isTauriEnv) {
+      if (this.unlistenReminder) {
+        this.unlistenReminder();
+        this.unlistenReminder = null;
+      }
+      listen<{ title: string; body: string; priority: string }>('velco://reminder-fired', (event) => {
+        playReminderChime();
+        if (this.onInAppNotifyFn) {
+          this.onInAppNotifyFn(event.payload.title);
+        }
+      }).then((unlisten) => {
+        this.unlistenReminder = unlisten;
+      }).catch(() => {});
+      return;
+    }
+
+    // Web fallback only when outside Tauri
     if (this.timer) {
       clearInterval(this.timer);
     }
-
-    // Run first check after 2 seconds, then every 30 seconds
     setTimeout(() => this.checkTasks(), 2000);
     this.timer = setInterval(() => this.checkTasks(), 30000);
   }
 
   stop() {
+    if (this.unlistenReminder) {
+      this.unlistenReminder();
+      this.unlistenReminder = null;
+    }
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;

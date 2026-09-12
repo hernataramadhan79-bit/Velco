@@ -28,6 +28,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V3)?;
         conn.pragma_update(None, "user_version", 3)?;
     }
+    if version < 4 {
+        conn.execute_batch(MIGRATION_V4)?;
+        conn.pragma_update(None, "user_version", 4)?;
+    }
 
     Ok(())
 }
@@ -191,3 +195,29 @@ const MIGRATION_V3: &str = r#"
 CREATE INDEX IF NOT EXISTS idx_items_updated_at ON items(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_items_status_trash ON items(status, archived, deleted_at);
 "#;
+
+/// V4: Tabel capsules & capsule_items untuk Context Hub
+const MIGRATION_V4: &str = r#"
+CREATE TABLE IF NOT EXISTS capsules (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'Host',
+    encryption_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS capsule_items (
+    capsule_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(capsule_id, item_id),
+    FOREIGN KEY(capsule_id) REFERENCES capsules(id) ON DELETE CASCADE,
+    FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_capsule_items_capsule ON capsule_items(capsule_id);
+CREATE INDEX IF NOT EXISTS idx_capsule_items_item ON capsule_items(item_id);
+"#;
+

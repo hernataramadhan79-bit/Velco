@@ -304,19 +304,19 @@ pub fn fetch_item_by_id(conn: &rusqlite::Connection, id: &str) -> Result<ItemRec
 
 #[tauri::command]
 pub fn get_item(db: State<'_, Database>, id: String) -> Result<ItemRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     fetch_item_by_id(&conn, &id)
 }
 
 /// Ambil daftar item ringkas (ItemSummary) dengan tags via JSON aggregation — 1 round-trip
 #[tauri::command]
-pub fn get_items_summary(
+pub fn get_items_summary(limit: Option<i32>, offset: Option<i32>,
     db: State<'_, Database>,
     filter_type: Option<String>,
     include_trash: Option<bool>,
     include_archived: Option<bool>,
 ) -> Result<Vec<ItemSummary>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
 
     let show_trash = include_trash.unwrap_or(false);
     let show_archived = include_archived.unwrap_or(false);
@@ -394,17 +394,20 @@ pub fn get_items_summary(
                           OR att.file_name LIKE '%.bmp'
                       )
                       AND att.data_url IS NOT NULL 
-                      AND att.data_url != '' 
+                      AND att.data_url != ''
                     LIMIT 1
                 ),
                 (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
             ) as thumbnail_url
         FROM items i
-        WHERE {}{}
+        WHERE {where_clause}{type_filter_sql}
         ORDER BY i.created_at DESC
-        LIMIT 500
+        LIMIT {limit} OFFSET {offset}
         "#,
-        where_clause, type_filter_sql
+        where_clause = where_clause, 
+        type_filter_sql = type_filter_sql,
+        limit = limit.unwrap_or(20000),
+        offset = offset.unwrap_or(0)
     );
 
     fn map_summary_row(row: &rusqlite::Row) -> rusqlite::Result<ItemSummary> {
@@ -463,7 +466,7 @@ pub fn get_items_summary(
 /// Ambil detail penuh item (full content) — dipanggil saat item diklik
 #[tauri::command]
 pub fn get_item_detail(db: State<'_, Database>, id: String) -> Result<ItemRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     fetch_item_by_id(&conn, &id)
 }
 
@@ -480,72 +483,34 @@ pub struct ItemCountsRecord {
 
 #[tauri::command]
 pub fn get_item_counts(db: State<'_, Database>) -> Result<ItemCountsRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
 
-    let inbox: i64 = conn
+    let counts: (i64, i64, i64, i64, i64, i64, i64) = conn
         .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND status = 'inbox'",
+            r#"
+            SELECT
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 0 AND status = 'inbox' THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 0 AND type = 'task' THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 0 AND (type = 'note' OR type = 'text') THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 0 AND (type = 'file' OR type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = items.id)) THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 0 AND type = 'link' THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NULL AND archived = 1 THEN 1 END),
+                COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END)
+            FROM items
+            "#,
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
         )
-        .unwrap_or(0);
-
-    let tasks: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND type = 'task'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-
-    let notes: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND type = 'note'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-
-    let files: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND (type = 'file' OR type = 'image' OR EXISTS (SELECT 1 FROM attachments a WHERE a.item_id = items.id))",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-
-    let links: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 0 AND type = 'link'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-
-    let archive: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND archived = 1",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-
-    let trash: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM items WHERE deleted_at IS NOT NULL",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+        .unwrap_or((0, 0, 0, 0, 0, 0, 0));
 
     Ok(ItemCountsRecord {
-        inbox,
-        tasks,
-        notes,
-        files,
-        links,
-        archive,
-        trash,
+        inbox: counts.0,
+        tasks: counts.1,
+        notes: counts.2,
+        files: counts.3,
+        links: counts.4,
+        archive: counts.5,
+        trash: counts.6,
     })
 }
 
@@ -555,8 +520,10 @@ pub fn get_items(
     filter_type: Option<String>,
     include_trash: Option<bool>,
     include_archived: Option<bool>,
+    limit: Option<i32>,
+    offset: Option<i32>,
 ) -> Result<Vec<ItemRecord>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
 
     let show_trash = include_trash.unwrap_or(false);
     let show_archived = include_archived.unwrap_or(false);
@@ -631,7 +598,9 @@ pub fn get_items(
         }
     }
 
-    sql.push_str(" ORDER BY i.created_at DESC LIMIT 500");
+        let limit_val = limit.unwrap_or(20000);
+    let offset_val = offset.unwrap_or(0);
+    sql.push_str(&format!(" ORDER BY i.created_at DESC LIMIT {} OFFSET {}", limit_val, offset_val));
 
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let param_refs: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
@@ -736,7 +705,7 @@ pub fn create_item(
             let mut file_path = String::new();
             let mut checksum = att.checksum.clone();
             let mut file_size = att.file_size;
-            let final_data_url = match &att.data_url {
+            let mut final_data_url = match &att.data_url {
                 Some(s) if s.trim().is_empty() => None,
                 Some(s) if s.len() > 30_000_000 => None, // tolak blob > ~22MB
                 Some(s) => Some(s.clone()),
@@ -754,6 +723,12 @@ pub fn create_item(
                                     file_path = target_path.to_string_lossy().to_string();
                                     checksum = computed_hash;
                                     file_size = written_size as i64;
+                                    // Jika gambar mentah berukuran besar (> 120KB), buat thumbnail ramping untuk SQLite
+                                    if bytes.len() > 120 * 1024 && (att.mime_type.starts_with("image/") || safe_name.ends_with(".png") || safe_name.ends_with(".jpg") || safe_name.ends_with(".jpeg") || safe_name.ends_with(".webp")) {
+                                        if let Some(thumb) = generate_thumbnail_data_url(&bytes, &att.mime_type) {
+                                            final_data_url = Some(thumb);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -778,7 +753,7 @@ pub fn create_item(
     // Tulis DB dalam SATU transaction (atomic: gagal di tengah → rollback, tanpa item yatim).
     // Trigger items_ai otomatis isi FTS — jangan insert manual (hindari duplikat).
     let (saved_tags, saved_attachments): (Vec<TagSubRecord>, Vec<AttachmentSubRecord>) = {
-        let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut conn = db.write_conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         tx.execute(
             "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, ?2, ?3, ?4, ?5, 'inbox', 0, 0, ?6, ?7, NULL)",
@@ -890,7 +865,7 @@ pub fn update_item(
     db: State<'_, Database>,
     payload: UpdateItemPayload,
 ) -> Result<ItemRecord, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
 
     // Check if item exists
@@ -998,7 +973,8 @@ pub fn update_item(
         .map_err(|e| e.to_string())?;
     }
 
-    conn.execute("UPDATE items SET updated_at = ?1 WHERE id = ?2", params![now, payload.id]).ok();
+    conn.execute("UPDATE items SET updated_at = ?1 WHERE id = ?2", params![now, payload.id])
+        .map_err(|e| e.to_string())?;
 
     let _ = app.emit("velco://items-changed", ());
 
@@ -1007,7 +983,7 @@ pub fn update_item(
 
 #[tauri::command]
 pub fn trash_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE items SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
@@ -1020,7 +996,7 @@ pub fn trash_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) ->
 
 #[tauri::command]
 pub fn restore_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE items SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
@@ -1032,18 +1008,18 @@ pub fn restore_item(app: tauri::AppHandle, db: State<'_, Database>, id: String) 
 }
 
 /// Hapus file fisik HANYA bila berada di dalam attachments_dir (jail).
-fn remove_jailed_file(storage: &StorageManager, file_path: &str, file_name: &str) {
-    // Resolve via jail helper; tolak absolut di luar sandbox.
-    let resolved = if let Some(r) = storage.resolve_attachment_path(file_path, file_name) {
-        r
-    } else {
-        return;
+fn remove_jailed_file(storage: &StorageManager, file_path: &str, _file_name: &str) {
+    let resolved = match storage.resolve_attachment_path(file_path) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Warning: Failed to resolve attachment path for removal '{}': {}", file_path, e);
+            return;
+        }
     };
-    if StorageManager::ensure_within_dir(&storage.attachments_dir(), &resolved).is_err() {
-        return;
-    }
     if resolved.is_file() {
-        let _ = std::fs::remove_file(resolved);
+        if let Err(e) = std::fs::remove_file(&resolved) {
+            eprintln!("Warning: Failed to delete attachment file {:?}: {}", resolved, e);
+        }
     }
 }
 
@@ -1054,12 +1030,13 @@ pub fn delete_item_permanent(
     storage: State<'_, StorageManager>,
     id: String,
 ) -> Result<(), String> {
-    // 1. Ambil daftar file di bawah lock singkat
+    // 1. Ambil daftar file & hapus row DB dalam 1 lock singkat (DB diupdate terlebih dahulu)
     let files: Vec<(String, String)> = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
         let mut out = Vec::new();
         if let Ok(mut stmt) =
-            conn.prepare("SELECT file_path, file_name FROM attachments WHERE item_id = ?1")
+            tx.prepare("SELECT file_path, file_name FROM attachments WHERE item_id = ?1")
         {
             if let Ok(rows) = stmt.query_map(params![id], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -1069,19 +1046,18 @@ pub fn delete_item_permanent(
                 }
             }
         }
+        // Hapus row DB (CASCADE + trigger FTS otomatis bersih)
+        tx.execute("DELETE FROM items WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
         out
-        // lock dilepas sebelum hapus file
     };
 
-    // 2. Hapus file fisik dengan jail (di luar lock agar tidak block IPC)
+    // 2. Hapus file fisik dengan jail (setelah DB terbukti sukses terhapus)
     for (fp, fn_) in files {
         remove_jailed_file(&storage, &fp, &fn_);
     }
 
-    // 3. Hapus row DB (CASCADE + trigger FTS otomatis bersih)
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM items WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
     let _ = app.emit("velco://items-changed", ());
     Ok(())
 }
@@ -1092,11 +1068,12 @@ pub fn empty_trash(
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
 ) -> Result<usize, String> {
-    // 1. Ambil daftar file trashed di bawah lock singkat
-    let files: Vec<(String, String)> = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // 1. Ambil daftar file trashed & hapus items dalam 1 transaksi DB
+    let (files, count): (Vec<(String, String)>, usize) = {
+        let mut conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
         let mut out = Vec::new();
-        if let Ok(mut stmt) = conn.prepare("SELECT a.file_path, a.file_name FROM attachments a JOIN items i ON a.item_id = i.id WHERE i.deleted_at IS NOT NULL") {
+        if let Ok(mut stmt) = tx.prepare("SELECT a.file_path, a.file_name FROM attachments a JOIN items i ON a.item_id = i.id WHERE i.deleted_at IS NOT NULL") {
             if let Ok(rows) = stmt.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
             }) {
@@ -1105,25 +1082,67 @@ pub fn empty_trash(
                 }
             }
         }
-        out
+        let deleted_count = tx
+            .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
+            .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        (out, deleted_count)
     };
 
-    // 2. Hapus file di luar lock dengan jail
+    // 2. Hapus file di luar lock setelah DB commit berhasil
     for (fp, fn_) in files {
         remove_jailed_file(&storage, &fp, &fn_);
     }
 
-    // 3. Hapus rows
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let count = conn
-        .execute("DELETE FROM items WHERE deleted_at IS NOT NULL", [])
-        .map_err(|e| e.to_string())?;
     let _ = app.emit("velco://items-changed", ());
     Ok(count)
 }
 
+/// Generate a lightweight, high-performance thumbnail data URL (~20-35KB).
+/// Resizes any image (whether 500KB, 5MB, 20MB, or 100MB) to max 480x480px,
+/// ensuring instant rendering and zero SQLite / IPC bloat.
+pub fn generate_thumbnail_data_url(bytes: &[u8], mime_type: &str) -> Option<String> {
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let is_svg = mime_type.contains("svg") || mime_type == "image/svg+xml";
+    if is_svg {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        return Some(format!("data:image/svg+xml;base64,{}", b64));
+    }
+
+    // Try decoding and resizing using the `image` crate (handles JPEG, PNG, WebP, GIF, BMP, etc.)
+    if let Ok(img) = image::load_from_memory(bytes) {
+        let thumb = img.thumbnail(480, 480);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let (format, mime) = if thumb.color().has_alpha() {
+            (image::ImageFormat::Png, "image/png")
+        } else {
+            (image::ImageFormat::Jpeg, "image/jpeg")
+        };
+        if thumb.write_to(&mut buf, format).is_ok() {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(buf.get_ref());
+            return Some(format!("data:{};base64,{}", mime, b64));
+        }
+    }
+
+    // Fallback if image decode fails (e.g. uncommon format), only for <= 5MB to avoid memory bloat
+    if bytes.len() <= 5 * 1024 * 1024 {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let safe_mime = if mime_type.starts_with("image/") {
+            mime_type.to_string()
+        } else {
+            "image/jpeg".to_string()
+        };
+        return Some(format!("data:{};base64,{}", safe_mime, b64));
+    }
+
+    None
+}
+
 #[tauri::command]
-pub fn import_files_from_paths(
+pub async fn import_files_from_paths(
     app: tauri::AppHandle,
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
@@ -1228,9 +1247,8 @@ pub fn import_files_from_paths(
             .unwrap_or(&s.file_name)
             .to_string();
 
-        let data_url = if s.item_type == "image" && file_size <= 64 * 1024 {
-            let b64 = base64::engine::general_purpose::STANDARD.encode(&s.file_bytes);
-            Some(format!("data:{};base64,{}", s.mime_type, b64))
+        let data_url = if s.item_type == "image" {
+            generate_thumbnail_data_url(&s.file_bytes, &s.mime_type)
         } else {
             None
         };
@@ -1246,7 +1264,7 @@ pub fn import_files_from_paths(
         if matches!(
             s.extension.as_str(),
             "txt" | "md" | "json" | "csv" | "log" | "rs" | "ts" | "js" | "html" | "css" | "xml" | "yaml" | "yml" | "sql" | "py" | "sh" | "bat" | "env" | "ini"
-        ) && file_size <= 1 * 1024 * 1024
+        ) && file_size <= 1024 * 1024
         {
             if let Ok(text) = String::from_utf8(s.file_bytes.clone()) {
                 content = text.chars().take(200_000).collect();
@@ -1277,7 +1295,7 @@ pub fn import_files_from_paths(
     let now = chrono::Utc::now().to_rfc3339();
     let mut imported_ids: Vec<String> = Vec::new();
     {
-        let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut conn = db.write_conn.lock().map_err(|e| e.to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         for r in &ready {
             let item_id = uuid::Uuid::new_v4().to_string();
@@ -1299,7 +1317,7 @@ pub fn import_files_from_paths(
     }
 
     // 4. Fetch records (read-only, tanpa menahan transaction)
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let mut imported_items = Vec::new();
     for item_id in imported_ids {
         if let Ok(rec) = fetch_item_by_id(&conn, &item_id) {
@@ -1337,10 +1355,8 @@ pub fn extract_docx_text(bytes: &[u8]) -> Option<String> {
                 }
                 tag_name.push(chars.next().unwrap());
             }
-            if tag_name == "w:p" || tag_name == "/w:p" {
-                if !result.ends_with('\n') && !result.is_empty() {
-                    result.push('\n');
-                }
+            if (tag_name == "w:p" || tag_name == "/w:p") && !result.ends_with('\n') && !result.is_empty() {
+                result.push('\n');
             }
             is_text_node = tag_name == "w:t" || tag_name.starts_with("w:t ");
         } else if c == '>' {
@@ -1406,7 +1422,7 @@ pub fn get_attachment_preview(
     storage: State<'_, StorageManager>,
     attachment_id: String,
 ) -> Result<FilePreviewContent, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
 
     // Query lampiran dari DB
     let query_res = conn.query_row(
@@ -1507,56 +1523,20 @@ pub fn get_attachment_preview(
     // 1. Cek apakah berkas ada di disk — HANYA di dalam attachments_dir (jail).
     // Path absolut di luar sandbox DITOLAK (mencegah arbitrary file read via DB beracun).
     // Lock DB dilepas sebelum I/O file agar tidak block IPC lain.
-    let att_dir = storage.attachments_dir();
-    let safe_name = StorageManager::sanitize_file_name(&file_name);
-    let jailed_primary: Option<std::path::PathBuf> =
-        storage.resolve_attachment_path(&file_path, &safe_name);
+    let _att_dir = storage.attachments_dir();
+    let jailed_primary = storage.resolve_attachment_path(&file_path);
+    
     // Drop guard sebelum fs::read (conn masih dipinjam oleh query di atas; explicitly drop)
     // NOTE: `conn` adalah MutexGuard — drop agar read file tidak menahan lock.
     drop(conn);
 
     let mut found_bytes: Option<Vec<u8>> = None;
-    if let Some(p) = jailed_primary {
-        if let Ok(jailed) = StorageManager::ensure_within_dir(&att_dir, &p) {
-            // Cap baca 30MB agar tidak OOM
-            if let Ok(meta) = std::fs::metadata(&jailed) {
-                if meta.len() <= 30 * 1024 * 1024 && jailed.is_file() {
-                    if let Ok(bytes) = std::fs::read(&jailed) {
-                        found_bytes = Some(bytes);
-                    }
-                }
-            }
-        }
-    }
-
-    // Jika belum ketemu, scan folder attachments untuk UUID prefix (tetap di dalam att_dir)
-    if found_bytes.is_none() {
-        if let Ok(entries) = std::fs::read_dir(&att_dir) {
-            let suffix = format!("_{}", safe_name);
-            for entry in entries.flatten() {
-                let p = entry.path();
-                let is_file = entry
-                    .file_type()
-                    .map(|f| f.is_file())
-                    .unwrap_or_else(|_| p.is_file());
-                if !is_file {
-                    continue;
-                }
-                // Jail tiap kandidat
-                if StorageManager::ensure_within_dir(&att_dir, &p).is_err() {
-                    continue;
-                }
-                let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if fname.ends_with(&suffix) || fname == safe_name {
-                    if let Ok(meta) = std::fs::metadata(&p) {
-                        if meta.len() > 30 * 1024 * 1024 {
-                            continue;
-                        }
-                    }
-                    if let Ok(bytes) = std::fs::read(&p) {
-                        found_bytes = Some(bytes);
-                        break;
-                    }
+    if let Ok(jailed) = jailed_primary {
+        // Cap baca 30MB agar tidak OOM
+        if let Ok(meta) = std::fs::metadata(&jailed) {
+            if meta.len() <= 30 * 1024 * 1024 && jailed.is_file() {
+                if let Ok(bytes) = std::fs::read(&jailed) {
+                    found_bytes = Some(bytes);
                 }
             }
         }
@@ -1581,7 +1561,7 @@ pub fn get_attachment_preview(
 
     // Helper: cache data_url kecil kembali ke DB di bawah lock singkat
     let cache_data_url = |att_id: &str, url: &str| {
-        if let Ok(conn) = db.conn.lock() {
+        if let Ok(conn) = db.write_conn.lock() {
             let _ = conn.execute(
                 "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
                 params![url, att_id],
@@ -1640,7 +1620,7 @@ pub fn get_attachment_preview(
 
         // Jika masih belum ada text_content, ambil dari content tabel items (lock singkat)
         if text_content.is_none() {
-            if let Ok(conn) = db.conn.lock() {
+            if let Ok(conn) = db.write_conn.lock() {
                 if let Ok(raw_content) = conn.query_row(
                     "SELECT content FROM items WHERE id = ?1",
                     params![item_id],
@@ -1656,19 +1636,22 @@ pub fn get_attachment_preview(
         preview_type = "image".to_string();
         if data_url.is_none() || data_url.as_deref() == Some("") {
             if let Some(bytes) = &found_bytes {
-                if bytes.len() <= 20 * 1024 * 1024 {
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-                    let safe_mime = if mime_type.starts_with("image/") {
-                        mime_type.clone()
-                    } else {
-                        format!("image/{}", if extension == "jpg" { "jpeg" } else { &extension })
-                    };
-                    let url = format!("data:{};base64,{}", safe_mime, b64);
-                    // Only cache tiny thumbnails (<= 64KB) in SQLite to prevent bloat
-                    if bytes.len() <= 64 * 1024 {
+                if bytes.len() <= 30 * 1024 * 1024 {
+                    // Buat thumbnail ramping untuk di-cache di SQLite
+                    if let Some(thumb_url) = generate_thumbnail_data_url(bytes, &mime_type) {
+                        cache_data_url(&id, &thumb_url);
+                        data_url = Some(thumb_url);
+                    } else if bytes.len() <= 10 * 1024 * 1024 {
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+                        let safe_mime = if mime_type.starts_with("image/") {
+                            mime_type.clone()
+                        } else {
+                            format!("image/{}", if extension == "jpg" { "jpeg" } else { &extension })
+                        };
+                        let url = format!("data:{};base64,{}", safe_mime, b64);
                         cache_data_url(&id, &url);
+                        data_url = Some(url);
                     }
-                    data_url = Some(url);
                 }
             }
         }
@@ -1705,3 +1688,40 @@ pub fn get_attachment_preview(
         char_count,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_thumbnail_from_large_image() {
+        // Buat gambar buatan resolusi besar (1200x800)
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(1200, 800));
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).expect("PNG encode failed");
+        let png_bytes = buf.into_inner();
+
+        let thumb = generate_thumbnail_data_url(&png_bytes, "image/png");
+        assert!(thumb.is_some(), "Thumbnail must be generated for large image");
+        let thumb_url = thumb.unwrap();
+        assert!(thumb_url.starts_with("data:image/"), "Must be a valid data URL");
+        // Pastikan ukuran string thumbnail ramping (< 100KB), membuktikan thumbnail berhasil di-downscale
+        assert!(thumb_url.len() < 100_000, "Thumbnail data URL must be compact, got len {}", thumb_url.len());
+    }
+
+    #[test]
+    fn test_generate_thumbnail_svg() {
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="40" fill="blue" /></svg>"#;
+        let thumb = generate_thumbnail_data_url(svg, "image/svg+xml");
+        assert!(thumb.is_some());
+        let thumb_url = thumb.unwrap();
+        assert!(thumb_url.starts_with("data:image/svg+xml;base64,"));
+    }
+
+    #[test]
+    fn test_generate_thumbnail_empty() {
+        let thumb = generate_thumbnail_data_url(&[], "image/png");
+        assert!(thumb.is_none());
+    }
+}
+

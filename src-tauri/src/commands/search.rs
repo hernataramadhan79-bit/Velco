@@ -29,7 +29,7 @@ pub fn search_items_v2(
     db: State<'_, Database>,
     query: String,
 ) -> Result<Vec<SearchResult>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     let trimmed = query.trim();
 
     if trimmed.is_empty() {
@@ -80,7 +80,7 @@ pub fn search_items_v2(
         "#;
 
         let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map([], |row| map_search_row(row)).map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], map_search_row).map_err(|e| e.to_string())?;
         let mut results = Vec::new();
         for r in rows { results.push(r.map_err(|e| e.to_string())?); }
         return Ok(results);
@@ -175,7 +175,7 @@ pub fn search_items_v2(
     let rows = stmt
         .query_map(
             params![fts_query, exact_query, prefix_pattern, substring_pattern],
-            |row| map_search_row(row),
+            map_search_row,
         )
         .map_err(|e| e.to_string())?;
 
@@ -228,7 +228,7 @@ fn map_search_row(row: &rusqlite::Row) -> rusqlite::Result<SearchResult> {
 /// Command lama — dipertahankan untuk backward compatibility dengan prefix matching
 #[tauri::command]
 pub fn search_items(db: State<'_, Database>, query: String) -> Result<Vec<crate::commands::items::ItemRecord>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     let trimmed = query.trim();
 
     if trimmed.is_empty() {

@@ -45,9 +45,11 @@ import {
   StructuredTaskItem,
   TagRecommendation,
 } from '../../services/ai/taskExtractor';
+import { invoke } from '@tauri-apps/api/core';
+import { z } from 'zod';
 import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { TagRecommendationBar } from './TagRecommendationBar';
-import { getProviderDisplayName } from '../../utils/aiUtils';
+import { getProviderDisplayName, extractValidJson } from '../../utils/aiUtils';
 import {
   formatFileSize,
   getFileTypeMeta,
@@ -58,7 +60,6 @@ import { FileLightboxModal } from '../../features/files/FileLightboxModal';
 
 async function fetchAttachmentPreview(attachmentId: string): Promise<FilePreviewContent | null> {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const res = await invoke<any>('get_attachment_preview', { attachmentId });
     if (!res) return null;
     return {
@@ -237,6 +238,18 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
     };
   }, []);
 
+  // Keyboard accessibility: Escape key closes modal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const activeAttachment: Attachment | undefined =
     item.attachments && item.attachments.length > 0
       ? item.attachments[Math.min(selectedAttachmentIdx, item.attachments.length - 1)]
@@ -376,7 +389,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
   const handleOpenInSystemViewer = async () => {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const attachmentId = activeAttachment?.id || item.id;
       await invoke('open_attachment_in_os', { attachmentId });
       notify('Opening document in default application...', 'info');
@@ -707,8 +719,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         // Sebelumnya JSON.parse mentah langsung masuk SQLite lalu crash saat render.
         let parsed = { category: 'General', confidence: 0.8, suggestedTags: [] as string[] };
         try {
-          const { extractValidJson } = await import('../../utils/aiUtils');
-          const { z } = await import('zod');
           const ClassifySchema = z.object({
             category: z.string().max(50).default('General'),
             confidence: z.number().min(0).max(1).default(0.8),
@@ -1858,7 +1868,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 </span>
               </div>
 
-              <div className="p-3 max-h-48 overflow-y-auto space-y-2 text-xs custom-scrollbar">
+              <div className="p-3 max-h-48 overflow-y-auto overflow-x-hidden space-y-2 text-xs custom-scrollbar">
                 {chatMessages.length === 0 ? (
                   <div className="text-slate-400 dark:text-zinc-500 text-center py-4 text-[11px]">
                     Ask any question about this item's content.
