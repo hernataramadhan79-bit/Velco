@@ -22,6 +22,7 @@ import {
   WifiOff,
   Users,
   Search,
+  LogIn,
   Eye,
   Edit3,
   Save,
@@ -83,6 +84,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
   // Modals state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [joinTab, setJoinTab] = useState<'key' | 'file'>('key');
   const [isNewCapsuleOpen, setIsNewCapsuleOpen] = useState(false);
   const [isEditCapsuleOpen, setIsEditCapsuleOpen] = useState(false);
   const [isNewDocOpen, setIsNewDocOpen] = useState(false);
@@ -304,26 +306,29 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     e.target.value = '';
   };
 
-  // Import capsule from raw JSON or key
+  // Import or join capsule from raw JSON or invitation key
   const handleJoinCapsuleByInput = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinKeyInput.trim()) return;
+    const trimmed = joinKeyInput.trim();
+    if (!trimmed) return;
 
     try {
-      if (joinKeyInput.trim().startsWith('{')) {
-        const imported = await importCapsule(joinKeyInput.trim());
+      if (trimmed.startsWith('{')) {
+        const imported = await importCapsule(trimmed);
         setIsJoinModalOpen(false);
         setJoinKeyInput('');
-        onNotify?.(`Imported "${imported.name}"`, 'success');
+        onNotify?.(`Imported "${imported.name}"! Click "Go Live" to sync on LAN.`, 'success');
       } else {
-        const created = await createCapsule(
-          `Workspace (${joinKeyInput.slice(0, 8)})`,
-          'Imported via key',
-          'Member'
+        const keyShort = trimmed.replace(/^vctx_live_/, '').slice(0, 6).toUpperCase();
+        await createCapsule(
+          `Joined Session (${keyShort})`,
+          'Joined via peer invitation key',
+          'Member',
+          trimmed
         );
         setIsJoinModalOpen(false);
         setJoinKeyInput('');
-        onNotify?.('Connected to capsule via key', 'success');
+        onNotify?.('Joined capsule! Click "Go Live" to connect with peers on your local network.', 'success');
       }
     } catch (err: any) {
       onNotify?.(`Failed to join: ${err.message || err}`, 'error');
@@ -605,10 +610,11 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
           <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => setIsJoinModalOpen(true)}
-              className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-200/60 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
-              title="Import .vctx capsule"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-zinc-200 text-[11px] font-medium transition-colors border border-slate-200 dark:border-white/[0.08] cursor-pointer"
+              title="Join via key or import .vctx bundle"
             >
-              <Download className="w-3.5 h-3.5" />
+              <LogIn className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Join</span>
             </button>
 
             <button
@@ -621,7 +627,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
             <button
               onClick={() => setIsNewCapsuleOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors shadow-2xs cursor-pointer ml-1"
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors shadow-2xs cursor-pointer ml-0.5"
               title="New Capsule"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -1611,56 +1617,73 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
         </div>
       )}
 
-      {/* 2. Import Capsule Modal */}
+      {/* 2. Join / Import Capsule Modal */}
       {isJoinModalOpen && (
         <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <div className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Download className="w-4 h-4 text-blue-600" />
+                <LogIn className="w-4 h-4 text-blue-600" />
                 <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  Import Capsule
+                  Join or Import Capsule
                 </h3>
               </div>
               <button
                 onClick={() => setIsJoinModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <label className="block p-4 border-2 border-dashed border-slate-200 dark:border-white/[0.1] hover:border-blue-500 rounded-xl text-center cursor-pointer transition-colors">
-                <Upload className="w-5 h-5 mx-auto text-blue-500 mb-1" />
-                <span className="text-xs font-medium text-slate-700 dark:text-zinc-200 block">
-                  Select a .vctx file
-                </span>
-                <input
-                  type="file"
-                  accept=".vctx,.json"
-                  onChange={handleImportBundleFile}
-                  className="hidden"
-                />
-              </label>
+            {/* Mode Switcher Tabs */}
+            <div className="flex rounded-lg bg-slate-100 dark:bg-[#101014] p-1 border border-slate-200/80 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setJoinTab('key')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  joinTab === 'key'
+                    ? 'bg-white dark:bg-[#18181e] text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Invitation Key</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setJoinTab('file')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  joinTab === 'file'
+                    ? 'bg-white dark:bg-[#18181e] text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>File .vctx</span>
+              </button>
+            </div>
 
-              <div className="relative flex items-center justify-center my-2">
-                <div className="border-t border-slate-200 dark:border-white/[0.08] w-full" />
-                <span className="bg-white dark:bg-[#141418] px-2 text-[10px] text-slate-400 uppercase">
-                  Or paste invite key
-                </span>
-              </div>
-
+            {joinTab === 'key' ? (
               <form onSubmit={handleJoinCapsuleByInput} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Paste invitation key or JSON..."
-                  value={joinKeyInput}
-                  onChange={(e) => setJoinKeyInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
+                    Peer Invitation Key
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Paste key (e.g. vctx_live_...) or exported JSON"
+                    value={joinKeyInput}
+                    onChange={(e) => setJoinKeyInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs font-mono text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1.5 leading-relaxed">
+                    Paste the invitation key copied from your peer&apos;s <strong>Share</strong> modal. Once joined, both of you can click <strong>Go Live</strong> to synchronize in real time via LAN.
+                  </p>
+                </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setIsJoinModalOpen(false)}
@@ -1671,13 +1694,42 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
                   <button
                     type="submit"
                     disabled={!joinKeyInput.trim()}
-                    className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
                   >
-                    Import
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Join Capsule</span>
                   </button>
                 </div>
               </form>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                <label className="block p-5 border-2 border-dashed border-slate-200 dark:border-white/[0.1] hover:border-blue-500 rounded-xl text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-white/[0.02]">
+                  <Upload className="w-6 h-6 mx-auto text-blue-500 mb-2" />
+                  <span className="text-xs font-medium text-slate-800 dark:text-zinc-200 block mb-0.5">
+                    Select a .vctx or .json file
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 block">
+                    Imports complete workspace notes, tasks, and cryptographic key
+                  </span>
+                  <input
+                    type="file"
+                    accept=".vctx,.json"
+                    onChange={handleImportBundleFile}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsJoinModalOpen(false)}
+                    className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

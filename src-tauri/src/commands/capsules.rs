@@ -499,8 +499,12 @@ pub fn import_capsule(
     let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().to_rfc3339();
 
-    let cap_id = uuid::Uuid::new_v4().to_string();
-    let name = format!("{} (Imported)", bundle.capsule.name.trim());
+    let cap_id = if bundle.capsule.id.trim().is_empty() {
+        uuid::Uuid::new_v4().to_string()
+    } else {
+        bundle.capsule.id.trim().to_string()
+    };
+    let name = bundle.capsule.name.trim().to_string();
     let desc = bundle.capsule.description;
     let role = "Member".to_string();
     let key = if bundle.capsule.encryption_key.is_empty() {
@@ -511,7 +515,7 @@ pub fn import_capsule(
 
     conn.execute(
         r#"
-        INSERT INTO capsules (id, name, description, role, encryption_key, created_at, updated_at)
+        INSERT OR REPLACE INTO capsules (id, name, description, role, encryption_key, created_at, updated_at)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
         "#,
         params![cap_id, name, desc, role, key, now, now],

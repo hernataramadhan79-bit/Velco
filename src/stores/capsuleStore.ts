@@ -43,7 +43,7 @@ interface CapsuleState {
   selectCapsule: (id: string | null) => Promise<void>;
   loadCapsuleItems: (capsuleId: string) => Promise<void>;
 
-  createCapsule: (name: string, description?: string, role?: string) => Promise<CapsuleRecord>;
+  createCapsule: (name: string, description?: string, role?: string, encryptionKey?: string) => Promise<CapsuleRecord>;
   updateCapsule: (id: string, updates: { name?: string; description?: string }) => Promise<void>;
   deleteCapsule: (id: string) => Promise<void>;
   addItemToCapsule: (capsuleId: string, itemId: string) => Promise<void>;
@@ -164,12 +164,12 @@ export const useCapsuleStore = create<CapsuleState>((set, get) => ({
     }
   },
 
-  createCapsule: async (name: string, description?: string, role?: string) => {
+  createCapsule: async (name: string, description?: string, role?: string, encryptionKey?: string) => {
     const raw = await invoke<RawCapsule>('create_capsule', {
       name,
       description: description || '',
       role: role || 'Host',
-      encryptionKey: null,
+      encryptionKey: encryptionKey || null,
     });
     const created = mapRawCapsule(raw);
     await get().refreshCapsules();

@@ -114,9 +114,9 @@ async fn handle_incoming_beacon(
         return;
     }
 
-    // Pastikan capsule dan key fingerprint cocok
+    // Pastikan capsule atau key fingerprint cocok
     if let (Some(ref my_cap), Some(ref my_hash)) = (active_cap, my_key_hash) {
-        if beacon.capsule_id == *my_cap && beacon.key_hash == *my_hash {
+        if beacon.key_hash == *my_hash || beacon.capsule_id == *my_cap {
             let mut target_addr = sender_addr;
             target_addr.set_port(beacon.port);
 
