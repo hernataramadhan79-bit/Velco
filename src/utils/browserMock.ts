@@ -1,7 +1,7 @@
 // Browser mock for Velco when running in standard browser/Vite dev environment
 // Enables rich local interactive preview and screenshot capture without Tauri Rust backend.
 
-if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+if (import.meta.env.DEV && typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
   console.info('🚀 [Velco Browser Sandbox] Initializing mock Tauri backend for web preview...');
 
   const mockTags = [
