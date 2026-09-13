@@ -10,6 +10,7 @@ import { useContextStore } from '../../stores/contextStore';
 import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
 import { SelectionActionBar } from '../common/SelectionActionBar';
+import { useSelectionStore } from '../../stores/selectionStore';
 import { ViewSkeleton } from '../common/ViewSkeleton';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { reminderService } from '../../services/reminder/reminderService';
@@ -586,13 +587,14 @@ export const AppLayout: React.FC = () => {
       <DragDropIndicator isDragging={isGlobalDragging} />
 
       {/* Global Multi-Select Action Bar */}
-      <SelectionActionBar
-        
-        onOpenFoundry={() => setIsFoundryOpen(true)}
-        onFocusChat={() => {
-          navigateToView('inbox');
-        }}
-      />
+      <ErrorBoundary onReset={() => useSelectionStore.getState().clearSelection()}>
+        <SelectionActionBar
+          onOpenFoundry={() => setIsFoundryOpen(true)}
+          onFocusChat={() => {
+            navigateToView('inbox');
+          }}
+        />
+      </ErrorBoundary>
     </div>
   );
 };

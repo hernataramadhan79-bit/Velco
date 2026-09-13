@@ -27,12 +27,14 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
   const { notify, trashItem } = useItemStore();
 
   const selectedCount = selectedIds.size;
-  if (selectedCount === 0) return null;
 
   const selectedItems = useMemo(() => {
+    if (selectedCount === 0) return [];
     const all = [...items, ...archiveItems, ...trashItems];
     return all.filter((item) => selectedIds.has(item.id));
-  }, [items, archiveItems, trashItems, selectedIds]);
+  }, [items, archiveItems, trashItems, selectedIds, selectedCount]);
+
+  if (selectedCount === 0) return null;
 
   const handleAddToChatContext = () => {
     if (selectedItems.length === 0) return;
