@@ -1,7 +1,7 @@
 # Velco v0.2.0 — Production Multi-Platform Release
 
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Velco Banner" width="100%" />
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/logo.png" width="120" height="120" alt="Velco Logo" />
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@ In addition to universal binaries, v0.2.0 introduces a dedicated **P2P Join & Ha
 
 ### 1. Mode 1: Personal Workstation Stream
 <p align="center">
-  <img src="docs/assets/screenshots/01-personal-workstation.png" alt="Personal Workstation" width="100%" />
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/screenshots/01-personal-workstation.png" alt="Personal Workstation" width="100%" />
 </p>
 
 - High-throughput ingestion stream with keyboard shortcuts (`Cmd+K` for FTS5 search, `Cmd+J` for AI workbench).
@@ -48,7 +48,7 @@ In addition to universal binaries, v0.2.0 introduces a dedicated **P2P Join & Ha
 
 ### 2. Mode 2: Context Hub & Technical Kanban
 <p align="center">
-  <img src="docs/assets/screenshots/02-context-hub-kanban.png" alt="Context Hub Kanban" width="100%" />
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/screenshots/02-context-hub-kanban.png" alt="Context Hub Kanban" width="100%" />
 </p>
 
 - 3-column Kanban board (`To Do`, `Priority / In Progress`, `Completed`) with inline priority adjustments and instant SQLite status sync.
@@ -57,7 +57,7 @@ In addition to universal binaries, v0.2.0 introduces a dedicated **P2P Join & Ha
 
 ### 3. P2P Collaboration & Join Handshake
 <p align="center">
-  <img src="docs/assets/screenshots/03-p2p-join-modal.png" alt="P2P Join Modal" width="100%" />
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/screenshots/03-p2p-join-modal.png" alt="P2P Join Modal" width="100%" />
 </p>
 
 - Dual-tab connection modal supporting both **Invitation Key** tokens (`vctx_live_...`) and standalone `.vctx` file imports.
@@ -66,7 +66,7 @@ In addition to universal binaries, v0.2.0 introduces a dedicated **P2P Join & Ha
 
 ### 4. Floating Multi-Selection Action Bar
 <p align="center">
-  <img src="docs/assets/screenshots/04-selection-action-bar.png" alt="Selection Action Bar" width="100%" />
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/screenshots/04-selection-action-bar.png" alt="Selection Action Bar" width="100%" />
 </p>
 
 - Fixed hook execution order in `SelectionActionBar.tsx`, resolving Minified React Error #310.

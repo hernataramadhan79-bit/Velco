@@ -1,5 +1,12 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Velco Banner" width="100%" />
+  <img src="docs/assets/logo.png" width="120" height="120" alt="Velco Logo" />
+</p>
+
+<h1 align="center">Velco</h1>
+
+<p align="center">
+  <strong>The Local-First, Context-Bound AI Workstation &amp; Knowledge OS</strong><br>
+  <em>Grounded context synthesis &bull; Embedded SQLite storage &bull; Air-gapped LAN collaboration &bull; Zero cloud telemetry</em>
 </p>
 
 <p align="center">
@@ -21,11 +28,6 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-gray?style=for-the-badge" alt="License">
   </a>
-</p>
-
-<p align="center">
-  <strong>Velco</strong> is an industrial-grade, local-first desktop workstation engineered for technical power users, engineers, and researchers.<br>
-  <em>Grounded context synthesis. Embedded SQLite storage. Air-gapped LAN collaboration. Zero cloud telemetry.</em>
 </p>
 
 ---
@@ -53,7 +55,7 @@ Official signed packages and portable binaries compiled via automated multi-arch
 
 ## 📸 Visual Interface Previews
 
-All screenshots are captured directly from live production builds running the obsidian industrial dark theme (`#09090b`):
+All screenshots are captured directly from live desktop builds running the obsidian industrial dark theme (`#09090b`):
 
 ### 1. Mode 1: Personal Workstation (Instant Capture & Virtualized Stream)
 High-density knowledge stream featuring rapid capture docks, automatic markdown parsing, priority chips, tag taxonomy, due dates, and virtualized scrolling handling 10,000+ items with zero compositor lag:

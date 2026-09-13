@@ -1,10 +1,10 @@
-# Velco UI/UX Comprehensive Review & Design System Audit
-
 <p align="center">
-  <img src="assets/banner.svg" alt="Velco Banner" width="100%" />
+  <img src="assets/logo.png" width="120" height="120" alt="Velco Logo" />
 </p>
 
-> **Document Version**: 2.1.0  
+<h1 align="center">Velco UI/UX Comprehensive Review &amp; Design System Audit</h1>
+
+> **Document Version**: 2.2.0  
 > **Release Target**: Velco Universal Multi-Platform Release (v0.2.0)  
 > **Design Philosophy**: Industrial Minimalism &bull; Zero-Slop Ergonomics &bull; Local-First Context Preservation
 
