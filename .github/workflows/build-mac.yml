@@ -53,15 +53,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: 'Velco v__VERSION__'
+          releaseBody: 'Direct macOS .dmg installers for Apple Silicon (M-Series) and Intel MacBook. Drag Velco to Applications, right-click and choose Open to launch.'
+          releaseDraft: false
+          prerelease: false
           args: --target ${{ matrix.target }}
 
-      - name: Upload macOS Artifacts
+      - name: Upload macOS DMG Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Velco-macOS-${{ matrix.name }}
+          name: Velco-macOS-${{ matrix.name }}-DMG
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
             src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: warn

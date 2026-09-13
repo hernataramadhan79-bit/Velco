@@ -68,7 +68,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 view-enter select-none">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/95 dark:bg-[#141418]/95 backdrop-blur-md text-slate-900 dark:text-zinc-100 shadow-2xl border border-slate-300 dark:border-white/[0.1] text-xs font-mono">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-[#141418] transform-gpu text-slate-900 dark:text-zinc-100 shadow-2xl border border-slate-300 dark:border-white/[0.1] text-xs font-mono">
         {/* Counter Badge */}
         <div className="flex items-center gap-2 pr-2.5 border-r border-slate-200 dark:border-white/[0.08]">
           <span className="w-5 h-5 rounded bg-blue-500/20 dark:bg-blue-600/30 border border-blue-500/40 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px] font-bold">

@@ -59,7 +59,7 @@ interface DragDropIndicatorProps {
 const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => {
   if (!isDragging) return null;
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white dark:bg-[#141418] text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-white/[0.12] backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-150">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white dark:bg-[#141418] text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-white/[0.12] transform-gpu">
       <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
         <Upload className="w-4 h-4" />
       </div>
@@ -87,7 +87,7 @@ const NotificationToast: React.FC = React.memo(() => {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 px-3.5 py-2.5 rounded-lg shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 border select-none max-w-sm backdrop-blur-md ${
+      className={`fixed bottom-6 right-6 z-50 px-3.5 py-2.5 rounded-lg shadow-2xl flex items-center gap-3 transform-gpu border select-none max-w-sm ${
         isReminder
           ? 'bg-white dark:bg-[#141418] text-slate-900 dark:text-white border-blue-500/50 shadow-blue-500/10 ring-1 ring-blue-500/20'
           : 'bg-white dark:bg-[#141418] text-slate-900 dark:text-zinc-100 border-slate-200 dark:border-white/[0.1]'
@@ -335,15 +335,17 @@ export const AppLayout: React.FC = () => {
           }}
         />
 
-        <ItemDetailModal
-          item={selectedItem}
-          isOpen={selectedItemId !== null}
-          onClose={() => setSelectedItemId(null)}
-          onUpdate={updateItem}
-          onTrash={trashItem}
-          allTags={tagStore.tags}
-          onCreateTag={tagStore.addTag}
-        />
+        <ErrorBoundary onReset={() => setSelectedItemId(null)}>
+          <ItemDetailModal
+            item={selectedItem}
+            isOpen={selectedItemId !== null}
+            onClose={() => setSelectedItemId(null)}
+            onUpdate={updateItem}
+            onTrash={trashItem}
+            allTags={tagStore.tags}
+            onCreateTag={tagStore.addTag}
+          />
+        </ErrorBoundary>
 
         <NotificationToast />
         <DragDropIndicator isDragging={isGlobalDragging} />
@@ -554,24 +556,28 @@ export const AppLayout: React.FC = () => {
       )}
 
       {/* Item Detail Inspector Modal */}
-      <ItemDetailModal
-        item={selectedItem}
-        isOpen={selectedItemId !== null}
-        onClose={() => setSelectedItemId(null)}
-        onUpdate={updateItem}
-        onTrash={trashItem}
-        onRestore={restoreItem}
-        onPermanentDelete={permanentDeleteItem}
-        allTags={tagStore.tags}
-        onCreateTag={tagStore.addTag}
-      />
+      <ErrorBoundary onReset={() => setSelectedItemId(null)}>
+        <ItemDetailModal
+          item={selectedItem}
+          isOpen={selectedItemId !== null}
+          onClose={() => setSelectedItemId(null)}
+          onUpdate={updateItem}
+          onTrash={trashItem}
+          onRestore={restoreItem}
+          onPermanentDelete={permanentDeleteItem}
+          allTags={tagStore.tags}
+          onCreateTag={tagStore.addTag}
+        />
+      </ErrorBoundary>
 
       {/* Global Search Modal */}
-      <GlobalSearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelectItem={(item) => setSelectedItemId(item.id)}
-      />
+      <ErrorBoundary onReset={() => setIsSearchOpen(false)}>
+        <GlobalSearchModal
+          isOpen={isSearchOpen}
+          onClose={() => setIsSearchOpen(false)}
+          onSelectItem={(item) => setSelectedItemId(item.id)}
+        />
+      </ErrorBoundary>
 
       {/* Global Notification Toast (Dismissible) */}
       <NotificationToast />

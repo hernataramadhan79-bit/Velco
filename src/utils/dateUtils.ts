@@ -317,3 +317,25 @@ export function formatTimeOnly(date: Date): string {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
 }
+
+/**
+ * Safely format date for display without throwing RangeError in WebKit/Safari
+ */
+export function formatDisplayDate(
+  dateInput: string | number | Date | null | undefined,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  if (!dateInput) return 'Recently';
+  try {
+    const d = typeof dateInput === 'object' && dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (isNaN(d.getTime())) return 'Recently';
+    return d.toLocaleDateString(undefined, options ?? {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return 'Recently';
+  }
+}
+

@@ -21,7 +21,7 @@ import {
 import { Item, ItemSummary } from '../../types/item';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
-import { formatTaskDueDate } from '../../utils/dateUtils';
+import { formatTaskDueDate, formatDisplayDate } from '../../utils/dateUtils';
 
 interface ItemCardProps {
   item: Item | ItemSummary;
@@ -74,7 +74,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     }
   };
 
-  const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
+  const formattedDate = formatDisplayDate(item.createdAt, {
     month: 'short',
     day: 'numeric',
   });

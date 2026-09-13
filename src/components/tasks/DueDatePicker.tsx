@@ -266,7 +266,7 @@ export const DueDatePicker: React.FC<DueDatePickerProps> = ({
         <div
           className={`absolute ${
             align === 'right' ? 'right-0' : 'left-0'
-          } top-full mt-2 z-50 w-[340px] p-3.5 bg-white/95 dark:bg-[#141418]/95 backdrop-blur-md rounded-xl border border-slate-200 dark:border-white/[0.08] shadow-2xl space-y-3.5 animate-in fade-in zoom-in-95 duration-150 text-xs select-none`}
+          } top-full mt-2 z-50 w-[340px] p-3.5 bg-white dark:bg-[#141418] transform-gpu rounded-xl border border-slate-200 dark:border-white/[0.08] shadow-2xl space-y-3.5 text-xs select-none`}
         >
           {/* Popover Header */}
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/[0.06]">

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ItemSummary } from '../../types/item';
 import { getFileTypeMeta, extractSizeFromContent } from '../../utils/fileUtils';
+import { formatDisplayDate } from '../../utils/dateUtils';
 import { useSelectionStore } from '../../stores/selectionStore';
 
 interface FileListRowProps {
@@ -25,12 +26,12 @@ export const FileListRow: React.FC<FileListRowProps> = ({
   onToggleFavorite,
   onTrash,
 }) => {
-  const isSelected = useSelectionStore((state) => state.isItemSelected(item.id));
-  const toggleSelectItem = useSelectionStore((state) => state.toggleSelectItem);
-  const selectedCount = useSelectionStore((state) => state.selectedIds.size);
-  const hasAnySelection = selectedCount > 0;
-
   const [imgError, setImgError] = React.useState(false);
+  const selectedIds = useSelectionStore((s) => s.selectedIds);
+  const toggleSelectItem = useSelectionStore((s) => s.toggleSelectItem);
+  const isSelected = selectedIds.has(item.id);
+  const hasAnySelection = selectedIds.size > 0;
+
   const meta = getFileTypeMeta(item.title);
   const thumbnail =
     item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
@@ -39,11 +40,7 @@ export const FileListRow: React.FC<FileListRowProps> = ({
   const isImage = (meta.category === 'image' || item.type === 'image') && !!thumbnail && !imgError;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
 
-  const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  const formattedDate = formatDisplayDate(item.createdAt);
 
   const handleSelectionClick = (e: React.MouseEvent) => {
     e.stopPropagation();

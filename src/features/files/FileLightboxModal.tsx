@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { X, Download, ExternalLink, FileText, Calendar, HardDrive } from 'lucide-react';
 import { ItemSummary } from '../../types/item';
 import { formatFileSize, getFileTypeMeta, extractSizeFromContent } from '../../utils/fileUtils';
+import { formatDisplayDate } from '../../utils/dateUtils';
 
 interface FileLightboxModalProps {
   item: ItemSummary | null;
@@ -34,11 +35,7 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({
   const meta = getFileTypeMeta(item.title);
   const isImage = meta.category === 'image' && !!item.thumbnailUrl;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
-  const formattedDate = new Date(item.createdAt).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  const formattedDate = formatDisplayDate(item.createdAt);
 
   const handleDownload = () => {
     if (!item.thumbnailUrl) return;
@@ -52,7 +49,7 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 transform-gpu select-none"
       onClick={onClose}
     >
       <div

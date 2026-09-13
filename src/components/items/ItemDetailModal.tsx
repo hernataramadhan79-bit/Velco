@@ -35,6 +35,7 @@ import { aiService } from '../../services/ai';
 import { MarkdownViewer } from '../common/MarkdownViewer';
 import { DueDatePicker } from '../tasks/DueDatePicker';
 import { openExternalUrl } from '../../utils/urlUtils';
+import { formatDisplayDate } from '../../utils/dateUtils';
 import { db } from '../../services/database';
 import { useItemStore } from '../../stores/itemStore';
 import { formatTaskBatchSource } from '../../types/item';
@@ -905,12 +906,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
                 {hasFiles ? activeMeta.extension : item.type}
               </span>
               <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono hidden sm:inline-block">
-                Created{' '}
-                {new Date(item.createdAt).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
+                Created {formatDisplayDate(item.createdAt)}
               </span>
             </div>
           </div>
@@ -1003,7 +999,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
         {hasFiles && (
           <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/[0.1] bg-slate-900/[0.03] dark:bg-black/40 shadow-xs">
             {/* Stage Toolbar */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-white/[0.08] bg-white/80 dark:bg-[#141418]/80 backdrop-blur-md">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#141418]">
               <div className="flex items-center gap-2 min-w-0 pr-2">
                 <span
                   className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide border ${activeMeta.badgeBg} ${activeMeta.badgeText} ${activeMeta.badgeBorder}`}

@@ -1541,7 +1541,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 1. Unified Share & Export Modal */}
       {isShareModalOpen && activeCapsule && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <div className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1613,7 +1613,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 2. Import Capsule Modal */}
       {isJoinModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <div className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1684,7 +1684,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 3. New Capsule Modal */}
       {isNewCapsuleOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <form
             onSubmit={handleCreateCapsule}
             className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
@@ -1756,7 +1756,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 4. Edit Capsule Modal */}
       {isEditCapsuleOpen && activeCapsule && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <form
             onSubmit={handleUpdateCapsule}
             className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
@@ -1826,7 +1826,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 5. New Note Modal */}
       {isNewDocOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <form
             onSubmit={handleCreateDoc}
             className="w-full max-w-lg bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
@@ -1898,7 +1898,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
       {/* 6. Attach Existing Items from Workspace Modal */}
       {isAttachModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
           <div className="w-full max-w-lg bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-3 shadow-2xl animate-in zoom-in-95 duration-100 flex flex-col max-h-[80vh]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

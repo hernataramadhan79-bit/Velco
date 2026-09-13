@@ -124,7 +124,7 @@ export const TaskExtractionModal: React.FC<TaskExtractionModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="extraction-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-150 select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 transform-gpu select-none"
     >
       <div
         className="fixed inset-0"

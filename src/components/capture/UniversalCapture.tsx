@@ -217,7 +217,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
     >
       {/* Visual Drag Overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-blue-50/95 dark:bg-[#0f1424]/95 backdrop-blur-xs border-2 border-dashed border-blue-500 text-blue-600 dark:text-blue-400 pointer-events-none animate-in fade-in duration-150">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-xl bg-blue-50/98 dark:bg-[#0f1424]/98 border-2 border-dashed border-blue-500 text-blue-600 dark:text-blue-400 pointer-events-none transform-gpu">
           <Paperclip className="w-6 h-6 mb-1.5 animate-bounce stroke-[2]" />
           <span className="text-xs font-semibold font-mono">Drop files or images here to attach</span>
         </div>

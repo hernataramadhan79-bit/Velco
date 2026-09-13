@@ -181,3 +181,14 @@
   overscroll-behavior-x: contain;
 }
 
+/* ── WebKit / WKWebView Compositor Stabilization ───────── */
+/* Prevents WKWebView Metal layer compositor drops or black flashes on fixed elements */
+.fixed,
+[role="dialog"] {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+
