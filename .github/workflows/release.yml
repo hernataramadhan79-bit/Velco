@@ -2,18 +2,6 @@ name: "Release (All Platforms)"
 
 on:
   workflow_dispatch:
-    inputs:
-      target_platform:
-        description: 'Target platform to build'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - Linux-x64
-          - Windows-x64
-          - macOS-AppleSilicon-M-Series
-          - macOS-Intel
   push:
     tags:
       - 'v*'
@@ -46,7 +34,6 @@ jobs:
             args: ''
             name: 'Linux-x64'
 
-    if: inputs.target_platform == null || inputs.target_platform == 'all' || inputs.target_platform == matrix.name
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
