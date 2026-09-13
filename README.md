@@ -6,7 +6,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Release-v0.2.0-blue?style=flat-square" alt="Version 0.2.0">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-emerald?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri v2">
   <img src="https://img.shields.io/badge/Rust-2021-black?style=flat-square" alt="Rust">
   <img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square" alt="React 19">
@@ -15,6 +16,25 @@
   <img src="https://img.shields.io/badge/Database-SQLite%20(FTS5)-003b57?style=flat-square" alt="SQLite">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </p>
+
+---
+
+## 💾 Multi-Platform Downloads (v0.2.0)
+
+Direct native packages and standalone binaries for all supported platforms:
+
+| Operating System | Architecture | Package Format | Download Link |
+| :--- | :--- | :--- | :--- |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe` / `.msi`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Portable Standalone (`velco.exe`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+| **macOS (Apple Silicon)** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+| **macOS (Intel)** | Intel Core (`x86_64`) | Apple Disk Image (`.dmg`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+| **Linux (Debian/Ubuntu)** | 64-bit (`amd64`) | Debian Package (`.deb`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | [GitHub Releases](https://github.com/hernataramadhan79-bit/Velco/releases) |
+
+> 📖 **Comprehensive Design & Architecture Audits**:
+> - [UI/UX Comprehensive Review & Design System Audit](docs/UI_UX_REVIEW.md)
+> - [Release Notes & Technical Changelog](RELEASE_NOTES.md)
 
 ---
 
