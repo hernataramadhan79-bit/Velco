@@ -2,7 +2,7 @@ import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
-import { PanelLeft, Search, Zap } from 'lucide-react';
+import { PanelLeft, Search, Zap, HelpCircle } from 'lucide-react';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { modKey, formatShortcut } from '../../utils/platformUtils';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onOpenSearch?: () => void;
+  onOpenCheatSheet?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = React.memo(({
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   isSidebarOpen = true,
   onToggleSidebar,
   onOpenSearch,
+  onOpenCheatSheet,
 }) => {
   const { settings, updateSettings } = useSettings();
   const stagedCount = useContextStore((state) => state.stagedItems.length);
@@ -135,6 +137,17 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
               </span>
             )}
+          </button>
+        )}
+
+        {/* Shortcuts Cheat Sheet Button */}
+        {onOpenCheatSheet && (
+          <button
+            onClick={onOpenCheatSheet}
+            className="p-1 rounded-md border border-slate-200 dark:border-white/[0.07] bg-slate-100 dark:bg-[#141418] hover:bg-slate-200 dark:hover:bg-[#1a1a20] text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            title="Keyboard Shortcuts (?)"
+          >
+            <HelpCircle className="w-3.5 h-3.5 stroke-[1.5]" />
           </button>
         )}
       </div>

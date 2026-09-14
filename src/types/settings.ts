@@ -46,6 +46,14 @@ export interface AppSettings {
   askBeforeCloudSend: boolean;
   autoProcessAI: boolean; // default false (Section 18)
   defaultTaskPriority: 'low' | 'medium' | 'high' | 'urgent';
+
+  // Backup Safety Net
+  lastBackupTimestamp?: number | null;
+  backupReminderDays?: number; // 0 = Never, 3, 7, 14, 30
+  remoteBackupEnabled?: boolean;
+
+  // Onboarding
+  onboardingCompleted?: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -71,4 +79,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   askBeforeCloudSend: true,
   autoProcessAI: false,
   defaultTaskPriority: 'medium',
+  lastBackupTimestamp: null,
+  backupReminderDays: 7,
+  remoteBackupEnabled: false,
+  onboardingCompleted: false,
 };

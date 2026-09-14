@@ -99,4 +99,20 @@ export const aiService = {
   /** Clear provider API secret from OS Keyring */
   deleteCredential: (provider: string) =>
     invoke<void>('delete_ai_credential', { provider }),
+
+  /** Get aggregated AI usage metrics and cost estimation */
+  getUsageSummary: () => invoke<import('../../types/ai').AiUsageSummary>('get_ai_usage_summary'),
+
+  /** Grant cloud consent for a specific provider */
+  grantCloudConsent: (provider: string) => invoke<void>('grant_cloud_consent', { provider }),
+
+  /** Check if cloud consent has been granted */
+  checkCloudConsent: (provider: string) => invoke<boolean>('check_cloud_consent', { provider }),
+
+  /** Revoke cloud consent */
+  revokeCloudConsent: (provider: string) => invoke<void>('revoke_cloud_consent', { provider }),
+
+  /** Quick token estimation helper */
+  estimateTokens: (text: string) => invoke<number>('estimate_tokens', { text }),
 };
+

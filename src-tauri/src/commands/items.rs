@@ -649,14 +649,7 @@ pub fn get_items(
     Ok(items)
 }
 
-#[tauri::command]
-pub fn create_item(
-    app: tauri::AppHandle,
-    db: State<'_, Database>,
-    storage: State<'_, StorageManager>,
-    payload: CreateItemPayload,
-) -> Result<ItemRecord, String> {
-    // Validasi awal (tanpa lock)
+pub fn validate_create_item_payload(payload: &CreateItemPayload) -> Result<(), String> {
     const ALLOWED_TYPES: &[&str] = &["note", "task", "link", "file", "image"];
     if !ALLOWED_TYPES.contains(&payload.r#type.as_str()) {
         return Err(format!("Invalid item type: {}", payload.r#type));
@@ -665,10 +658,24 @@ pub fn create_item(
     if title.trim().is_empty() {
         return Err("Title cannot be empty".to_string());
     }
-    let id = payload.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    if id.len() > 64 || id.contains('/') || id.contains('\\') {
-        return Err("Invalid item id".to_string());
+    if let Some(ref id) = payload.id {
+        if id.len() > 64 || id.contains('/') || id.contains('\\') {
+            return Err("Invalid item id".to_string());
+        }
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_item(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
+    payload: CreateItemPayload,
+) -> Result<ItemRecord, String> {
+    validate_create_item_payload(&payload)?;
+    let title: String = payload.title.chars().take(500).collect();
+    let id = payload.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let now = chrono::Utc::now().to_rfc3339();
     let content: String = payload.content.clone().unwrap_or_default().chars().take(2_000_000).collect();
     let source = payload.source.clone().unwrap_or_else(|| "direct".to_string());
@@ -1722,6 +1729,99 @@ mod tests {
     fn test_generate_thumbnail_empty() {
         let thumb = generate_thumbnail_data_url(&[], "image/png");
         assert!(thumb.is_none());
+    }
+
+    #[test]
+    fn test_validate_create_item_payload_empty_title() {
+        let payload = CreateItemPayload {
+            id: None,
+            r#type: "note".to_string(),
+            title: "   ".to_string(),
+            content: None,
+            source: None,
+            task: None,
+            link: None,
+            attachments: None,
+            tag_ids: None,
+        };
+        let res = validate_create_item_payload(&payload);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Title cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_create_item_payload_invalid_type() {
+        let payload = CreateItemPayload {
+            id: None,
+            r#type: "unsupported_type".to_string(),
+            title: "Valid Title".to_string(),
+            content: None,
+            source: None,
+            task: None,
+            link: None,
+            attachments: None,
+            tag_ids: None,
+        };
+        let res = validate_create_item_payload(&payload);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Invalid item type"));
+    }
+
+    #[test]
+    fn test_item_crud_in_memory_db() {
+        let conn = rusqlite::Connection::open_in_memory().expect("failed to open memory db");
+        crate::database::schema::run_migrations(&conn).expect("migrations failed");
+
+        let id = "test-item-123";
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // 1. Create item
+        conn.execute(
+            "INSERT INTO items (id, type, title, content, source, status, favorite, archived, created_at, updated_at, deleted_at) VALUES (?1, 'note', 'CRUD Test Title', 'Initial content', 'direct', 'inbox', 0, 0, ?2, ?2, NULL)",
+            params![id, now],
+        ).expect("insert failed");
+
+        let fetched = fetch_item_by_id(&conn, id).expect("fetch failed");
+        assert_eq!(fetched.id, id);
+        assert_eq!(fetched.title, "CRUD Test Title");
+        assert_eq!(fetched.content, "Initial content");
+        assert_eq!(fetched.favorite, false);
+        assert_eq!(fetched.deleted_at, None);
+
+        // 2. Update item
+        let updated_time = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE items SET title = 'Updated Title', content = 'Updated content', updated_at = ?1 WHERE id = ?2",
+            params![updated_time, id],
+        ).expect("update failed");
+
+        let fetched_updated = fetch_item_by_id(&conn, id).expect("fetch updated failed");
+        assert_eq!(fetched_updated.title, "Updated Title");
+        assert_eq!(fetched_updated.content, "Updated content");
+
+        // 3. Trash item
+        let trash_time = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE items SET deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            params![trash_time, trash_time, id],
+        ).expect("trash failed");
+
+        let fetched_trashed = fetch_item_by_id(&conn, id).expect("fetch trashed failed");
+        assert!(fetched_trashed.deleted_at.is_some());
+
+        // 4. Restore item
+        conn.execute(
+            "UPDATE items SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+            params![updated_time, id],
+        ).expect("restore failed");
+
+        let fetched_restored = fetch_item_by_id(&conn, id).expect("fetch restored failed");
+        assert_eq!(fetched_restored.deleted_at, None);
+
+        // 5. Permanent delete
+        conn.execute("DELETE FROM items WHERE id = ?1", params![id]).expect("delete failed");
+        let fetch_deleted = fetch_item_by_id(&conn, id);
+        assert!(fetch_deleted.is_err());
     }
 }
 

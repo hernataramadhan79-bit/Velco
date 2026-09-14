@@ -78,6 +78,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(storage)
         .manage(db)
         .manage(ai_state)
@@ -169,6 +171,7 @@ pub fn run() {
             // Backup
             commands::backup::export_backup,
             commands::backup::import_backup,
+            commands::backup::get_backup_status,
             // Settings
             commands::settings::get_system_paths,
             // AI
@@ -184,6 +187,10 @@ pub fn run() {
             commands::ai::set_ai_credential,
             commands::ai::get_ai_credential,
             commands::ai::delete_ai_credential,
+            commands::ai::get_ai_usage_summary,
+            commands::ai::grant_cloud_consent,
+            commands::ai::revoke_cloud_consent,
+            commands::ai::get_cloud_consent,
             // Capsules (Context Hub)
             commands::capsules::get_capsules,
             commands::capsules::create_capsule,
@@ -201,6 +208,9 @@ pub fn run() {
             commands::p2p::broadcast_p2p_item_upsert,
             commands::p2p::broadcast_p2p_task_toggle,
             commands::p2p::broadcast_p2p_item_removed,
+            // Updater
+            commands::updater::check_for_updates,
+            commands::updater::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Velco application");

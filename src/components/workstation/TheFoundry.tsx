@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Zap,
   CheckSquare,
@@ -24,6 +24,7 @@ import {
   Sliders,
   CornerDownLeft,
   ShieldAlert,
+  Coins,
 } from 'lucide-react';
 import { useContextStore } from '../../stores/contextStore';
 import { useSettings } from '../../stores/settingsStore';
@@ -137,6 +138,35 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
     if (tokenPercentage > 60) return 'bg-amber-500';
     return 'bg-emerald-500';
   };
+
+  const costInfo = useMemo(() => {
+    if (isLocalMode) {
+      return { text: 'Free (100% Local Inference)', isFree: true };
+    }
+    const estimatedInputTokens = tokens;
+    const estimatedOutputTokens = 800;
+    const p = settings.aiProvider.toLowerCase();
+    const m = activeModel.toLowerCase();
+
+    if (p === 'gemini') {
+      return { text: 'Free Tier / ~$0.0001', isFree: true };
+    } else if (p === 'openrouter' && (m.includes(':free') || m.endsWith(':free'))) {
+      return { text: 'Free (OpenRouter Free Model)', isFree: true };
+    } else if (p === 'openai') {
+      const c = m.includes('gpt-4o-mini')
+        ? (estimatedInputTokens / 1_000_000) * 0.15 + (estimatedOutputTokens / 1_000_000) * 0.60
+        : (estimatedInputTokens / 1_000_000) * 2.50 + (estimatedOutputTokens / 1_000_000) * 10.00;
+      return { text: c < 0.0001 ? '<$0.0001' : `~$${c.toFixed(4)}`, isFree: false };
+    } else if (p === 'anthropic') {
+      const c = m.includes('haiku')
+        ? (estimatedInputTokens / 1_000_000) * 0.80 + (estimatedOutputTokens / 1_000_000) * 4.00
+        : (estimatedInputTokens / 1_000_000) * 3.00 + (estimatedOutputTokens / 1_000_000) * 15.00;
+      return { text: c < 0.0001 ? '<$0.0001' : `~$${c.toFixed(4)}`, isFree: false };
+    }
+    const c = (estimatedInputTokens / 1_000_000) * 0.20 + (estimatedOutputTokens / 1_000_000) * 0.80;
+    return { text: c < 0.0001 ? '<$0.0001' : `~$${c.toFixed(4)}`, isFree: false };
+  }, [isLocalMode, tokens, settings.aiProvider, activeModel]);
+
 
   const handleRunForge = async () => {
     if (!settings.aiEnabled) {
@@ -498,6 +528,22 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
           >
             Turn On AI
           </button>
+        </div>
+      )}
+
+      {/* AI Token & Cost Guardrail Badge */}
+      {settings.aiEnabled && stagedItems.length > 0 && (
+        <div className="flex items-center justify-between text-[11px] font-mono px-2.5 py-1.5 rounded-md bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.06] text-slate-600 dark:text-zinc-400">
+          <div className="flex items-center gap-1.5">
+            <Cpu className="w-3 h-3 text-blue-500" />
+            <span>~{tokens.toLocaleString()} tokens staged</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Coins className="w-3 h-3 text-amber-500" />
+            <span className={costInfo.isFree ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-800 dark:text-zinc-200 font-semibold'}>
+              {costInfo.text}
+            </span>
+          </div>
         </div>
       )}
 

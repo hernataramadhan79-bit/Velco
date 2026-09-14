@@ -13,6 +13,8 @@ export interface CapsuleRecord {
   itemCount: number;
 }
 
+export type Capsule = CapsuleRecord;
+
 export interface CapsuleExportItem {
   id: string;
   type: string;

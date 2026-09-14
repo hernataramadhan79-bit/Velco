@@ -127,11 +127,11 @@ export const AIPrivacyBadge: React.FC = () => {
       <button
         type="button"
         onClick={handleToggle}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-zinc-500 dark:hover:text-zinc-300 border border-slate-200 dark:border-white/[0.07] transition-all cursor-pointer"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-zinc-500 dark:hover:text-zinc-300 border border-slate-200 dark:border-white/[0.07] transition-all cursor-pointer"
         title="AI engine is disabled. Click to turn ON."
       >
         <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-zinc-600 shrink-0" />
-        <span>AI Off</span>
+        <span className="font-semibold">AI OFF</span>
       </button>
     );
   }
@@ -140,15 +140,19 @@ export const AIPrivacyBadge: React.FC = () => {
     <button
       type="button"
       onClick={handleToggle}
-      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono border transition-all cursor-pointer ${
+      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-mono border transition-all cursor-pointer ${
         isOnline === false
           ? 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-rose-400 dark:border-rose-500/20'
-          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#141418] dark:hover:bg-[#1a1a20] dark:text-zinc-300 border-slate-200 dark:border-white/[0.07]'
+          : isLocal
+          ? 'bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 border-emerald-200 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40'
+          : 'bg-blue-50/70 hover:bg-blue-100/80 text-blue-800 border-blue-200 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/40'
       }`}
       title={
         isOnline === false
           ? `AI Offline (${providerLabel}). Cannot connect to ${getBaseUrl(settings)}. Click to toggle.`
-          : `Engine: ${providerLabel} • Model: ${activeModel} (${isLocal ? '100% Local Inference' : 'Cloud'}). Click to toggle.`
+          : isLocal
+          ? `Engine: ${providerLabel} (${activeModel}) • 100% Local Inference & Air-Gapped. Click to toggle.`
+          : `Engine: ${providerLabel} (${activeModel}) • External Cloud API. Click to toggle.`
       }
     >
       <span
@@ -156,15 +160,15 @@ export const AIPrivacyBadge: React.FC = () => {
           isOnline === false
             ? 'bg-rose-500'
             : isLocal
-            ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-            : 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.5)]'
+            ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]'
+            : 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]'
         }`}
       />
-      <span className="text-slate-500 dark:text-zinc-400 truncate max-w-[70px] sm:max-w-[90px]">
-        {providerLabel}:
+      <span className="font-bold uppercase tracking-wider">
+        {isOnline === false ? 'OFFLINE' : isLocal ? 'LOCAL' : 'CLOUD'}
       </span>
-      <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate max-w-[100px] sm:max-w-[140px]">
-        {isOnline === false ? 'Offline' : activeModel}
+      <span className="opacity-75 truncate max-w-[80px] sm:max-w-[120px]">
+        {activeModel}
       </span>
     </button>
   );

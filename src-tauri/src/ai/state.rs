@@ -73,4 +73,18 @@ impl AiState {
 
         Ok((provider, api_key))
     }
+
+    pub fn grant_consent(&self, provider_id: &str) -> String {
+        let consent_id = format!("consent_{}_{}", provider_id, uuid::Uuid::new_v4());
+        *self.cloud_consent_id.write() = Some(consent_id.clone());
+        consent_id
+    }
+
+    pub fn revoke_consent(&self) {
+        *self.cloud_consent_id.write() = None;
+    }
+
+    pub fn get_current_consent(&self) -> Option<String> {
+        self.cloud_consent_id.read().clone()
+    }
 }

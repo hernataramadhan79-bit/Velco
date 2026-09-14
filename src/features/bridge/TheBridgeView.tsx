@@ -1,46 +1,31 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  FolderGit2,
-  Plus,
-  Download,
-  Share2,
-  Key,
-  Lock,
   CheckSquare,
   FileText,
   Sparkles,
-  Copy,
-  Check,
-  Trash2,
-  Layers,
-  AlertCircle,
-  X,
-  Zap,
-  Upload,
-  RefreshCw,
-  Wifi,
-  WifiOff,
-  Users,
-  Search,
-  LogIn,
-  Eye,
-  Edit3,
-  Save,
   Kanban,
   List,
-  MoreVertical,
-  Calendar,
-  Paperclip,
-  Clock,
-  ArrowUpRight,
+  FolderGit2,
+  Plus,
 } from 'lucide-react';
 import { PriorityLevel, ItemSummary, Item } from '../../types/item';
-import { MarkdownViewer } from '../../components/common/MarkdownViewer';
 import { useSettings } from '../../stores/settingsStore';
 import { useCapsuleStore } from '../../stores/capsuleStore';
 import { useItemStore } from '../../stores/itemStore';
 import { aiService } from '../../services/ai';
 import { db } from '../../services/database';
+
+import { CapsuleNavigator } from './components/CapsuleNavigator';
+import { CapsuleHeader } from './components/CapsuleHeader';
+import { CapsuleKanbanBoard } from './components/CapsuleKanbanBoard';
+import { CapsuleDocEditor } from './components/CapsuleDocEditor';
+import { CapsuleAiRecipes } from './components/CapsuleAiRecipes';
+import { ShareCapsuleModal } from './components/ShareCapsuleModal';
+import { JoinCapsuleModal } from './components/JoinCapsuleModal';
+import { NewCapsuleModal } from './components/NewCapsuleModal';
+import { EditCapsuleModal } from './components/EditCapsuleModal';
+import { NewDocModal } from './components/NewDocModal';
+import { AttachItemModal } from './components/AttachItemModal';
 
 interface TheBridgeViewProps {
   onNotify?: (msg: string, type?: 'info' | 'success' | 'error' | 'reminder') => void;
@@ -127,6 +112,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
   // Clipboard copy feedback
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedRecipe, setCopiedRecipe] = useState(false);
+  const [copiedDoc, setCopiedDoc] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -185,7 +171,6 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
   }, [docs, selectedDocId]);
 
   // Load FULL doc content from SQLite whenever selectedDocId changes
-  // Resolves the 120-character truncation bug!
   const loadFullDoc = useCallback(async (docId: string) => {
     try {
       const item = await db.getItem(docId);
@@ -209,12 +194,16 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
   }, [selectedDocId, loadFullDoc]);
 
   // Copy helper
-  const handleCopy = (text: string, type: 'key' | 'recipe') => {
+  const handleCopy = (text: string, type: 'key' | 'recipe' | 'doc') => {
     navigator.clipboard.writeText(text);
     if (type === 'key') {
       setCopiedKey(true);
       setTimeout(() => setCopiedKey(false), 2000);
       onNotify?.('Invitation key copied to clipboard!', 'success');
+    } else if (type === 'doc') {
+      setCopiedDoc(true);
+      setTimeout(() => setCopiedDoc(false), 2000);
+      onNotify?.('Note content copied to clipboard!', 'success');
     } else {
       setCopiedRecipe(true);
       setTimeout(() => setCopiedRecipe(false), 2000);
@@ -447,7 +436,6 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
         content: editingDocContent,
       });
 
-      // Update full local item state
       setFullDocItem((prev) =>
         prev
           ? {
@@ -458,10 +446,8 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
           : null
       );
 
-      // Refresh capsule items list
       await useCapsuleStore.getState().loadCapsuleItems(activeCapsule.id);
 
-      // Broadcast to P2P network if live
       if (p2pStatus?.is_active) {
         void broadcastItemUpsert({
           capsuleId: activeCapsule.id,
@@ -548,7 +534,6 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     }
   };
 
-  // Save AI Recipe output as a note in the capsule
   const handleSaveRecipeAsNote = async () => {
     if (!recipeOutput || !activeCapsule) return;
     try {
@@ -578,7 +563,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     }
   };
 
-  // Available workspace items to attach (excluding items already in active capsule)
+  // Available workspace items to attach
   const attachableItems = useMemo(() => {
     const existingIds = new Set(capsuleItems.map((i) => i.id));
     return allWorkspaceItems
@@ -592,305 +577,60 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
 
   return (
     <div className="h-full w-full max-w-full flex min-h-0 select-none bg-white dark:bg-[#09090b] text-slate-900 dark:text-zinc-100 overflow-hidden font-sans">
-      {/* ─────────────────────────────────────────────────────────────
-          1. LEFT PANE: CAPSULES NAVIGATOR
-      ────────────────────────────────────────────────────────────── */}
-      <aside className="w-68 md:w-72 lg:w-76 border-r border-slate-200 dark:border-white/[0.07] bg-slate-50/60 dark:bg-[#0c0c0f] flex flex-col shrink-0">
-        {/* Header Toolbar */}
-        <div className="h-11 px-3.5 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs font-semibold tracking-tight text-slate-800 dark:text-zinc-200 truncate">
-              Capsules
-            </span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-white/[0.08] text-slate-600 dark:text-zinc-400 font-semibold">
-              {capsules.length}
-            </span>
-          </div>
+      {/* 1. LEFT PANE: CAPSULES NAVIGATOR */}
+      <CapsuleNavigator
+        capsules={capsules}
+        filteredCapsules={filteredCapsules}
+        activeCapsuleId={activeCapsuleId}
+        activeCapsule={activeCapsule ?? undefined}
+        loading={loading}
+        capsuleSearchQuery={capsuleSearchQuery}
+        copiedKey={copiedKey}
+        p2pStatus={p2pStatus}
+        onSearchChange={setCapsuleSearchQuery}
+        onSelectCapsule={(id) => void selectCapsule(id)}
+        onDeleteCapsule={(id, name) => void handleDeleteCapsule(id, name)}
+        onOpenJoinModal={() => setIsJoinModalOpen(true)}
+        onOpenNewCapsuleModal={() => setIsNewCapsuleOpen(true)}
+        onRefreshCapsules={() => void refreshCapsules()}
+        onCopyKey={(k) => handleCopy(k, 'key')}
+      />
 
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => setIsJoinModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-slate-700 dark:text-zinc-200 text-[11px] font-medium transition-colors border border-slate-200 dark:border-white/[0.08] cursor-pointer"
-              title="Join via key or import .vctx bundle"
-            >
-              <LogIn className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Join</span>
-            </button>
-
-            <button
-              onClick={() => void refreshCapsules()}
-              className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-200/60 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
-              title="Refresh capsules"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            <button
-              onClick={() => setIsNewCapsuleOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors shadow-2xs cursor-pointer ml-0.5"
-              title="New Capsule"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Optional quick search for capsules */}
-        {capsules.length > 3 && (
-          <div className="p-2 border-b border-slate-200/70 dark:border-white/[0.05]">
-            <div className="relative">
-              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
-              <input
-                type="text"
-                placeholder="Filter capsules..."
-                value={capsuleSearchQuery}
-                onChange={(e) => setCapsuleSearchQuery(e.target.value)}
-                className="w-full pl-7 pr-2 py-1 rounded-md bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] text-xs text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Capsules List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
-          {filteredCapsules.map((cap) => {
-            const isSelected = cap.id === activeCapsuleId;
-
-            return (
-              <div
-                key={cap.id}
-                onClick={() => void selectCapsule(cap.id)}
-                className={`p-2.5 rounded-lg border text-xs transition-all cursor-pointer group relative ${
-                  isSelected
-                    ? 'bg-white dark:bg-[#141418] border-blue-500/40 shadow-xs ring-1 ring-blue-500/10'
-                    : 'bg-transparent border-transparent hover:bg-white/80 dark:hover:bg-white/[0.04] hover:border-slate-200 dark:hover:border-white/[0.06]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-1.5 mb-1">
-                  <span
-                    className={`font-semibold truncate flex-1 ${
-                      isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-zinc-200'
-                    }`}
-                  >
-                    {cap.name}
-                  </span>
-                  <span className="text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-zinc-400 shrink-0">
-                    {cap.role}
-                  </span>
-                </div>
-
-                {cap.description && (
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-1 leading-snug mb-1.5">
-                    {cap.description}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 pt-1 border-t border-slate-100 dark:border-white/[0.04]">
-                  <span className="flex items-center gap-1 font-mono">
-                    <Layers className="w-3 h-3 text-slate-400 dark:text-zinc-500" />
-                    {cap.itemCount} {cap.itemCount === 1 ? 'item' : 'items'}
-                  </span>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void handleDeleteCapsule(cap.id, cap.name);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                    title="Delete capsule"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {filteredCapsules.length === 0 && !loading && (
-            <div className="py-12 px-3 text-center text-xs space-y-2.5">
-              <FolderGit2 className="w-6 h-6 text-slate-400 dark:text-zinc-600 mx-auto stroke-[1.5]" />
-              <div className="text-slate-500 dark:text-zinc-400 text-[11px]">
-                {capsuleSearchQuery ? 'No matching capsules' : 'No capsules yet'}
-              </div>
-              <button
-                onClick={() => setIsNewCapsuleOpen(true)}
-                className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors cursor-pointer"
-              >
-                Create Capsule
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar Footer: Security & LAN Status */}
-        {activeCapsule && (
-          <div className="p-2.5 border-t border-slate-200 dark:border-white/[0.07] bg-white/40 dark:bg-[#0c0c0f] text-[11px] space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-zinc-400 flex items-center gap-1 text-[10px]">
-                <Lock className="w-3 h-3 text-emerald-500" />
-                Vault Key
-              </span>
-              <button
-                onClick={() => handleCopy(activeCapsule.encryptionKey, 'key')}
-                className="font-mono text-slate-600 dark:text-zinc-300 hover:text-blue-500 flex items-center gap-1 text-[10px] cursor-pointer"
-                title="Click to copy invite key"
-              >
-                <span>{activeCapsule.encryptionKey.slice(0, 12)}...</span>
-                {copiedKey ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-2.5 h-2.5" />}
-              </button>
-            </div>
-
-            {/* P2P Live Session Bar */}
-            {p2pStatus?.is_active && (
-              <div className="pt-1.5 border-t border-slate-200/60 dark:border-white/[0.05] flex items-center justify-between text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                <span className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Port {p2pStatus.listen_port}
-                </span>
-                <span>
-                  {p2pStatus.connected_peers.length} peer{p2pStatus.connected_peers.length === 1 ? '' : 's'}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </aside>
-
-      {/* ─────────────────────────────────────────────────────────────
-          2. RIGHT MAIN WORKSPACE CANVAS
-      ────────────────────────────────────────────────────────────── */}
+      {/* 2. RIGHT MAIN WORKSPACE CANVAS */}
       {activeCapsule ? (
         <main className="flex-1 flex flex-col min-w-0 max-w-full h-full overflow-hidden bg-white dark:bg-[#09090b]">
-          {/* Unified Header Bar */}
-          <div className="h-12 px-6 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-4 shrink-0 bg-white dark:bg-[#09090b]">
-            {/* Title & Metadata */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-900 dark:text-zinc-100 truncate tracking-tight">
-                    {activeCapsule.name}
-                  </h2>
-                  <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-300 font-semibold shrink-0">
-                    {activeCapsule.role}
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500">
-                    {tasks.length} tasks &bull; {docs.length} notes
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions Toolbar */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* LAN Live / P2P Toggle */}
-              <button
-                onClick={async () => {
-                  if (p2pStatus?.is_active) {
-                    try {
-                      await stopP2P();
-                      onNotify?.('P2P LAN session stopped (offline)', 'info');
-                    } catch (err: any) {
-                      onNotify?.(`P2P error: ${err.message || err}`, 'error');
-                    }
-                  } else {
-                    try {
-                      await startP2P(activeCapsule.id);
-                      onNotify?.('P2P LAN session live! Discovering local peers...', 'success');
-                    } catch (err: any) {
-                      onNotify?.(`P2P error: ${err.message || err}`, 'error');
-                    }
-                  }
-                }}
-                disabled={isP2PLoading}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer border ${
-                  p2pStatus?.is_active
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20'
-                    : 'bg-slate-100 dark:bg-white/[0.05] border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-300 hover:bg-slate-200/80 dark:hover:bg-white/[0.08]'
-                }`}
-                title={p2pStatus?.is_active ? 'Click to disconnect P2P session' : 'Go Live on local network'}
-              >
-                {p2pStatus?.is_active ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Live ({p2pStatus.connected_peers.length} peers)</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{isP2PLoading ? 'Connecting...' : 'Go Live'}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Attach Existing Item from Workspace */}
-              <button
-                onClick={() => setIsAttachModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200/80 dark:hover:bg-white/[0.08] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/[0.07] text-xs font-medium transition-colors cursor-pointer"
-                title="Attach notes or tasks from your workspace"
-              >
-                <Paperclip className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Attach</span>
-              </button>
-
-              {/* Share & Export Modal Trigger */}
-              <button
-                onClick={() => setIsShareModalOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200/80 dark:hover:bg-white/[0.08] text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-white/[0.07] text-xs font-medium transition-colors cursor-pointer"
-                title="Share key & Export capsule"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Share</span>
-              </button>
-
-              {/* Capsule Settings & Menu */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsOptionsMenuOpen((prev) => !prev)}
-                  className="p-1.5 rounded-md text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  title="Capsule Options"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-
-                {isOptionsMenuOpen && (
-                  <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] rounded-lg shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
-                    <button
-                      onClick={() => {
-                        setIsOptionsMenuOpen(false);
-                        setIsEditCapsuleOpen(true);
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] flex items-center gap-2 cursor-pointer"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Edit Capsule</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsOptionsMenuOpen(false);
-                        void handleExportCapsule();
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] flex items-center gap-2 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Export .vctx</span>
-                    </button>
-                    <div className="my-1 border-t border-slate-100 dark:border-white/[0.05]" />
-                    <button
-                      onClick={() => {
-                        setIsOptionsMenuOpen(false);
-                        void handleDeleteCapsule(activeCapsule.id, activeCapsule.name);
-                      }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Capsule</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Header Bar */}
+          <CapsuleHeader
+            activeCapsule={activeCapsule}
+            tasksCount={tasks.length}
+            docsCount={docs.length}
+            p2pStatus={p2pStatus}
+            isP2PLoading={isP2PLoading}
+            isOptionsMenuOpen={isOptionsMenuOpen}
+            onToggleP2P={async () => {
+              if (p2pStatus?.is_active) {
+                try {
+                  await stopP2P();
+                  onNotify?.('P2P LAN session stopped (offline)', 'info');
+                } catch (err: any) {
+                  onNotify?.(`P2P error: ${err.message || err}`, 'error');
+                }
+              } else {
+                try {
+                  await startP2P(activeCapsule.id);
+                  onNotify?.('P2P LAN session live! Discovering local peers...', 'success');
+                } catch (err: any) {
+                  onNotify?.(`P2P error: ${err.message || err}`, 'error');
+                }
+              }
+            }}
+            onOpenAttachModal={() => setIsAttachModalOpen(true)}
+            onOpenShareModal={() => setIsShareModalOpen(true)}
+            onToggleOptionsMenu={() => setIsOptionsMenuOpen((prev) => !prev)}
+            onCloseOptionsMenu={() => setIsOptionsMenuOpen(false)}
+            onOpenEditModal={() => setIsEditCapsuleOpen(true)}
+            onDeleteCapsule={() => void handleDeleteCapsule(activeCapsule.id, activeCapsule.name)}
+          />
 
           {/* Navigation Tabs Bar */}
           <div className="px-6 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-[#0c0c0f]/50">
@@ -967,554 +707,69 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
             )}
           </div>
 
-          {/* ─────────────────────────────────────────────────────────────
-              TAB 1: TASKS (BOARD OR LIST)
-          ────────────────────────────────────────────────────────────── */}
+          {/* TAB CONTENT */}
           {activeTab === 'tasks' && (
-            <div className="flex-1 flex flex-col min-h-0 max-w-full overflow-hidden">
-              {/* Quick Add Task Bar */}
-              <div className="p-4 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#09090b] shrink-0">
-                <form onSubmit={handleAddTask} className="flex items-center gap-2 max-w-4xl">
-                  <input
-                    type="text"
-                    placeholder="Add a new task to this capsule..."
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    className="flex-1 px-3 py-1.5 rounded-md bg-slate-50 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-
-                  <select
-                    value={newTaskPriority}
-                    onChange={(e) => setNewTaskPriority(e.target.value as PriorityLevel)}
-                    className="px-2.5 py-1.5 rounded-md bg-slate-50 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] text-xs font-medium text-slate-700 dark:text-zinc-200 focus:outline-none cursor-pointer"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-
-                  <input
-                    type="date"
-                    value={newTaskDueDate}
-                    onChange={(e) => setNewTaskDueDate(e.target.value)}
-                    className="px-2 py-1 rounded-md bg-slate-50 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-700 dark:text-zinc-300 focus:outline-none cursor-pointer"
-                    title="Due Date"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={!newTaskTitle.trim()}
-                    className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Task</span>
-                  </button>
-                </form>
-              </div>
-
-              {/* View Content: Kanban Board or List */}
-              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-5">
-                {taskViewMode === 'board' ? (
-                  /* 3-Column Kanban Board with corrected priority/status logic */
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full min-h-[450px]">
-                    {(['todo', 'in_progress', 'done'] as const).map((colStatus) => {
-                      const colTasks = tasks.filter((t) => {
-                        const isDone = !!t.task?.completed;
-                        if (colStatus === 'done') return isDone;
-                        const isHighPriority = t.task?.priority === 'high' || t.task?.priority === 'urgent';
-                        if (colStatus === 'in_progress') return !isDone && isHighPriority;
-                        return !isDone && !isHighPriority;
-                      });
-
-                      const colTitle =
-                        colStatus === 'todo'
-                          ? 'To Do'
-                          : colStatus === 'in_progress'
-                          ? 'Priority / In Progress'
-                          : 'Completed';
-
-                      return (
-                        <div
-                          key={colStatus}
-                          className="rounded-xl bg-slate-50/70 dark:bg-[#0f0f13] border border-slate-200/80 dark:border-white/[0.06] p-3 flex flex-col min-h-[350px]"
-                        >
-                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60 dark:border-white/[0.05]">
-                            <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                              {colTitle}
-                            </span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-white/[0.06] text-slate-500 dark:text-zinc-400">
-                              {colTasks.length}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2 flex-1 overflow-y-auto overflow-x-hidden pr-0.5">
-                            {colTasks.map((task) => (
-                              <div
-                                key={task.id}
-                                onClick={() => setSelectedItemId(task.id)}
-                                className="p-2.5 rounded-lg bg-white dark:bg-[#141418] border border-slate-200/90 dark:border-white/[0.07] hover:border-blue-400 dark:hover:border-white/[0.16] shadow-2xs space-y-1.5 transition-all cursor-pointer group"
-                              >
-                                <div className="flex items-start gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!task.task?.completed}
-                                    onChange={() => void handleToggleTask(task)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="mt-0.5 rounded text-blue-600 focus:ring-0 cursor-pointer"
-                                  />
-                                  <span
-                                    className={`text-xs flex-1 leading-snug truncate ${
-                                      task.task?.completed
-                                        ? 'line-through text-slate-400 dark:text-zinc-500'
-                                        : 'text-slate-800 dark:text-zinc-200 font-medium'
-                                    }`}
-                                  >
-                                    {task.title}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500 pt-1 border-t border-slate-100 dark:border-white/[0.03]">
-                                  <div className="flex items-center gap-1.5">
-                                    <span
-                                      className={`text-[9px] uppercase font-mono font-semibold px-1 py-0.2 rounded ${
-                                        task.task?.priority === 'urgent'
-                                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300'
-                                          : task.task?.priority === 'high'
-                                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'
-                                          : task.task?.priority === 'medium'
-                                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300'
-                                          : 'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-zinc-400'
-                                      }`}
-                                    >
-                                      {task.task?.priority || 'medium'}
-                                    </span>
-                                    {task.task?.dueDate && (
-                                      <span className="flex items-center gap-0.5 text-slate-500 dark:text-zinc-400">
-                                        <Calendar className="w-2.5 h-2.5" />
-                                        {task.task.dueDate}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void handleRemoveItem(task.id, task.title);
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-rose-500 transition-opacity cursor-pointer"
-                                    title="Remove from capsule"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-
-                            {colTasks.length === 0 && (
-                              <div className="py-8 text-center text-[11px] text-slate-400 dark:text-zinc-600 border border-dashed border-slate-200 dark:border-white/[0.06] rounded-lg">
-                                No tasks
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* List / Table View */
-                  <div className="border border-slate-200 dark:border-white/[0.07] rounded-xl overflow-hidden bg-white dark:bg-[#141418]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 dark:bg-[#101014] text-slate-500 dark:text-zinc-400 border-b border-slate-200 dark:border-white/[0.07] font-medium text-[11px]">
-                        <tr>
-                          <th className="py-2 px-3 w-8"></th>
-                          <th className="py-2 px-3">Title</th>
-                          <th className="py-2 px-3 w-24">Priority</th>
-                          <th className="py-2 px-3 w-32">Due Date</th>
-                          <th className="py-2 px-3 w-16 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                        {tasks.map((task) => (
-                          <tr
-                            key={task.id}
-                            onClick={() => setSelectedItemId(task.id)}
-                            className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group"
-                          >
-                            <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={!!task.task?.completed}
-                                onChange={() => void handleToggleTask(task)}
-                                className="rounded text-blue-600 focus:ring-0 cursor-pointer"
-                              />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`font-medium ${
-                                  task.task?.completed
-                                    ? 'line-through text-slate-400 dark:text-zinc-500'
-                                    : 'text-slate-800 dark:text-zinc-200'
-                                }`}
-                              >
-                                {task.title}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span
-                                className={`text-[9px] uppercase font-mono font-semibold px-1.5 py-0.2 rounded ${
-                                  task.task?.priority === 'urgent'
-                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300'
-                                    : task.task?.priority === 'high'
-                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'
-                                    : 'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-zinc-400'
-                                }`}
-                              >
-                                {task.task?.priority || 'medium'}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-500 dark:text-zinc-400">
-                              {task.task?.dueDate || '—'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleRemoveItem(task.id, task.title);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 transition-opacity p-1 cursor-pointer"
-                                title="Remove"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-
-                        {tasks.length === 0 && (
-                          <tr>
-                            <td colSpan={5} className="py-8 text-center text-slate-400 dark:text-zinc-600">
-                              No tasks in this capsule yet
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
+            <CapsuleKanbanBoard
+              tasks={tasks}
+              taskViewMode={taskViewMode}
+              newTaskTitle={newTaskTitle}
+              newTaskPriority={newTaskPriority}
+              newTaskDueDate={newTaskDueDate}
+              onTitleChange={setNewTaskTitle}
+              onPriorityChange={setNewTaskPriority}
+              onDueDateChange={setNewTaskDueDate}
+              onAddTask={handleAddTask}
+              onToggleTask={(t) => void handleToggleTask(t)}
+              onRemoveItem={(id, title) => void handleRemoveItem(id, title)}
+              onSelectItem={(id) => setSelectedItemId(id)}
+            />
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              TAB 2: BRIEFS & DOCS (SPLIT READER & FULL EDITOR)
-          ────────────────────────────────────────────────────────────── */}
           {activeTab === 'docs' && (
-            <div className="flex-1 flex min-h-0 max-w-full overflow-hidden">
-              {/* Left Sub-list of Notes */}
-              <div className="w-64 border-r border-slate-200 dark:border-white/[0.07] bg-slate-50/40 dark:bg-[#0c0c0f] flex flex-col shrink-0">
-                <div className="p-2.5 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                    Notes ({docs.length})
-                  </span>
-                  <button
-                    onClick={() => setIsNewDocOpen(true)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>New Note</span>
-                  </button>
-                </div>
-
-                {docs.length > 3 && (
-                  <div className="p-2 border-b border-slate-200/60 dark:border-white/[0.05]">
-                    <input
-                      type="text"
-                      placeholder="Filter notes..."
-                      value={docSearchQuery}
-                      onChange={(e) => setDocSearchQuery(e.target.value)}
-                      className="w-full px-2 py-1 rounded bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] text-xs text-slate-800 dark:text-zinc-200 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none"
-                    />
-                  </div>
-                )}
-
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1">
-                  {filteredDocs.map((doc) => {
-                    const isSelected = doc.id === selectedDocId;
-
-                    return (
-                      <button
-                        key={doc.id}
-                        onClick={() => setSelectedDocId(doc.id)}
-                        className={`w-full text-left p-2 rounded-lg text-xs transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-white dark:bg-[#141418] text-blue-600 dark:text-blue-400 font-semibold border border-blue-500/30 shadow-2xs'
-                            : 'text-slate-600 dark:text-zinc-400 hover:bg-white/60 dark:hover:bg-white/[0.03] border border-transparent'
-                        }`}
-                      >
-                        <div className="truncate">{doc.title}</div>
-                        <div className="text-[10px] text-slate-400 dark:text-zinc-500 line-clamp-1 mt-0.5">
-                          {doc.excerpt || 'Empty note'}
-                        </div>
-                      </button>
-                    );
-                  })}
-
-                  {filteredDocs.length === 0 && (
-                    <div className="py-8 text-center text-xs text-slate-400 dark:text-zinc-500 space-y-2">
-                      <FileText className="w-6 h-6 mx-auto stroke-[1.5] text-slate-300 dark:text-zinc-600" />
-                      <p className="text-[11px]">No documents</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Document Detail & Editor */}
-              <div className="flex-1 flex flex-col min-w-0 min-h-0 max-w-full bg-white dark:bg-[#09090b] overflow-hidden">
-                {fullDocItem ? (
-                  <div className="flex-1 flex flex-col min-h-0">
-                    {/* Note Toolbar */}
-                    <div className="px-6 py-2.5 border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-4 shrink-0 bg-white/50 dark:bg-[#09090b]">
-                      <div className="min-w-0 flex-1">
-                        {isDocEditing ? (
-                          <input
-                            type="text"
-                            value={editingDocTitle}
-                            onChange={(e) => setEditingDocTitle(e.target.value)}
-                            className="w-full text-sm font-bold text-slate-900 dark:text-zinc-100 bg-transparent border-b border-blue-500 focus:outline-none pb-0.5"
-                          />
-                        ) : (
-                          <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100 truncate">
-                            {fullDocItem.title}
-                          </h3>
-                        )}
-                        <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                          Updated {fullDocItem.updatedAt ? new Date(fullDocItem.updatedAt).toLocaleDateString() : 'recently'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Preview / Edit Mode Switch */}
-                        <button
-                          onClick={() => {
-                            if (isDocEditing) {
-                              void handleSaveDocContent();
-                            } else {
-                              setIsDocEditing(true);
-                            }
-                          }}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer border ${
-                            isDocEditing
-                              ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-500'
-                              : 'bg-slate-100 dark:bg-white/[0.05] border-slate-200 dark:border-white/[0.07] text-slate-700 dark:text-zinc-300 hover:bg-slate-200'
-                          }`}
-                        >
-                          {isDocEditing ? (
-                            <>
-                              <Save className="w-3.5 h-3.5" />
-                              <span>{isSavingDoc ? 'Saving...' : 'Save'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </>
-                          )}
-                        </button>
-
-                        {isDocEditing && (
-                          <button
-                            onClick={() => {
-                              setIsDocEditing(false);
-                              setEditingDocTitle(fullDocItem.title);
-                              setEditingDocContent(fullDocItem.content || '');
-                            }}
-                            className="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => handleCopy(fullDocItem.content || '', 'recipe')}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
-                          title="Copy Markdown"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          onClick={() => void handleRemoveItem(fullDocItem.id, fullDocItem.title)}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-                          title="Remove from Capsule"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Note Content Area */}
-                    <div className="flex-1 p-6 overflow-y-auto overflow-x-hidden min-h-0">
-                      {isDocEditing ? (
-                        <textarea
-                          value={editingDocContent}
-                          onChange={(e) => setEditingDocContent(e.target.value)}
-                          placeholder="Write markdown content..."
-                          className="w-full h-full min-h-[350px] p-3 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-relaxed"
-                        />
-                      ) : (
-                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <MarkdownViewer content={fullDocItem.content || '*Empty note*'} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-slate-400 dark:text-zinc-600">
-                    Select a note to read or edit
-                  </div>
-                )}
-              </div>
-            </div>
+            <CapsuleDocEditor
+              docs={docs}
+              filteredDocs={filteredDocs}
+              selectedDocId={selectedDocId}
+              fullDocItem={fullDocItem}
+              docSearchQuery={docSearchQuery}
+              isDocEditing={isDocEditing}
+              isSavingDoc={isSavingDoc}
+              editingDocTitle={editingDocTitle}
+              editingDocContent={editingDocContent}
+              copiedDoc={copiedDoc}
+              onDocSearchChange={setDocSearchQuery}
+              onSelectDoc={setSelectedDocId}
+              onOpenNewDocModal={() => setIsNewDocOpen(true)}
+              onStartEditing={() => setIsDocEditing(true)}
+              onCancelEditing={() => {
+                setIsDocEditing(false);
+                if (fullDocItem) {
+                  setEditingDocTitle(fullDocItem.title);
+                  setEditingDocContent(fullDocItem.content || '');
+                }
+              }}
+              onTitleChange={setEditingDocTitle}
+              onContentChange={setEditingDocContent}
+              onSaveDoc={() => void handleSaveDocContent()}
+              onCopyDoc={(t) => handleCopy(t, 'doc')}
+              onRemoveDoc={(id, title) => void handleRemoveItem(id, title)}
+            />
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              TAB 3: INTELLIGENCE & AI RECIPES
-          ────────────────────────────────────────────────────────────── */}
           {activeTab === 'ai_recipes' && (
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 space-y-5 max-w-4xl">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100">
-                  Capsule Intelligence
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                  Synthesize the {capsuleItems.length} items in this capsule to produce structured overviews and action matrices.
-                </p>
-              </div>
-
-              {!settings.aiEnabled ? (
-                <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 text-xs text-amber-700 dark:text-amber-300 space-y-2">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>AI is currently disabled</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
-                    Enable AI in Settings or click below to enable local AI models for context processing.
-                  </p>
-                  <button
-                    onClick={() => updateSettings({ aiEnabled: true })}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium cursor-pointer"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span>Enable AI Features</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div
-                    onClick={() => void handleRunAiRecipe('synthesize')}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer group ${
-                      activeRecipeKey === 'synthesize' && isGeneratingRecipe
-                        ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-950/20 ring-1 ring-blue-500/20'
-                        : 'border-slate-200 dark:border-white/[0.07] bg-slate-50/50 dark:bg-[#141418] hover:border-blue-400'
-                    }`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2">
-                      <Sparkles className="w-3.5 h-3.5" />
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      Multi-Perspective Synthesis
-                    </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                      Synthesize tasks and briefs into a consolidated executive action plan.
-                    </p>
-                  </div>
-
-                  <div
-                    onClick={() => void handleRunAiRecipe('matrix')}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer group ${
-                      activeRecipeKey === 'matrix' && isGeneratingRecipe
-                        ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-500/20'
-                        : 'border-slate-200 dark:border-white/[0.07] bg-slate-50/50 dark:bg-[#141418] hover:border-emerald-400'
-                    }`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2">
-                      <CheckSquare className="w-3.5 h-3.5" />
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-                      Action &amp; Decision Matrix
-                    </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                      Extract structured decision tables, status, and owner impacts.
-                    </p>
-                  </div>
-
-                  <div
-                    onClick={() => void handleRunAiRecipe('audit')}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer group ${
-                      activeRecipeKey === 'audit' && isGeneratingRecipe
-                        ? 'border-indigo-500 bg-indigo-50/30 dark:bg-indigo-950/20 ring-1 ring-indigo-500/20'
-                        : 'border-slate-200 dark:border-white/[0.07] bg-slate-50/50 dark:bg-[#141418] hover:border-indigo-400'
-                    }`}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2">
-                      <Layers className="w-3.5 h-3.5" />
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                      Integrity &amp; Risk Audit
-                    </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                      Detect contradictions between tasks, verify containment, and check completeness.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Progress state */}
-              {isGeneratingRecipe && (
-                <div className="p-6 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-950/20 text-center space-y-2 animate-pulse">
-                  <Sparkles className="w-5 h-5 text-blue-500 mx-auto animate-spin" />
-                  <div className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                    Running {activeRecipeTitle}...
-                  </div>
-                </div>
-              )}
-
-              {/* Output Result */}
-              {recipeOutput && !isGeneratingRecipe && (
-                <div className="p-5 rounded-xl border border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#141418] space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-white/[0.07]">
-                    <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      {activeRecipeTitle || 'Analysis Result'}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleSaveRecipeAsNote}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors cursor-pointer"
-                        title="Save as Note in this Capsule"
-                      >
-                        <Save className="w-3 h-3" />
-                        <span>Save to Capsule</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleCopy(recipeOutput, 'recipe')}
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        {copiedRecipe ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        <span>Copy</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                    <MarkdownViewer content={recipeOutput} />
-                  </div>
-                </div>
-              )}
-            </div>
+            <CapsuleAiRecipes
+              capsuleItemsCount={capsuleItems.length}
+              aiEnabled={settings.aiEnabled}
+              isGeneratingRecipe={isGeneratingRecipe}
+              activeRecipeKey={activeRecipeKey}
+              activeRecipeTitle={activeRecipeTitle}
+              recipeOutput={recipeOutput}
+              copiedRecipe={copiedRecipe}
+              onEnableAi={() => updateSettings({ aiEnabled: true })}
+              onRunRecipe={(k) => void handleRunAiRecipe(k)}
+              onSaveRecipeAsNote={() => void handleSaveRecipeAsNote()}
+              onCopyRecipe={(t) => handleCopy(t, 'recipe')}
+            />
           )}
         </main>
       ) : (
@@ -1541,494 +796,67 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
         </div>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────
-          MODALS
-      ────────────────────────────────────────────────────────────── */}
+      {/* Modals */}
+      <ShareCapsuleModal
+        isOpen={isShareModalOpen}
+        activeCapsule={activeCapsule}
+        copiedKey={copiedKey}
+        onCopyKey={(k) => handleCopy(k, 'key')}
+        onExportCapsule={() => void handleExportCapsule()}
+        onClose={() => setIsShareModalOpen(false)}
+      />
 
-      {/* 1. Unified Share & Export Modal */}
-      {isShareModalOpen && activeCapsule && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <div className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Share2 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  Share Capsule &bull; {activeCapsule.name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsShareModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <JoinCapsuleModal
+        isOpen={isJoinModalOpen}
+        joinTab={joinTab}
+        joinKeyInput={joinKeyInput}
+        onJoinTabChange={setJoinTab}
+        onJoinKeyInputChange={setJoinKeyInput}
+        onJoinByInput={handleJoinCapsuleByInput}
+        onImportBundleFile={handleImportBundleFile}
+        onClose={() => setIsJoinModalOpen(false)}
+      />
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Invitation Key (Local / LAN Sync)
-                </label>
-                <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] flex items-center justify-between gap-2">
-                  <code className="font-mono text-[11px] text-blue-600 dark:text-blue-400 truncate">
-                    {activeCapsule.encryptionKey}
-                  </code>
-                  <button
-                    onClick={() => handleCopy(activeCapsule.encryptionKey, 'key')}
-                    className="p-1 rounded bg-white dark:bg-white/[0.08] text-slate-600 dark:text-zinc-300 hover:bg-slate-200 transition-colors shrink-0 cursor-pointer"
-                    title="Copy Key"
-                  >
-                    {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
+      <NewCapsuleModal
+        isOpen={isNewCapsuleOpen}
+        name={newCapsuleName}
+        description={newCapsuleDesc}
+        onNameChange={setNewCapsuleName}
+        onDescriptionChange={setNewCapsuleDesc}
+        onCreateCapsule={handleCreateCapsule}
+        onClose={() => setIsNewCapsuleOpen(false)}
+      />
 
-              <div className="pt-2 border-t border-slate-100 dark:border-white/[0.05] flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-slate-700 dark:text-zinc-300 block text-xs">
-                    Portable Bundle (.vctx)
-                  </span>
-                  <span className="text-[11px] text-slate-400 dark:text-zinc-500">
-                    Export entire capsule with full notes and tasks
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    void handleExportCapsule();
-                    setIsShareModalOpen(false);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Export</span>
-                </button>
-              </div>
-            </div>
+      <EditCapsuleModal
+        isOpen={isEditCapsuleOpen}
+        activeCapsule={activeCapsule}
+        name={editCapsuleName}
+        description={editCapsuleDesc}
+        onNameChange={setEditCapsuleName}
+        onDescriptionChange={setEditCapsuleDesc}
+        onUpdateCapsule={handleUpdateCapsule}
+        onClose={() => setIsEditCapsuleOpen(false)}
+      />
 
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setIsShareModalOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium cursor-pointer"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NewDocModal
+        isOpen={isNewDocOpen}
+        capsuleName={activeCapsule?.name}
+        title={newDocTitle}
+        content={newDocContent}
+        onTitleChange={setNewDocTitle}
+        onContentChange={setNewDocContent}
+        onCreateDoc={handleCreateDoc}
+        onClose={() => setIsNewDocOpen(false)}
+      />
 
-      {/* 2. Join / Import Capsule Modal */}
-      {isJoinModalOpen && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <div className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <LogIn className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  Join or Import Capsule
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsJoinModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Mode Switcher Tabs */}
-            <div className="flex rounded-lg bg-slate-100 dark:bg-[#101014] p-1 border border-slate-200/80 dark:border-white/[0.06]">
-              <button
-                type="button"
-                onClick={() => setJoinTab('key')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  joinTab === 'key'
-                    ? 'bg-white dark:bg-[#18181e] text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
-                }`}
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>Invitation Key</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setJoinTab('file')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  joinTab === 'file'
-                    ? 'bg-white dark:bg-[#18181e] text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
-                }`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>File .vctx</span>
-              </button>
-            </div>
-
-            {joinTab === 'key' ? (
-              <form onSubmit={handleJoinCapsuleByInput} className="space-y-3">
-                <div>
-                  <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                    Peer Invitation Key
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Paste key (e.g. vctx_live_...) or exported JSON"
-                    value={joinKeyInput}
-                    onChange={(e) => setJoinKeyInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs font-mono text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  />
-                  <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1.5 leading-relaxed">
-                    Paste the invitation key copied from your peer&apos;s <strong>Share</strong> modal. Once joined, both of you can click <strong>Go Live</strong> to synchronize in real time via LAN.
-                  </p>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsJoinModalOpen(false)}
-                    className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!joinKeyInput.trim()}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>Join Capsule</span>
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-3">
-                <label className="block p-5 border-2 border-dashed border-slate-200 dark:border-white/[0.1] hover:border-blue-500 rounded-xl text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-white/[0.02]">
-                  <Upload className="w-6 h-6 mx-auto text-blue-500 mb-2" />
-                  <span className="text-xs font-medium text-slate-800 dark:text-zinc-200 block mb-0.5">
-                    Select a .vctx or .json file
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 block">
-                    Imports complete workspace notes, tasks, and cryptographic key
-                  </span>
-                  <input
-                    type="file"
-                    accept=".vctx,.json"
-                    onChange={handleImportBundleFile}
-                    className="hidden"
-                  />
-                </label>
-
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsJoinModalOpen(false)}
-                    className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. New Capsule Modal */}
-      {isNewCapsuleOpen && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <form
-            onSubmit={handleCreateCapsule}
-            className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FolderGit2 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  New Context Capsule
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsNewCapsuleOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Project Roadmap, Architecture Review..."
-                  value={newCapsuleName}
-                  onChange={(e) => setNewCapsuleName(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Description (Optional)
-                </label>
-                <textarea
-                  placeholder="Scope or brief of this capsule..."
-                  value={newCapsuleDesc}
-                  onChange={(e) => setNewCapsuleDesc(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="pt-1 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsNewCapsuleOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!newCapsuleName.trim()}
-                className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
-              >
-                Create
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 4. Edit Capsule Modal */}
-      {isEditCapsuleOpen && activeCapsule && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <form
-            onSubmit={handleUpdateCapsule}
-            className="w-full max-w-md bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  Edit Capsule
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditCapsuleOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={editCapsuleName}
-                  onChange={(e) => setEditCapsuleName(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={editCapsuleDesc}
-                  onChange={(e) => setEditCapsuleDesc(e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="pt-1 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsEditCapsuleOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!editCapsuleName.trim()}
-                className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
-              >
-                Save
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 5. New Note Modal */}
-      {isNewDocOpen && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <form
-            onSubmit={handleCreateDoc}
-            className="w-full max-w-lg bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-100"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  New Note &bull; {activeCapsule?.name}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsNewDocOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Architecture Specs, Meeting Notes..."
-                  value={newDocTitle}
-                  onChange={(e) => setNewDocTitle(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-medium text-slate-600 dark:text-zinc-400 block mb-1">
-                  Content (Markdown)
-                </label>
-                <textarea
-                  placeholder="Write markdown note..."
-                  value={newDocContent}
-                  onChange={(e) => setNewDocContent(e.target.value)}
-                  rows={8}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs font-mono text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="pt-1 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setIsNewDocOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!newDocTitle.trim()}
-                className="px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium cursor-pointer"
-              >
-                Create Note
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 6. Attach Existing Items from Workspace Modal */}
-      {isAttachModalOpen && (
-        <div className="fixed inset-0 bg-black/75 transform-gpu z-50 flex items-center justify-center p-4 select-none">
-          <div className="w-full max-w-lg bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.08] p-5 space-y-3 shadow-2xl animate-in zoom-in-95 duration-100 flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Paperclip className="w-4 h-4 text-blue-600" />
-                <h3 className="text-xs font-bold text-slate-900 dark:text-zinc-100">
-                  Attach from Workspace
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsAttachModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search notes and tasks to attach..."
-                value={attachSearchQuery}
-                onChange={(e) => setAttachSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#101014] border border-slate-200 dark:border-white/[0.08] text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-1 min-h-[220px] max-h-[350px] p-1 border border-slate-100 dark:border-white/[0.04] rounded-lg">
-              {attachableItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-2 rounded-md hover:bg-slate-50 dark:hover:bg-white/[0.04] flex items-center justify-between gap-3 text-xs transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono uppercase px-1 py-0.2 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-zinc-400">
-                        {item.type}
-                      </span>
-                      <span className="font-medium text-slate-800 dark:text-zinc-200 truncate">
-                        {item.title}
-                      </span>
-                    </div>
-                    {item.excerpt && (
-                      <p className="text-[11px] text-slate-400 dark:text-zinc-500 truncate mt-0.5">
-                        {item.excerpt}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => void handleAttachItem(item)}
-                    className="flex items-center gap-1 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 text-[11px] font-medium transition-colors cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Attach</span>
-                  </button>
-                </div>
-              ))}
-
-              {attachableItems.length === 0 && (
-                <div className="py-12 text-center text-xs text-slate-400 dark:text-zinc-600">
-                  {attachSearchQuery ? 'No matching items' : 'All workspace items are already attached'}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setIsAttachModalOpen(false)}
-                className="px-3 py-1.5 rounded-md bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 text-slate-700 dark:text-zinc-300 text-xs font-medium cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AttachItemModal
+        isOpen={isAttachModalOpen}
+        attachSearchQuery={attachSearchQuery}
+        attachableItems={attachableItems}
+        onSearchChange={setAttachSearchQuery}
+        onAttachItem={(item) => void handleAttachItem(item)}
+        onClose={() => setIsAttachModalOpen(false)}
+      />
     </div>
   );
 };

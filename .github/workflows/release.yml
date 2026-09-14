@@ -11,11 +11,26 @@ permissions:
 
 jobs:
   test:
-    name: "Tests & Lint"
+    name: "Tests & Quality Gate"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Frontend Build & Typecheck
+        run: npm run build
+
+      - name: Frontend Unit Tests
+        run: npm test
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -27,10 +42,19 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Install Linux system deps (required for Tauri compile)
+      - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev build-essential
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            libfuse2 \
+            libdbus-1-dev
 
       - name: Run Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
@@ -50,7 +74,7 @@ jobs:
             target: 'aarch64-apple-darwin'
             args: '--target aarch64-apple-darwin'
             name: 'macOS-AppleSilicon-M-Series'
-          - platform: 'macos-14'
+          - platform: 'macos-13'
             target: 'x86_64-apple-darwin'
             args: '--target x86_64-apple-darwin'
             name: 'macOS-Intel'
@@ -88,10 +112,22 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libxdo-dev build-essential
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libfuse2 \
+            libdbus-1-dev
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci || npm install
 
       - name: Build frontend
         run: npm run build
@@ -100,21 +136,24 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.0' }}
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v0.2.1' }}
           releaseName: 'Velco v__VERSION__'
           releaseBody: |
             ### Velco Production Multi-Platform Release
 
             Universal installers and packages for all supported platforms:
             - **Windows**: `.msi` and `.exe` installer (Windows 10 / 11 64-bit)
-            - **macOS Apple Silicon**: `.dmg` installer for MacBook M1, M2, M3, M4
-            - **macOS Intel**: `.dmg` installer for Intel MacBook / iMac
+            - **macOS Apple Silicon**: `.dmg` installer for Apple Silicon (M1/M2/M3/M4)
+            - **macOS Intel**: `.dmg` installer for Intel Mac
             - **Linux**: `.deb` package and portable `.AppImage` (Ubuntu, Debian, Fedora)
 
-            *Air-Gapped P2P Collaboration &bull; Local SQLite Storage &bull; Dual-Mode Architecture &bull; Industrial Minimalism*
+            *Air-Gapped P2P Collaboration • Local SQLite Storage • Context Queue & The Foundry • Industrial Minimalism*
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
           args: ${{ matrix.args }}
 
       - name: Upload Build Artifacts
@@ -129,4 +168,6 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/velco.exe
+            src-tauri/target/${{ matrix.target }}/release/velco
+            src-tauri/target/release/velco
           if-no-files-found: warn

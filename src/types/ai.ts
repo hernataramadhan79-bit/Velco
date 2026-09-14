@@ -57,3 +57,14 @@ export interface ChatChunkEvent {
   error?: string | null;
 }
 
+/** AI usage telemetry and token/cost summary */
+export interface AiUsageSummary {
+  today_cost: number;
+  today_tokens_in: number;
+  today_tokens_out: number;
+  month_cost: number;
+  month_tokens_in: number;
+  month_tokens_out: number;
+  total_cost: number;
+}
+

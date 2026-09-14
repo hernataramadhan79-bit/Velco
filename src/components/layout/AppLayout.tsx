@@ -3,6 +3,10 @@ import { Upload, Bell, X } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { UpdateBanner } from '../updater/UpdateBanner';
+import { BackupReminderBanner } from '../backup/BackupReminderBanner';
+import { OnboardingOverlay } from '../onboarding/OnboardingOverlay';
+import { ShortcutCheatSheetModal } from '../common/ShortcutCheatSheetModal';
 import { TheFoundry } from '../workstation/TheFoundry';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { useTagStore } from '../../stores/tagStore';
@@ -164,6 +168,7 @@ export const AppLayout: React.FC = () => {
   const [isFoundryExpanded, setIsFoundryExpanded] = useState(false);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isCheatSheetOpen, setIsCheatSheetOpen] = useState(false);
   const previousViewRef = useRef<NavigationView>('inbox');
 
   const navigateToView = useCallback((view: NavigationView) => {
@@ -303,6 +308,9 @@ export const AppLayout: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setIsSidebarOpen((prev) => !prev);
+      } else if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault();
+        setIsCheatSheetOpen((prev) => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -383,6 +391,8 @@ export const AppLayout: React.FC = () => {
 
       {/* Pane 2: Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full h-full overflow-hidden bg-slate-50 dark:bg-[#09090b]">
+        <UpdateBanner />
+        <BackupReminderBanner />
         <Header
           currentView={currentView}
           onNewCaptureClick={() => navigateToView('inbox')}
@@ -391,6 +401,7 @@ export const AppLayout: React.FC = () => {
           isSidebarOpen={appMode === 'personal' ? isSidebarOpen : true}
           onToggleSidebar={appMode === 'personal' ? () => setIsSidebarOpen((prev) => !prev) : undefined}
           onOpenSearch={() => setIsSearchOpen(true)}
+          onOpenCheatSheet={() => setIsCheatSheetOpen(true)}
         />
 
         {/* Scrollable View Content */}
@@ -595,6 +606,15 @@ export const AppLayout: React.FC = () => {
           }}
         />
       </ErrorBoundary>
+
+      {/* First-Run Onboarding Overlay */}
+      <OnboardingOverlay />
+
+      {/* Keyboard Shortcuts Cheat Sheet Modal */}
+      <ShortcutCheatSheetModal
+        isOpen={isCheatSheetOpen}
+        onClose={() => setIsCheatSheetOpen(false)}
+      />
     </div>
   );
 };

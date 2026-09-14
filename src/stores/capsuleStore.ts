@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { CapsuleRecord, CapsuleExportBundle, P2PStatus } from '../types/capsule';
+import { CapsuleRecord, CapsuleExportBundle, P2PStatus, Capsule } from '../types/capsule';
+export type { CapsuleRecord, CapsuleExportBundle, P2PStatus, Capsule };
 import { ItemSummary } from '../types/item';
 
 interface RawCapsule {

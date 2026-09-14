@@ -32,6 +32,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V4)?;
         conn.pragma_update(None, "user_version", 4)?;
     }
+    if version < 5 {
+        conn.execute_batch(MIGRATION_V5)?;
+        conn.pragma_update(None, "user_version", 5)?;
+    }
 
     Ok(())
 }
@@ -220,4 +224,19 @@ CREATE TABLE IF NOT EXISTS capsule_items (
 CREATE INDEX IF NOT EXISTS idx_capsule_items_capsule ON capsule_items(capsule_id);
 CREATE INDEX IF NOT EXISTS idx_capsule_items_item ON capsule_items(item_id);
 "#;
+
+/// V5: Tabel ai_usage_log untuk cost & token guardrails
+const MIGRATION_V5: &str = r#"
+CREATE TABLE IF NOT EXISTS ai_usage_log (
+    id TEXT PRIMARY KEY NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    token_in INTEGER NOT NULL,
+    token_out INTEGER NOT NULL,
+    estimated_cost REAL NOT NULL,
+    timestamp TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_log_timestamp ON ai_usage_log(timestamp DESC);
+"#;
+
 

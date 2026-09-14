@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Item, ItemSummary, CreateItemInput } from '../../types/item';
+import { ItemSummary, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Link2, Plus } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -83,6 +83,13 @@ export const LinksView: React.FC<LinksViewProps> = ({
               icon={Link2}
               title="No saved links yet"
               description="Paste and bookmark URLs to docs, articles, design files, or research repositories."
+              action={{
+                label: 'Save a Link',
+                onClick: () => {
+                  document.querySelector<HTMLInputElement>('input[placeholder*="Paste a URL"]')?.focus();
+                },
+                icon: Plus,
+              }}
               badgeIcon={Link2}
             />
           ) : (

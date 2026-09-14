@@ -1,5 +1,7 @@
 pub mod ollama;
+pub mod providers;
 pub mod state;
+pub mod usage;
 
 use serde::{Deserialize, Serialize};
 

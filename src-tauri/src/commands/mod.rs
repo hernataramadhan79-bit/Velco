@@ -9,4 +9,5 @@ pub mod tags;
 pub mod tasks;
 pub mod capsules;
 pub mod p2p;
+pub mod updater;
 

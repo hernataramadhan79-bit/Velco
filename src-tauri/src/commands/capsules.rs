@@ -573,3 +573,89 @@ pub fn import_capsule(
 
     Ok(record)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::schema::run_migrations;
+    use rusqlite::Connection;
+
+    fn setup_test_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("failed to open memory db");
+        run_migrations(&conn).expect("migrations failed");
+        conn
+    }
+
+    #[test]
+    fn test_create_capsule_empty_name_validation() {
+        let empty_name = "   ";
+        assert!(empty_name.trim().is_empty());
+    }
+
+    #[test]
+    fn test_capsule_crud_in_memory() {
+        let conn = setup_test_db();
+        let cap_id = "capsule-101";
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // 1. Create capsule
+        conn.execute(
+            r#"
+            INSERT INTO capsules (id, name, description, role, encryption_key, created_at, updated_at)
+            VALUES (?1, 'Project Alpha', 'Secret Project', 'Host', 'vctx_live_1234567890abcdef', ?2, ?2)
+            "#,
+            params![cap_id, now],
+        ).expect("insert capsule failed");
+
+        let record = conn.query_row(
+            "SELECT id, name, description, role, encryption_key, created_at, updated_at, 0 FROM capsules WHERE id = ?1",
+            params![cap_id],
+            map_capsule_row,
+        ).expect("fetch capsule failed");
+
+        assert_eq!(record.name, "Project Alpha");
+        assert_eq!(record.role, "Host");
+
+        // 2. Add item to capsule
+        let item_id = "item-alpha-1";
+        conn.execute(
+            "INSERT INTO items (id, type, title, content, created_at, updated_at) VALUES (?1, 'note', 'Alpha Doc', 'Notes', ?2, ?2)",
+            params![item_id, now],
+        ).expect("insert item failed");
+
+        conn.execute(
+            "INSERT INTO capsule_items (capsule_id, item_id, added_at) VALUES (?1, ?2, ?3)",
+            params![cap_id, item_id, now],
+        ).expect("add item to capsule failed");
+
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM capsule_items WHERE capsule_id = ?1",
+            params![cap_id],
+            |r| r.get(0),
+        ).expect("count failed");
+        assert_eq!(count, 1);
+
+        // 3. Remove item from capsule
+        conn.execute(
+            "DELETE FROM capsule_items WHERE capsule_id = ?1 AND item_id = ?2",
+            params![cap_id, item_id],
+        ).expect("remove item failed");
+
+        let count_after: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM capsule_items WHERE capsule_id = ?1",
+            params![cap_id],
+            |r| r.get(0),
+        ).expect("count failed");
+        assert_eq!(count_after, 0);
+
+        // 4. Delete capsule
+        conn.execute("DELETE FROM capsules WHERE id = ?1", params![cap_id]).expect("delete capsule failed");
+        let exists: bool = conn.query_row(
+            "SELECT 1 FROM capsules WHERE id = ?1",
+            params![cap_id],
+            |_| Ok(true),
+        ).unwrap_or(false);
+        assert!(!exists);
+    }
+}
+

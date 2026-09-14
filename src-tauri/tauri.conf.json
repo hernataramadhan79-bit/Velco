@@ -58,5 +58,13 @@
       "minimumSystemVersion": "10.15",
       "entitlements": "Entitlements.plist"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDE0MUIyNTEyOTk1RUM3Q0MKUldRRFg3c3Z1NW5PdmI1cllySDRhN29vT3hWQUlZek5nK0d6bTBNdW5sLzZ4RFVlK1c4NHlHWWIK",
+      "endpoints": [
+        "https://github.com/hernataramadhan79-bit/Velco/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
