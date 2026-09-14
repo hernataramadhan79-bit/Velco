@@ -387,7 +387,7 @@ fn launch_file_sandboxed(path: &std::path::Path) -> Result<(), String> {
             cmd.arg("-R").arg(path);
         }
         cmd.spawn().map_err(|e| format!("Failed to open file: {}", e))?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
@@ -402,7 +402,7 @@ fn launch_file_sandboxed(path: &std::path::Path) -> Result<(), String> {
                 .spawn()
                 .map_err(|e| format!("Failed to open directory: {}", e))?;
         }
-        return Ok(());
+        Ok(())
     }
 }
 
