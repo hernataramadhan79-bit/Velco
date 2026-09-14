@@ -475,11 +475,6 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-xs font-mono text-slate-500 dark:text-zinc-400 select-none w-fit">
                             <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400 shrink-0" />
                             <span>Generating response...</span>
-                            <span className="inline-flex gap-1 items-center ml-0.5">
-                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce [animation-delay:-0.3s]" />
-                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce [animation-delay:-0.15s]" />
-                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce" />
-                            </span>
                           </div>
                         ) : (
                           <div className="p-2.5 rounded-lg text-slate-800 dark:text-zinc-200">
