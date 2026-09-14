@@ -112,8 +112,8 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-            let show_i = MenuItem::with_id(app, "show", "Buka Velco", true, None::<&str>)?;
-            let quit_i = MenuItem::with_id(app, "quit", "Keluar dari Velco", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Open Velco", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit Velco", true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
             let mut tray_builder = TrayIconBuilder::new()

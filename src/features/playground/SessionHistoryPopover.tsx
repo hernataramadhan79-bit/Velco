@@ -31,10 +31,10 @@ function getDateGroup(updatedAt: number): 'today' | 'yesterday' | 'week' | 'olde
 }
 
 const GROUP_LABELS: Record<string, string> = {
-  today: 'Hari ini',
-  yesterday: 'Kemarin',
-  week: '7 Hari Terakhir',
-  older: 'Lebih Lama',
+  today: 'Today',
+  yesterday: 'Yesterday',
+  week: 'Previous 7 Days',
+  older: 'Older',
 };
 const GROUP_ORDER = ['today', 'yesterday', 'week', 'older'] as const;
 
@@ -116,7 +116,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400 truncate">
-          Hapus sesi ini?
+          Delete this chat?
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -124,14 +124,14 @@ const SessionItem: React.FC<SessionItemProps> = ({
             onClick={handleConfirmDelete}
             className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-medium cursor-pointer transition-colors shadow-2xs"
           >
-            Hapus
+            Delete
           </button>
           <button
             type="button"
             onClick={handleCancelDelete}
             className="px-2 py-0.5 rounded text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-200/60 dark:hover:bg-white/10 text-[11px] cursor-pointer transition-colors"
           >
-            Batal
+            Cancel
           </button>
         </div>
       </div>
@@ -157,7 +157,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
           type="button"
           onClick={handleConfirmRename}
           className="p-1 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-500/15 cursor-pointer shrink-0"
-          title="Simpan nama"
+          title="Save"
         >
           <Check className="w-3.5 h-3.5 stroke-[2]" />
         </button>
@@ -168,7 +168,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
             setIsEditing(false);
           }}
           className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-200/50 dark:hover:bg-white/10 cursor-pointer shrink-0"
-          title="Batal"
+          title="Cancel"
         >
           <X className="w-3.5 h-3.5 stroke-[2]" />
         </button>
@@ -223,7 +223,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
             type="button"
             onClick={handleStartEdit}
             className="p-1 rounded text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors cursor-pointer"
-            title="Ubah nama"
+            title="Rename"
           >
             <Edit2 className="w-3 h-3 stroke-[1.5]" />
           </button>
@@ -231,7 +231,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
             type="button"
             onClick={handleDeleteClick}
             className="p-1 rounded text-slate-400 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer"
-            title="Hapus sesi"
+            title="Delete chat"
           >
             <Trash2 className="w-3 h-3 stroke-[1.5]" />
           </button>
@@ -342,7 +342,7 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
             ? 'bg-slate-100 dark:bg-white/[0.08] text-slate-900 dark:text-zinc-100'
             : 'text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-white/[0.05]'
         }`}
-        title="Buka riwayat obrolan"
+        title="Chat history"
       >
         <MessageSquare className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-zinc-500" />
         <span className="text-xs font-medium truncate">{truncatedTitle}</span>
@@ -369,7 +369,7 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
               className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 shadow-2xs"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.25]" />
-              <span>Obrolan Baru</span>
+              <span>New Chat</span>
             </button>
           </div>
 
@@ -381,7 +381,7 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
                 ref={searchRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari obrolan..."
+                placeholder="Search conversations..."
                 className="flex-1 text-xs bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-zinc-600 text-slate-800 dark:text-zinc-200"
               />
               {searchQuery && (
@@ -389,7 +389,7 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
                   type="button"
                   onClick={() => setSearchQuery('')}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 cursor-pointer p-0.5"
-                  title="Hapus pencarian"
+                  title="Clear search"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -401,7 +401,7 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
           <div className="flex-1 overflow-y-auto px-1.5 py-1 space-y-2">
             {filtered.length === 0 ? (
               <div className="px-3 py-8 text-center text-xs text-slate-400 dark:text-zinc-500">
-                {searchQuery ? 'Tidak ada obrolan yang cocok' : 'Belum ada obrolan tersimpan'}
+                {searchQuery ? 'No matching conversations' : 'No conversations yet'}
               </div>
             ) : (
               GROUP_ORDER.filter((g) => grouped[g]?.length > 0).map((group) => (
