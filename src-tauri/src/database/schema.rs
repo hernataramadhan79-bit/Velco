@@ -36,6 +36,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V5)?;
         conn.pragma_update(None, "user_version", 5)?;
     }
+    if version < 6 {
+        conn.execute_batch(MIGRATION_V6)?;
+        conn.pragma_update(None, "user_version", 6)?;
+    }
 
     Ok(())
 }
@@ -239,4 +243,28 @@ CREATE TABLE IF NOT EXISTS ai_usage_log (
 CREATE INDEX IF NOT EXISTS idx_ai_usage_log_timestamp ON ai_usage_log(timestamp DESC);
 "#;
 
+/// V6: Tabel chat_sessions & chat_messages untuk persistent chat history
+const MIGRATION_V6: &str = r#"
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id TEXT PRIMARY KEY NOT NULL,
+    title TEXT NOT NULL DEFAULT 'New Chat',
+    origin TEXT NOT NULL DEFAULT 'playground'
+        CHECK(origin IN ('playground', 'inbox')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    staged_item_ids TEXT NULL,
+    error TEXT NULL,
+    timestamp INTEGER NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, timestamp ASC);
+"#;

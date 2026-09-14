@@ -25,7 +25,7 @@ import {
   Zap,
   ChevronDown,
 } from 'lucide-react';
-import { useChatStore } from '../../stores/chatStore';
+import { useEphemeralChat } from '../../hooks/useEphemeralChat';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useSettings } from '../../stores/settingsStore';
@@ -80,7 +80,9 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   onArtifactCreated,
   onOpenSettings,
 }) => {
-  const { messages, isGenerating, sendMessage, stopGenerating, clearChat } = useChatStore();
+  // useEphemeralChat: local-only, no Zustand persist — resets on each mount
+  // sessionId di-create lazily saat pesan pertama dikirim (origin='inbox')
+  const { messages, isGenerating, sendMessage, stopGenerating, clearChat } = useEphemeralChat();
   const {
     chatContextItems,
     addChatContextItem,

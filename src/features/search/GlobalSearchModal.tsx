@@ -1,20 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useDebounce } from '../../hooks/useDebounce';
-import { Search, X, FileText, CheckSquare, Link2, Folder, Star, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, X, FileText, CheckSquare, Link2, Folder, Star, ArrowRight, Loader2, MessageSquare } from 'lucide-react';
 import { Item, ItemType } from '../../types/item';
 import { db } from '../../services/database';
 import { useFocusTrap } from '../../components/common/useFocusTrap';
+import { usePlaygroundChatStore } from '../../stores/playgroundChatStore';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectItem: (item: Item) => void;
+  onSwitchSession?: (id: string) => void;
 }
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   isOpen,
   onClose,
   onSelectItem,
+  onSwitchSession,
 }) => {
     const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 200);
@@ -27,6 +30,19 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const modalContainerRef = useRef<HTMLDivElement>(null);
   const resultsContainerRef = useRef<HTMLDivElement>(null);
   const latestQueryRef = useRef(query);
+
+  // ── Chat sessions for Cmd+K ──────────────────────────────────────────────
+  const sessions = usePlaygroundChatStore((s) => s.sessions);
+
+  const matchingSessions = useMemo(() => {
+    if (!debouncedQuery.trim()) return [];
+    const q = debouncedQuery.toLowerCase();
+    return sessions.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.last_message_preview ?? '').toLowerCase().includes(q)
+    );
+  }, [sessions, debouncedQuery]);
 
   useFocusTrap(modalContainerRef, isOpen, onClose);
 
@@ -264,6 +280,50 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             })
           )}
         </div>
+
+        {/* Chat Sessions section */}
+        {matchingSessions.length > 0 && (
+          <div className="border-t border-slate-100 dark:border-white/[0.05] px-1.5 py-1">
+            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-600 flex items-center gap-1.5">
+              <MessageSquare className="w-3 h-3" />
+              Chat Sessions
+            </div>
+            {matchingSessions.slice(0, 5).map((session) => (
+              <div
+                key={session.id}
+                onClick={() => {
+                  onSwitchSession?.(session.id);
+                  // Navigation + close handled by parent's onSwitchSession
+                }}
+                className="group flex items-center justify-between px-2.5 py-2 rounded-md transition-all cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.04] border border-transparent text-slate-700 dark:text-zinc-300"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="p-1 rounded bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 text-violet-500 dark:text-violet-400 shrink-0">
+                    <MessageSquare className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium truncate text-slate-900 dark:text-zinc-100">
+                      {session.title}
+                    </div>
+                    {session.last_message_preview && (
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-500 truncate mt-0.5 font-mono">
+                        {session.last_message_preview}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-3">
+                  {session.origin === 'inbox' && (
+                    <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-400/20">
+                      Inbox
+                    </span>
+                  )}
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 dark:text-zinc-600 group-hover:text-slate-600 dark:group-hover:text-zinc-400 transition-colors" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Keyboard hints footer */}
         <div className="px-3 py-2 bg-slate-50 dark:bg-[#101014] border-t border-slate-200 dark:border-white/[0.07] text-[10px] font-mono text-slate-500 dark:text-zinc-500 flex items-center justify-between">

@@ -211,6 +211,14 @@ pub fn run() {
             // Updater
             commands::updater::check_for_updates,
             commands::updater::install_update,
+            // Chat Sessions
+            commands::chat_sessions::create_chat_session,
+            commands::chat_sessions::append_chat_message,
+            commands::chat_sessions::list_chat_sessions,
+            commands::chat_sessions::get_chat_session_messages,
+            commands::chat_sessions::rename_chat_session,
+            commands::chat_sessions::delete_chat_session,
+            commands::chat_sessions::migrate_legacy_chat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Velco application");

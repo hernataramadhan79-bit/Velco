@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod backup;
+pub mod chat_sessions;
 pub mod filesystem;
 pub mod items;
 pub mod search;
@@ -10,4 +11,3 @@ pub mod tasks;
 pub mod capsules;
 pub mod p2p;
 pub mod updater;
-

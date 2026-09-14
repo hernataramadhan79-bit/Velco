@@ -11,15 +11,11 @@ import {
   Search,
   PanelLeftClose,
   Tag as TagIcon,
-  ChevronRight,
   X,
   Bot,
-  Zap,
-  GitBranch,
 } from 'lucide-react';
 import { NavigationView } from '../../stores/itemStore';
 import { Tag } from '../../types/item';
-import { useSettings } from '../../stores/settingsStore';
 import { modKey, formatShortcut } from '../../utils/platformUtils';
 
 interface SidebarProps {
@@ -61,8 +57,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
   onOpenSearch,
   onToggleSidebar,
 }) => {
-  const { settings } = useSettings();
-
   const knowledgeNav: NavEntry[] = [
     { id: 'inbox', label: 'Inbox', icon: Inbox, count: itemCounts.inbox },
     { id: 'notes', label: 'Notes', icon: FileText, count: itemCounts.notes },
@@ -79,17 +73,9 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
     { id: 'tags', label: 'Tags', icon: TagIcon },
     { id: 'archive', label: 'Archive', icon: Archive, count: itemCounts.archive },
     { id: 'trash', label: 'Trash', icon: Trash2, count: itemCounts.trash },
-    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const selectedTag = tags.find((t) => t.id === selectedTagId);
-
-  const activeProvider = settings.aiProvider === 'none' ? 'None' :
-    settings.aiProvider === 'ollama' ? 'Ollama' :
-    settings.aiProvider === 'lmstudio' ? 'LM Studio' :
-    settings.aiProvider.charAt(0).toUpperCase() + settings.aiProvider.slice(1);
-
-  const isLocalAi = ['ollama', 'lmstudio'].includes(settings.aiProvider);
 
   const renderNavGroup = (title: string, items: NavEntry[]) => (
     <div className="space-y-1">
@@ -274,27 +260,30 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
         )}
       </div>
 
-      {/* Bottom Telemetry & Status Chip */}
+      {/* Bottom Settings Button */}
       <div className="p-2.5 border-t border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#0d0d10]">
-        <div className="flex items-center justify-between px-2 py-1.5 rounded-md bg-slate-50 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.06] text-[11px] font-mono">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                settings.aiEnabled
-                  ? isLocalAi
-                    ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-                    : 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.5)]'
-                  : 'bg-zinc-400 dark:bg-zinc-600'
+        <button
+          onClick={() => {
+            onSelectTag(null);
+            onSelectView('settings');
+          }}
+          className={`w-full group flex items-center justify-between px-3 py-1.5 rounded-md text-xs transition-all duration-150 cursor-pointer ${
+            currentView === 'settings'
+              ? 'bg-slate-100 dark:bg-white/[0.08] text-slate-900 dark:text-zinc-100 font-medium border border-slate-200 dark:border-white/[0.08] shadow-xs'
+              : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 hover:bg-slate-100/70 dark:hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Settings
+              className={`w-4 h-4 shrink-0 transition-colors ${
+                currentView === 'settings'
+                  ? 'text-slate-900 dark:text-zinc-100 stroke-[1.8]'
+                  : 'text-slate-400 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300 stroke-[1.5]'
               }`}
             />
-            <span className="text-slate-600 dark:text-zinc-400 truncate">
-              {settings.aiEnabled ? activeProvider : 'AI Disabled'}
-            </span>
+            <span className="truncate tracking-tight">Settings</span>
           </div>
-          <span className="text-[10px] text-slate-400 dark:text-zinc-600 uppercase">
-            {isLocalAi ? 'Local' : 'Cloud'}
-          </span>
-        </div>
+        </button>
       </div>
     </aside>
   );

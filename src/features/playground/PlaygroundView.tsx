@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { useChatStore } from '../../stores/chatStore';
+import { usePlaygroundChatStore } from '../../stores/playgroundChatStore';
 import { useContextStore } from '../../stores/contextStore';
 import { useSettings } from '../../stores/settingsStore';
 import { useItemStore } from '../../stores/itemStore';
@@ -18,6 +18,7 @@ import { PlaygroundHeader } from './PlaygroundHeader';
 import { PlaygroundEmptyState } from './PlaygroundEmptyState';
 import { PlaygroundMessageItem } from './PlaygroundMessageItem';
 import { PlaygroundInputDock } from './PlaygroundInputDock';
+import { chatSessionService } from '../../services/chatSessionService';
 
 interface PlaygroundViewProps {
   onOpenSettings?: () => void;
@@ -28,8 +29,20 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   onOpenSettings,
   onArtifactCreated,
 }) => {
-  const { messages, isGenerating, sendMessage, stopGenerating, clearChat, deleteMessage } =
-    useChatStore();
+  const {
+    messages,
+    sessions,
+    activeSessionId,
+    isGenerating,
+    sendMessage,
+    stopGenerating,
+    newSession,
+    switchSession,
+    renameSession,
+    deleteSession,
+    loadSessions,
+    deleteMessage,
+  } = usePlaygroundChatStore();
   const { chatContextItems } = useContextStore();
   const { settings } = useSettings();
 
@@ -49,6 +62,37 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
 
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isUserScrolledUpRef = useRef(false);
+
+  // ── Init: load sessions + resume last session on mount ─────────────────
+  useEffect(() => {
+    const init = async () => {
+      await loadSessions();
+      // Resume sesi terakhir (persisted activeSessionId)
+      if (activeSessionId) {
+        await switchSession(activeSessionId);
+      }
+    };
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── One-time legacy migration dari localStorage ─────────────────────────
+  useEffect(() => {
+    const migrateIfNeeded = async () => {
+      try {
+        const raw = localStorage.getItem('velco-context-chat-storage');
+        if (!raw) return;
+        const migrated = await chatSessionService.migrateLegacy(raw);
+        if (migrated) {
+          await loadSessions();
+        }
+      } catch {
+        // Silently ignore — migration tidak critical
+      }
+    };
+    migrateIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Scroll detection to respect user's manual scroll position
   const handleScroll = () => {
@@ -102,13 +146,13 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
     [prompt, isGenerating, settings, chatContextItems, sendMessage]
   );
 
-  // New Chat Handler
+  // New Chat Handler — buat sesi baru, sesi lama tetap ada di history
   const handleNewChat = useCallback(() => {
     if (isGenerating) return;
-    clearChat();
+    newSession();
     setPrompt('');
     isUserScrolledUpRef.current = false;
-  }, [isGenerating, clearChat]);
+  }, [isGenerating, newSession]);
 
   // Copy Message Handler
   const handleCopyMessage = useCallback((id: string, text: string) => {
@@ -242,10 +286,13 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
       {/* 1. Dedicated Top Chat Navigation Bar */}
       <PlaygroundHeader
         onNewChat={handleNewChat}
-        onClearChat={clearChat}
         isGenerating={isGenerating}
         hasMessages={messages.length > 0}
-        contextCount={chatContextItems.length}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        onSwitchSession={switchSession}
+        onRenameSession={renameSession}
+        onDeleteSession={deleteSession}
       />
 
       {/* 2. Scrollable Messages Viewport */}

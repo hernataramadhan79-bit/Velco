@@ -15,6 +15,7 @@ import { GlobalSearchModal } from '../../features/search/GlobalSearchModal';
 import { ItemDetailModal } from '../items/ItemDetailModal';
 import { SelectionActionBar } from '../common/SelectionActionBar';
 import { useSelectionStore } from '../../stores/selectionStore';
+import { usePlaygroundChatStore } from '../../stores/playgroundChatStore';
 import { ViewSkeleton } from '../common/ViewSkeleton';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import { reminderService } from '../../services/reminder/reminderService';
@@ -342,6 +343,11 @@ export const AppLayout: React.FC = () => {
             setSelectedItemId(item.id);
             setCurrentView(previousViewRef.current);
           }}
+          onSwitchSession={(id) => {
+            usePlaygroundChatStore.getState().switchSession(id);
+            navigateToView('playground');
+            setIsSearchOpen(false);
+          }}
         />
 
         <ErrorBoundary onReset={() => setSelectedItemId(null)}>
@@ -588,6 +594,11 @@ export const AppLayout: React.FC = () => {
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
           onSelectItem={(item) => setSelectedItemId(item.id)}
+          onSwitchSession={(id) => {
+            usePlaygroundChatStore.getState().switchSession(id);
+            navigateToView('playground');
+            setIsSearchOpen(false);
+          }}
         />
       </ErrorBoundary>
 
