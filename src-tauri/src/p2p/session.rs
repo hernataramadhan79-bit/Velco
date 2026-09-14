@@ -82,7 +82,7 @@ async fn recv_encrypted_frame(
     stream.read_exact(&mut len_buf).await.ok()?;
     let frame_len = u32::from_be_bytes(len_buf) as usize;
 
-    if frame_len < NONCE_LEN + TAG_LEN || frame_len > MAX_FRAME_BYTES {
+    if !(NONCE_LEN + TAG_LEN..=MAX_FRAME_BYTES).contains(&frame_len) {
         return None; // Reject malformed or oversized frames
     }
 
@@ -550,6 +550,7 @@ pub async fn broadcast_to_peers(p2p_state: &P2PState, msg: &SyncMessage) {
 // DB write helper (unchanged logic, same parameterized queries)
 // ─────────────────────────────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn apply_remote_item_upsert(
     db: &Database,
     capsule_id: &str,

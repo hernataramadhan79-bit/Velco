@@ -116,6 +116,7 @@ pub async fn get_p2p_status(
     })
 }
 
+#[allow(clippy::too_many_arguments)] // Tauri command: params map 1:1 to JS invoke args
 #[tauri::command]
 pub async fn broadcast_p2p_item_upsert(
     p2p_state: State<'_, P2PState>,
