@@ -4,7 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { UpdateBanner } from '../updater/UpdateBanner';
-import { BackupReminderBanner } from '../backup/BackupReminderBanner';
+import { BackupReminderBanner, dismissBackupReminderForSession } from '../backup/BackupReminderBanner';
 import { OnboardingOverlay } from '../onboarding/OnboardingOverlay';
 import { ShortcutCheatSheetModal } from '../common/ShortcutCheatSheetModal';
 import { TheFoundry } from '../workstation/TheFoundry';
@@ -240,6 +240,13 @@ export const AppLayout: React.FC = () => {
       reminderService.stop();
     };
   }, []);
+
+  // ── Dismiss Backup Reminder on Settings Entry ─────────────
+  useEffect(() => {
+    if (currentView === 'settings') {
+      dismissBackupReminderForSession();
+    }
+  }, [currentView]);
 
   // ── Native Tauri Drag-and-Drop listener ──────────────────
   useEffect(() => {

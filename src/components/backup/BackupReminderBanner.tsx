@@ -1,11 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSettings } from '../../stores/settingsStore';
 import { db } from '../../services/database';
 import { ShieldAlert, Download, X, CheckCircle2 } from 'lucide-react';
 
+const SESSION_DISMISSED_KEY = 'velco_backup_reminder_session_dismissed';
+let inMemorySessionDismissed = false;
+
+export function isBackupReminderDismissedForSession(): boolean {
+  if (inMemorySessionDismissed) return true;
+  try {
+    return sessionStorage.getItem(SESSION_DISMISSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function dismissBackupReminderForSession(): void {
+  inMemorySessionDismissed = true;
+  try {
+    sessionStorage.setItem(SESSION_DISMISSED_KEY, 'true');
+  } catch {}
+}
+
 export const BackupReminderBanner: React.FC = () => {
   const { settings, updateSettings } = useSettings();
-  const [snoozed, setSnoozed] = useState(false);
+  const [snoozed, setSnoozed] = useState(() => isBackupReminderDismissedForSession());
   const [isExporting, setIsExporting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -15,7 +34,7 @@ export const BackupReminderBanner: React.FC = () => {
 
   const isDue = (() => {
     if (reminderDays <= 0) return false;
-    if (snoozed) return false;
+    if (snoozed || isBackupReminderDismissedForSession()) return false;
     if (!lastBackup) return true; // Never backed up
     const diffDays = (Date.now() - lastBackup) / (1000 * 60 * 60 * 24);
     return diffDays >= reminderDays;
@@ -41,6 +60,7 @@ export const BackupReminderBanner: React.FC = () => {
       document.body.removeChild(a);
 
       updateSettings({ lastBackupTimestamp: Date.now() });
+      dismissBackupReminderForSession();
       setSuccessMsg('Backup saved successfully.');
       setTimeout(() => {
         setSuccessMsg(null);
@@ -86,7 +106,10 @@ export const BackupReminderBanner: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setSnoozed(true)}
+            onClick={() => {
+              dismissBackupReminderForSession();
+              setSnoozed(true);
+            }}
             className="p-1 text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-100 rounded transition-colors cursor-pointer"
             title="Dismiss for this session"
           >
