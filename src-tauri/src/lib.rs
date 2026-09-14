@@ -69,23 +69,92 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app.get_webview_window("main").map(|w| {
+            if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.unminimize();
                 let _ = w.set_focus();
-            });
+            } else {
+                // Jika window "main" sebelumnya telah ditutup/hancur, buat ulang agar aplikasi tetap bisa dibuka
+                let _ = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::App("index.html".into()),
+                )
+                .title("Velco")
+                .inner_size(1280.0, 840.0)
+                .min_inner_size(900.0, 600.0)
+                .center()
+                .resizable(true)
+                .build();
+            }
         }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Saat user menekan tombol "X" (close), sembunyikan window (hide) alih-alih menghancurkannya (destroy).
+                // Dengan begini, background worker (reminder) dan shortcut Spotlight tetap berjalan,
+                // dan window dapat dibuka kembali secara instan kapan saja user membuka aplikasi.
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .manage(storage)
         .manage(db)
         .manage(ai_state)
         .manage(p2p_state)
         .manage(reqwest::Client::builder().timeout(Duration::from_secs(180)).build().expect("failed to build http client"))
         .setup(|app| {
+            // ── System Tray Icon ───────────────────────────────────────
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+
+            let show_i = MenuItem::with_id(app, "show", "Buka Velco", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Keluar dari Velco", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+
+            let mut tray_builder = TrayIconBuilder::new()
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .tooltip("Velco Workstation")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                });
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            let _ = tray_builder.build(app)?;
+
             // ── Background Reminder Worker ─────────────────────────────
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
