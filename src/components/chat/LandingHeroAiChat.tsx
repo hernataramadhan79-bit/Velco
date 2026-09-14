@@ -427,13 +427,19 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
               return (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 text-xs w-full min-w-0 ${
+                  className={`flex gap-2.5 text-xs w-full min-w-0 ${
                     isUser ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   {!isUser && (
-                    <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
-                      <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                        msg.isStreaming
+                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-xs'
+                          : 'bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300'
+                      }`}
+                    >
+                      <Bot className={`w-3.5 h-3.5 stroke-[1.75] ${msg.isStreaming ? 'animate-pulse' : ''}`} />
                     </div>
                   )}
 
@@ -442,25 +448,66 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                       isUser ? 'items-end' : 'items-start'
                     }`}
                   >
-                    <div
-                      className={`leading-relaxed break-words min-w-0 ${
-                        isUser
-                          ? 'p-3 rounded-lg overflow-hidden bg-slate-100 text-slate-900 border border-slate-200 dark:bg-white/[0.06] dark:border-white/[0.08] dark:text-zinc-100'
-                          : 'p-3 rounded-lg text-slate-800 dark:text-zinc-200'
-                      }`}
-                    >
-                      {isUser ? (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                      ) : (
-                        <div className="prose prose-slate dark:prose-invert prose-xs max-w-none text-slate-800 dark:text-zinc-200">
-                          <MarkdownViewer content={msg.content} />
-                        </div>
-                      )}
-                    </div>
+                    {/* Attached Context Pills on User Prompts */}
+                    {isUser && msg.stagedItemTitles && msg.stagedItemTitles.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-end gap-1 mb-1.5 select-none">
+                        {msg.stagedItemTitles.map((title, idx) => (
+                          <span
+                            key={idx}
+                            className="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-white/[0.06] border border-slate-300/60 dark:border-white/[0.08] text-[10px] font-mono text-slate-600 dark:text-zinc-300 truncate max-w-[140px]"
+                            title={title}
+                          >
+                            {title}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
-                    {/* Message Action Bar (Assistant Only) */}
-                    {!isUser && (
-                      <div className="flex items-center gap-1 mt-1 px-1">
+                    {/* Message Bubble */}
+                    {isUser ? (
+                      <div className="leading-relaxed break-words min-w-0 p-3 rounded-xl overflow-hidden bg-slate-100 text-slate-900 border border-slate-200 dark:bg-white/[0.06] dark:border-white/[0.08] dark:text-zinc-100">
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    ) : (
+                      <div className="leading-relaxed break-words min-w-0 w-full">
+                        {/* If streaming and content empty, render neat inline generating block */}
+                        {msg.isStreaming && !msg.content ? (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-xs font-mono text-slate-500 dark:text-zinc-400 select-none w-fit">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400 shrink-0" />
+                            <span>Generating response...</span>
+                            <span className="inline-flex gap-1 items-center ml-0.5">
+                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce [animation-delay:-0.3s]" />
+                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce [animation-delay:-0.15s]" />
+                              <span className="w-1 h-1 rounded-full bg-blue-500/70 animate-bounce" />
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-lg text-slate-800 dark:text-zinc-200">
+                            <div className="prose prose-slate dark:prose-invert prose-xs max-w-none text-slate-800 dark:text-zinc-200">
+                              <MarkdownViewer content={msg.content} />
+                              {msg.isStreaming && (
+                                <span className="inline-block w-1.5 h-3.5 ml-1 bg-blue-500 animate-pulse align-middle rounded-xs" />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Error Callout */}
+                        {msg.error && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                            <div className="flex-1 break-words">
+                              <span className="font-semibold">Error: </span>
+                              {msg.error}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Message Action Bar (Assistant Only - only show when finished streaming & has content) */}
+                    {!isUser && !msg.isStreaming && Boolean(msg.content && msg.content.trim()) && (
+                      <div className="flex items-center gap-1 mt-1 px-1 select-none">
                         <button
                           onClick={() => handleCopyMessage(msg.id, msg.content)}
                           className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-white/[0.04] transition-colors cursor-pointer"
@@ -508,7 +555,7 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
                   </div>
 
                   {isUser && (
-                    <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
                       <User className="w-3.5 h-3.5 stroke-[1.5]" />
                     </div>
                   )}
@@ -516,8 +563,8 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
               );
             })}
 
-            {isGenerating && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-zinc-500 font-mono py-1">
+            {isGenerating && messages.length === 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/[0.06] text-xs font-mono text-slate-500 dark:text-zinc-400 w-fit">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 dark:text-blue-400" />
                 <span>Generating response...</span>
               </div>
