@@ -2,7 +2,7 @@ use tauri::State;
 use tokio::sync::broadcast;
 
 use crate::database::Database;
-use crate::p2p::{compute_key_hash, P2PState, P2PStatus, SyncMessage};
+use crate::p2p::{derive_session_key, derive_beacon_mac_key, P2PState, P2PStatus, SyncMessage};
 
 #[tauri::command]
 pub async fn start_p2p_session(
@@ -22,7 +22,8 @@ pub async fn start_p2p_session(
         .map_err(|e| format!("Capsule not found: {}", e))?
     };
 
-    let key_hash = compute_key_hash(&key);
+    let session_key = derive_session_key(&key);
+    let beacon_mac_key = derive_beacon_mac_key(&key);
 
     // Hentikan sesi lama jika ada
     {
@@ -42,7 +43,8 @@ pub async fn start_p2p_session(
         inner.is_active = true;
         inner.active_capsule_id = Some(capsule_id.clone());
         inner.encryption_key = Some(key);
-        inner.key_hash = Some(key_hash);
+        inner.session_key = Some(session_key);
+        inner.beacon_mac_key = Some(beacon_mac_key);
         inner.stop_sender = Some(stop_tx);
     }
 
@@ -89,7 +91,8 @@ pub async fn stop_p2p_session(
     inner.is_active = false;
     inner.active_capsule_id = None;
     inner.encryption_key = None;
-    inner.key_hash = None;
+    inner.session_key = None;
+    inner.beacon_mac_key = None;
     if let Some(ref sender) = inner.stop_sender {
         let _ = sender.send(());
     }

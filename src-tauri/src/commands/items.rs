@@ -1353,7 +1353,7 @@ pub fn extract_docx_text(bytes: &[u8]) -> Option<String> {
                 if next_c == '>' || next_c.is_whitespace() {
                     break;
                 }
-                tag_name.push(chars.next().unwrap());
+                tag_name.push(chars.next().unwrap_or_default());
             }
             if (tag_name == "w:p" || tag_name == "/w:p") && !result.ends_with('\n') && !result.is_empty() {
                 result.push('\n');
@@ -1395,7 +1395,7 @@ pub fn extract_xlsx_text(bytes: &[u8]) -> Option<String> {
                 if next_c == '>' || next_c.is_whitespace() {
                     break;
                 }
-                tag.push(chars.next().unwrap());
+                tag.push(chars.next().unwrap_or_default());
             }
             in_t = tag == "t";
             if tag == "/si" {

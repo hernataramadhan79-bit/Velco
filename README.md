@@ -96,7 +96,9 @@ Select one or more items to reveal the floating action bar. Attach artifacts dir
 ### 🔒 Air-Gapped P2P LAN Collaboration
 - **Zero Cloud Servers**: Synchronization happens directly between peer machines over local Wi-Fi or wired ethernet.
 - **UDP Discovery + Framed TCP Streaming**: Automatic peer discovery on UDP port `42426`, followed by bidirectional length-prefixed TCP socket synchronization.
-- **Cryptographic Vault Keys**: Capsules are protected with ChaCha20-Poly1305 and Argon2 key derivation.
+- **Cryptographic Frame Encryption**: All TCP sync traffic is encrypted with **XChaCha20-Poly1305** AEAD (fresh 24-byte nonce per frame). Keys are derived from the vault key via **HKDF-SHA256** — a peer without the correct vault key cannot decrypt any frame.
+- **Challenge-Response Auth Handshake**: Before any data is exchanged, a 5-second HMAC-SHA256 challenge-response proves mutual possession of the vault key. Unauthenticated TCP connections are dropped immediately.
+- **Signed UDP Beacons**: Discovery beacons are signed with HMAC-SHA256 and include a timestamp. Beacons older than 30 seconds (replay attacks) or with invalid MACs are silently rejected.
 
 ### 🤖 Grounded Studio Workbench (The Foundry)
 - **Bounded Context Synthesis**: Run AI recipes exclusively bounded to staged notes and tasks.
@@ -165,7 +167,7 @@ Select one or more items to reveal the floating action bar. Attach artifacts dir
 | **Icons** | [Lucide React](https://lucide.dev/) | Consistent 1.5px stroke geometric iconography |
 | **Local Storage** | [SQLite](https://sqlite.org/) + [Rusqlite](https://github.com/rusqlite/rusqlite) | Local-first persistence, FTS5 tokenizer, WAL concurrency |
 | **P2P Networking** | Native Rust UDP & TCP | Port 42426 multicast beacon, length-prefixed framed streams |
-| **Crypto Vault** | ChaCha20-Poly1305 + Argon2 | Lossless encrypted portable `.vctx` project bundles |
+| **Crypto / P2P** | XChaCha20-Poly1305 + HKDF-SHA256 + HMAC-SHA256 | Frame encryption, key derivation, beacon auth, challenge-response handshake |
 
 ---
 
