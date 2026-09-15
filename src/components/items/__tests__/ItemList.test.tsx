@@ -24,8 +24,8 @@ describe('ItemList component', () => {
       />
     );
 
-    expect(screen.getByText('No items found')).toBeInTheDocument();
-    expect(screen.getByText(/Capture notes, tasks, or drop attachments/i)).toBeInTheDocument();
+    expect(screen.getByText('No items found')).toBeTruthy();
+    expect(screen.getByText(/Capture notes, tasks, or drop attachments/i)).toBeTruthy();
   });
 
   it('renders items in flat mode', () => {
@@ -75,8 +75,8 @@ describe('ItemList component', () => {
       />
     );
 
-    expect(screen.getByText('Task Alpha')).toBeInTheDocument();
-    expect(screen.getByText('Note Beta')).toBeInTheDocument();
+    expect(screen.getByText('Task Alpha')).toBeTruthy();
+    expect(screen.getByText('Note Beta')).toBeTruthy();
   });
 
   it('renders grouped items with accordion headers and supports collapse/expand', () => {
@@ -131,14 +131,14 @@ describe('ItemList component', () => {
     );
 
     // Group headers should be rendered
-    expect(screen.getByText('Today')).toBeInTheDocument();
-    expect(screen.getByText('Earlier')).toBeInTheDocument();
+    expect(screen.getByText('Today')).toBeTruthy();
+    expect(screen.getByText('Earlier')).toBeTruthy();
 
     // Today task should be visible
-    expect(screen.getByText('Today Task')).toBeInTheDocument();
+    expect(screen.getByText('Today Task')).toBeTruthy();
 
     // By default, 'earlier' is collapsed, so 'Earlier Note' should NOT be in DOM
-    expect(screen.queryByText('Earlier Note')).not.toBeInTheDocument();
+    expect(screen.queryByText('Earlier Note')).toBeNull();
 
     // Click 'Earlier' accordion header to expand it
     const earlierHeaderBtn = screen.getByText('Earlier').closest('button');
@@ -146,10 +146,10 @@ describe('ItemList component', () => {
     fireEvent.click(earlierHeaderBtn!);
 
     // Now 'Earlier Note' should be visible
-    expect(screen.getByText('Earlier Note')).toBeInTheDocument();
+    expect(screen.getByText('Earlier Note')).toBeTruthy();
 
     // Click 'Earlier' again to collapse
     fireEvent.click(earlierHeaderBtn!);
-    expect(screen.queryByText('Earlier Note')).not.toBeInTheDocument();
+    expect(screen.queryByText('Earlier Note')).toBeNull();
   });
 });
