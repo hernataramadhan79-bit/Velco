@@ -28,7 +28,7 @@ interface ProgressPayload {
 }
 
 export const AboutSection: React.FC = () => {
-  const [currentVersion, setCurrentVersion] = useState<string>('0.2.5');
+  const [currentVersion, setCurrentVersion] = useState<string>('0.2.6');
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
