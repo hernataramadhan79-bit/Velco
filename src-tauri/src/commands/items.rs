@@ -314,6 +314,7 @@ pub fn get_items_summary(
     limit: Option<i32>,
     offset: Option<i32>,
     db: State<'_, Database>,
+    storage: State<'_, StorageManager>,
     filter_type: Option<String>,
     include_trash: Option<bool>,
     include_archived: Option<bool>,
@@ -532,13 +533,23 @@ pub fn get_items_summary(
         }
     }
 
-    // D. Attachments summary (count + image file_path thumbnail — TANPA data_url base64 biner!)
+    // D. Attachments summary: count + image thumbnail data_url (or resolved absolute file_path)
     let mut att_map: std::collections::HashMap<String, (i64, Option<String>)> = std::collections::HashMap::new();
     let att_sql = format!(
         r#"
         SELECT
             item_id,
             COUNT(*) as att_count,
+            MIN(CASE WHEN (mime_type LIKE 'image/%'
+                OR file_name LIKE '%.png'
+                OR file_name LIKE '%.jpg'
+                OR file_name LIKE '%.jpeg'
+                OR file_name LIKE '%.webp'
+                OR file_name LIKE '%.gif'
+                OR file_name LIKE '%.svg'
+                OR file_name LIKE '%.bmp')
+                AND data_url IS NOT NULL AND data_url != ''
+                THEN data_url ELSE NULL END) as thumb_data_url,
             MIN(CASE WHEN mime_type LIKE 'image/%'
                 OR file_name LIKE '%.png'
                 OR file_name LIKE '%.jpg'
@@ -547,7 +558,7 @@ pub fn get_items_summary(
                 OR file_name LIKE '%.gif'
                 OR file_name LIKE '%.svg'
                 OR file_name LIKE '%.bmp'
-                THEN file_path ELSE NULL END) as thumb_path
+                THEN file_path ELSE NULL END) as thumb_file_path
         FROM attachments
         WHERE item_id IN ({})
         GROUP BY item_id
@@ -558,8 +569,12 @@ pub fn get_items_summary(
         if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(item_ids.iter()), |row| {
             let item_id: String = row.get(0)?;
             let count: i64 = row.get(1).unwrap_or(0);
-            let thumb_path: Option<String> = row.get(2).ok();
-            Ok((item_id, (count, thumb_path)))
+            let thumb_data: Option<String> = row.get(2).ok();
+            let thumb_path: Option<String> = row.get(3).ok();
+            let final_thumb = thumb_data.or_else(|| {
+                thumb_path.and_then(|p| storage.resolve_attachment_path(&p).ok().map(|pb| pb.to_string_lossy().to_string()))
+            });
+            Ok((item_id, (count, final_thumb)))
         }) {
             for r in rows.flatten() {
                 att_map.insert(r.0, r.1);
@@ -1853,6 +1868,75 @@ pub async fn get_attachment_preview(
         line_count,
         char_count,
     })
+}
+
+/// Optimasi thumbnail lama (>120KB atau belum ada) di background secara asinkron
+pub fn optimize_legacy_thumbnails(db: &Database, storage: &StorageManager) {
+    let pool_conn = match db.read_pool.get() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut stmt = match pool_conn.prepare(
+        "SELECT id, file_path, mime_type, data_url FROM attachments \
+         WHERE (mime_type LIKE 'image/%' OR file_name LIKE '%.png' OR file_name LIKE '%.jpg' OR file_name LIKE '%.jpeg' OR file_name LIKE '%.webp') \
+           AND (data_url IS NULL OR length(data_url) > 120000)"
+    ) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let rows = match stmt.query_map([], |row| {
+        let id: String = row.get(0)?;
+        let file_path: String = row.get(1)?;
+        let mime_type: String = row.get(2)?;
+        let data_url: Option<String> = row.get(3).ok();
+        Ok((id, file_path, mime_type, data_url))
+    }) {
+        Ok(r) => r.flatten().collect::<Vec<_>>(),
+        Err(_) => return,
+    };
+
+    drop(stmt);
+    drop(pool_conn);
+
+    if rows.is_empty() {
+        return;
+    }
+
+    for (id, file_path, mime_type, data_url) in rows {
+        let full_path = storage.resolve_attachment_path(&file_path).ok();
+        let bytes = if let Some(ref p) = full_path {
+            std::fs::read(p).ok()
+        } else {
+            None
+        };
+
+        let thumb = if let Some(ref b) = bytes {
+            generate_thumbnail_data_url(b, &mime_type)
+        } else if let Some(ref d) = data_url {
+            if let Some(comma) = d.find(',') {
+                if let Ok(b) = base64::engine::general_purpose::STANDARD.decode(&d[comma + 1..]) {
+                    generate_thumbnail_data_url(&b, &mime_type)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(t) = thumb {
+            if let Ok(conn) = db.write_conn.lock() {
+                let _ = conn.execute(
+                    "UPDATE attachments SET data_url = ?1 WHERE id = ?2",
+                    rusqlite::params![t, id],
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]

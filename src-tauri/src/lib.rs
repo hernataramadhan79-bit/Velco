@@ -165,6 +165,22 @@ pub fn run() {
                 }
             });
 
+            // ── Background Thumbnail Optimizer Worker ──────────────────
+            let app_handle_thumb = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                tokio::task::spawn_blocking(move || {
+                    if let (Some(db), Some(storage)) = (
+                        app_handle_thumb.try_state::<Database>(),
+                        app_handle_thumb.try_state::<StorageManager>(),
+                    ) {
+                        commands::items::optimize_legacy_thumbnails(&db, &storage);
+                    }
+                })
+                .await
+                .ok();
+            });
+
             // ── Global Shortcut: CmdOrCtrl+Shift+Space → Toggle Spotlight ──
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
             let primary_mod = if cfg!(target_os = "macos") {

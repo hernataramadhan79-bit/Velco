@@ -1,4 +1,5 @@
 import React from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import {
   FileText,
   Eye,
@@ -33,10 +34,28 @@ export const FileListRow: React.FC<FileListRowProps> = ({
   const hasAnySelection = selectedIds.size > 0;
 
   const meta = getFileTypeMeta(item.title);
-  const thumbnail =
+  const rawThumbnailSource =
     item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
       ? item.thumbnailUrl
       : item.attachments?.find((a) => a.dataUrl && a.dataUrl.trim() !== '')?.dataUrl || null;
+
+  const thumbnail = React.useMemo(() => {
+    if (!rawThumbnailSource) return null;
+    if (
+      rawThumbnailSource.startsWith('http://') ||
+      rawThumbnailSource.startsWith('https://') ||
+      rawThumbnailSource.startsWith('data:') ||
+      rawThumbnailSource.startsWith('asset:')
+    ) {
+      return rawThumbnailSource;
+    }
+    try {
+      return convertFileSrc(rawThumbnailSource);
+    } catch {
+      return rawThumbnailSource;
+    }
+  }, [rawThumbnailSource]);
+
   const isImage = (meta.category === 'image' || item.type === 'image') && !!thumbnail && !imgError;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
 

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { X, Download, ExternalLink, FileText, Calendar, HardDrive } from 'lucide-react';
 import { ItemSummary } from '../../types/item';
 import { formatFileSize, getFileTypeMeta, extractSizeFromContent } from '../../utils/fileUtils';
@@ -30,17 +31,35 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const rawThumbnailSource = item?.thumbnailUrl;
+  const imageSrc = React.useMemo(() => {
+    if (!rawThumbnailSource) return null;
+    if (
+      rawThumbnailSource.startsWith('http://') ||
+      rawThumbnailSource.startsWith('https://') ||
+      rawThumbnailSource.startsWith('data:') ||
+      rawThumbnailSource.startsWith('asset:')
+    ) {
+      return rawThumbnailSource;
+    }
+    try {
+      return convertFileSrc(rawThumbnailSource);
+    } catch {
+      return rawThumbnailSource;
+    }
+  }, [rawThumbnailSource]);
+
   if (!isOpen || !item) return null;
 
   const meta = getFileTypeMeta(item.title);
-  const isImage = meta.category === 'image' && !!item.thumbnailUrl;
+  const isImage = meta.category === 'image' && !!imageSrc;
   const contentSize = extractSizeFromContent(item.content || item.excerpt);
   const formattedDate = formatDisplayDate(item.createdAt);
 
   const handleDownload = () => {
-    if (!item.thumbnailUrl) return;
+    if (!imageSrc) return;
     const a = document.createElement('a');
-    a.href = item.thumbnailUrl;
+    a.href = imageSrc;
     a.download = item.title || 'download';
     document.body.appendChild(a);
     a.click();
@@ -110,7 +129,7 @@ export const FileLightboxModal: React.FC<FileLightboxModalProps> = ({
         <div className="flex-1 min-h-[300px] max-h-[calc(85vh-120px)] flex items-center justify-center p-6 bg-slate-900/[0.02] dark:bg-black/30 overflow-auto">
           {isImage ? (
             <img
-              src={item.thumbnailUrl!}
+              src={imageSrc!}
               alt={item.title}
               className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm select-none"
             />
