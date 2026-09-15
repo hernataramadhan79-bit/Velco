@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
-import { Copy, Check, Download, ExternalLink, CheckSquare, Square } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  Download,
+  ExternalLink,
+  CheckSquare,
+  Square,
+  BrainCircuit,
+  Info,
+  Lightbulb,
+  AlertTriangle,
+  AlertCircle,
+  ShieldAlert,
+  ChevronRight,
+} from 'lucide-react';
 import { openExternalUrl } from '../../utils/urlUtils';
 
 interface MarkdownViewerProps {
@@ -90,6 +104,9 @@ interface TableData {
 
 type Block =
   | { type: 'code'; code: string; language?: string }
+  | { type: 'think'; content: string }
+  | { type: 'math'; math: string }
+  | { type: 'alert'; variant: 'note' | 'tip' | 'important' | 'warning' | 'caution'; title?: string; lines: string[] }
   | { type: 'table'; data: TableData }
   | { type: 'heading'; level: number; text: string }
   | { type: 'hr' }
@@ -98,6 +115,101 @@ type Block =
   | { type: 'ul'; items: { text: string; indent: number }[] }
   | { type: 'ol'; items: { num: string; text: string; indent: number }[] }
   | { type: 'paragraph'; lines: string[] };
+
+const ThinkBlock: React.FC<{ content: string }> = ({ content }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="my-2.5 rounded-xl border border-indigo-500/25 dark:border-indigo-500/35 bg-indigo-50/30 dark:bg-indigo-950/20 text-xs overflow-hidden transition-all shadow-2xs">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-3 py-2 text-indigo-700 dark:text-indigo-300 font-medium cursor-pointer hover:bg-indigo-500/10 transition-colors select-none"
+      >
+        <span className="flex items-center gap-2">
+          <BrainCircuit className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+          <span>Thought Process</span>
+          <span className="text-[10px] opacity-75 font-mono">({content.length} chars)</span>
+        </span>
+        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-150 ${isOpen ? 'rotate-90' : ''}`} />
+      </button>
+      {isOpen && (
+        <div className="p-3 border-t border-indigo-500/20 text-slate-600 dark:text-zinc-400 text-[11.5px] leading-relaxed whitespace-pre-wrap font-mono bg-white/60 dark:bg-black/25 max-h-96 overflow-y-auto">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AlertBlock: React.FC<{
+  variant: 'note' | 'tip' | 'important' | 'warning' | 'caution';
+  title?: string;
+  lines: string[];
+}> = ({ variant, title, lines }) => {
+  const config = {
+    note: {
+      border: 'border-blue-500/30 dark:border-blue-500/40',
+      bg: 'bg-blue-50/40 dark:bg-blue-950/25',
+      text: 'text-blue-700 dark:text-blue-300',
+      icon: Info,
+      defaultTitle: 'Note',
+    },
+    tip: {
+      border: 'border-emerald-500/30 dark:border-emerald-500/40',
+      bg: 'bg-emerald-50/40 dark:bg-emerald-950/25',
+      text: 'text-emerald-700 dark:text-emerald-300',
+      icon: Lightbulb,
+      defaultTitle: 'Tip',
+    },
+    important: {
+      border: 'border-violet-500/30 dark:border-violet-500/40',
+      bg: 'bg-violet-50/40 dark:bg-violet-950/25',
+      text: 'text-violet-700 dark:text-violet-300',
+      icon: AlertCircle,
+      defaultTitle: 'Important',
+    },
+    warning: {
+      border: 'border-amber-500/30 dark:border-amber-500/40',
+      bg: 'bg-amber-50/40 dark:bg-amber-950/25',
+      text: 'text-amber-700 dark:text-amber-300',
+      icon: AlertTriangle,
+      defaultTitle: 'Warning',
+    },
+    caution: {
+      border: 'border-rose-500/30 dark:border-rose-500/40',
+      bg: 'bg-rose-50/40 dark:bg-rose-950/25',
+      text: 'text-rose-700 dark:text-rose-300',
+      icon: ShieldAlert,
+      defaultTitle: 'Caution',
+    },
+  }[variant];
+
+  const Icon = config.icon;
+
+  return (
+    <div className={`my-2.5 rounded-xl border ${config.border} ${config.bg} p-3 text-xs space-y-1.5 shadow-2xs`}>
+      <div className={`flex items-center gap-1.5 font-semibold ${config.text}`}>
+        <Icon className="w-3.5 h-3.5 shrink-0" />
+        <span>{title || config.defaultTitle}</span>
+      </div>
+      <div className="text-slate-700 dark:text-zinc-300 leading-relaxed text-[11.5px] pl-5 space-y-1">
+        {lines.map((line, idx) => (
+          <div key={idx}>{formatInline(line)}</div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const MathBlock: React.FC<{ math: string }> = ({ math }) => {
+  return (
+    <div className="my-2.5 p-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-[#121318] overflow-x-auto text-center font-mono text-xs text-slate-800 dark:text-zinc-200 shadow-2xs">
+      <code className="inline-block py-1 tracking-wider text-indigo-600 dark:text-indigo-400 font-semibold">
+        {math}
+      </code>
+    </div>
+  );
+};
 
 const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, language }) => {
   const [copied, setCopied] = useState(false);
@@ -184,6 +296,15 @@ function renderBlock(block: Block, key: string): React.ReactNode {
   switch (block.type) {
     case 'code':
       return <CodeBlock key={key} code={block.code} language={block.language} />;
+
+    case 'think':
+      return <ThinkBlock key={key} content={block.content} />;
+
+    case 'math':
+      return <MathBlock key={key} math={block.math} />;
+
+    case 'alert':
+      return <AlertBlock key={key} variant={block.variant} title={block.title} lines={block.lines} />;
 
     case 'table': {
       const { headers, alignments, rows } = block.data;
@@ -387,7 +508,21 @@ function parseTableRow(line: string): string[] {
   let trimmed = line.trim();
   if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
   if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
-  return trimmed.split('|').map((c) => c.trim());
+
+  // Mask pipes inside inline code spans so `|` inside code does not split columns
+  let inCode = false;
+  let masked = '';
+  for (let idx = 0; idx < trimmed.length; idx++) {
+    const char = trimmed[idx];
+    if (char === '`') inCode = !inCode;
+    if (char === '|' && inCode) {
+      masked += '\u0000';
+    } else {
+      masked += char;
+    }
+  }
+
+  return masked.split('|').map((c) => c.replace(/\u0000/g, '|').trim());
 }
 
 function parseTableAlignments(sepLine: string): ('left' | 'center' | 'right')[] {
@@ -413,9 +548,47 @@ function parseMarkdownBlocks(content: string): Block[] {
   const NUM_REGEX = /^(\s*)(\d+)[.)]\s+(.*)$/;
   const HR_REGEX = /^([-*_]){3,}$/;
   const HEADING_REGEX = /^(#{1,6})\s+(.*)$/;
+  const ALERT_REGEX = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s+(.*))?$/i;
 
   while (i < lines.length) {
     const line = lines[i];
+
+    // 0. Reasoning / Thought Block (<think> ... </think>)
+    if (line.trim().startsWith('<think>')) {
+      const thinkLines: string[] = [];
+      const remainder = line.trim().slice(7); // after <think>
+      if (remainder.includes('</think>')) {
+        const parts = remainder.split('</think>');
+        thinkLines.push(parts[0]);
+        blocks.push({ type: 'think', content: thinkLines.join('\n').trim() });
+        if (parts[1]?.trim()) {
+          lines[i] = parts[1].trim();
+          continue;
+        }
+        i++;
+        continue;
+      }
+      if (remainder.trim()) thinkLines.push(remainder);
+      i++;
+      while (i < lines.length && !lines[i].includes('</think>')) {
+        thinkLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length && lines[i].includes('</think>')) {
+        const parts = lines[i].split('</think>');
+        if (parts[0].trim()) thinkLines.push(parts[0]);
+        blocks.push({ type: 'think', content: thinkLines.join('\n').trim() });
+        if (parts[1]?.trim()) {
+          lines[i] = parts[1].trim();
+          continue;
+        }
+        i++;
+        continue;
+      }
+      // Unclosed <think> during streaming
+      blocks.push({ type: 'think', content: thinkLines.join('\n').trim() });
+      continue;
+    }
 
     // 1. Code Block (including unclosed blocks during streaming)
     if (line.trim().startsWith('```')) {
@@ -434,6 +607,30 @@ function parseMarkdownBlocks(content: string): Block[] {
         language,
         code: codeLines.join('\n'),
       });
+      continue;
+    }
+
+    // 1b. Display Math Block ($$...$$)
+    if (line.trim().startsWith('$$')) {
+      const mathLines: string[] = [];
+      const remainder = line.trim().slice(2);
+      if (remainder.endsWith('$$') && remainder.length > 2) {
+        blocks.push({ type: 'math', math: remainder.slice(0, -2).trim() });
+        i++;
+        continue;
+      }
+      if (remainder.trim()) mathLines.push(remainder);
+      i++;
+      while (i < lines.length && !lines[i].trim().endsWith('$$')) {
+        mathLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length && lines[i].trim().endsWith('$$')) {
+        const lastLine = lines[i].trim().slice(0, -2);
+        if (lastLine.trim()) mathLines.push(lastLine);
+        i++;
+      }
+      blocks.push({ type: 'math', math: mathLines.join('\n').trim() });
       continue;
     }
 
@@ -475,12 +672,28 @@ function parseMarkdownBlocks(content: string): Block[] {
       continue;
     }
 
-    // 5. Blockquote (> ...)
+    // 5. Blockquote (> ...) or GitHub Alert (> [!NOTE], etc)
     if (line.trim().startsWith('>')) {
       const quoteLines: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith('>')) {
         quoteLines.push(lines[i].replace(/^>\s?/, ''));
         i++;
+      }
+      // Check for alert
+      if (quoteLines.length > 0) {
+        const alertMatch = quoteLines[0].trim().match(ALERT_REGEX);
+        if (alertMatch) {
+          const variant = alertMatch[1].toLowerCase() as 'note' | 'tip' | 'important' | 'warning' | 'caution';
+          const alertTitle = alertMatch[2]?.trim() || undefined;
+          const bodyLines = quoteLines.slice(1);
+          blocks.push({
+            type: 'alert',
+            variant,
+            title: alertTitle,
+            lines: bodyLines,
+          });
+          continue;
+        }
       }
       blocks.push({
         type: 'blockquote',
@@ -551,7 +764,9 @@ function parseMarkdownBlocks(content: string): Block[] {
     while (
       i < lines.length &&
       lines[i].trim() &&
+      !lines[i].trim().startsWith('<think>') &&
       !lines[i].trim().startsWith('```') &&
+      !lines[i].trim().startsWith('$$') &&
       !HEADING_REGEX.test(lines[i]) &&
       !HR_REGEX.test(lines[i].trim()) &&
       !lines[i].trim().startsWith('>') &&
@@ -579,8 +794,18 @@ function formatInline(text: string, depth = 0): React.ReactNode {
   if (!text) return null;
   if (depth > 2) return text;
 
+  // Pattern captures:
+  // 1. Inline code: `...`
+  // 2. Inline math: $...$
+  // 3. Markdown link: [label](url)
+  // 4. Plain URL: https://...
+  // 5. Bold+Italic: ***...*** or ___...___
+  // 6. Bold: **...** or __...__
+  // 7. Italic *: *(?![\s*]).+?(?<![\s*])*
+  // 8. Italic _: \b_([^\s_].*?[^\s_]|[^\s_])_\b (requires word boundary so snake_case is preserved)
+  // 9. Strikethrough: ~~...~~
   const INLINE_REGEX =
-    /(`[^`\n]+`)|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*|_)(.+?)(?:\*|_)|(~~.+?~~)/g;
+    /(`[^`\n]+`)|(?:\$([^$\n]+?)\$)|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*(?!\s)([^*]+?)(?<!\s)\*)|(?:\b_([^\s_].*?[^\s_]|[^\s_])_\b)|(~~.+?~~)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -605,10 +830,21 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </code>
       );
     }
-    // 2. Markdown Link [label](url)
+    // 2. Inline Math ($...$)
     else if (match[2]) {
-      const linkLabel = match[3];
-      const linkUrl = match[4];
+      elements.push(
+        <code
+          key={match.index}
+          className="px-1 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-mono text-[11px] font-medium border border-indigo-200/60 dark:border-indigo-800/40"
+        >
+          {match[2]}
+        </code>
+      );
+    }
+    // 3. Markdown Link [label](url)
+    else if (match[3]) {
+      const linkLabel = match[4];
+      const linkUrl = match[5];
       const safeUrl = sanitizeUrl(linkUrl);
       elements.push(
         <a
@@ -629,9 +865,9 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </a>
       );
     }
-    // 3. Plain URL
-    else if (match[5]) {
-      const url = match[5];
+    // 4. Plain URL
+    else if (match[6]) {
+      const url = match[6];
       const safePlain = sanitizeUrl(url);
       elements.push(
         <a
@@ -651,33 +887,41 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </a>
       );
     }
-    // 4. Bold + Italic (***text*** or ___text___)
-    else if (match[6]) {
-      elements.push(
-        <strong key={match.index} className="font-bold text-slate-900 dark:text-slate-100">
-          <em className="italic">{formatInline(match[6], depth + 1)}</em>
-        </strong>
-      );
-    }
-    // 5. Bold (**text** or __text__)
+    // 5. Bold + Italic (***text*** or ___text___)
     else if (match[7]) {
       elements.push(
-        <strong key={match.index} className="font-semibold text-slate-900 dark:text-slate-100">
-          {formatInline(match[7], depth + 1)}
+        <strong key={match.index} className="font-bold text-slate-900 dark:text-slate-100">
+          <em className="italic">{formatInline(match[7], depth + 1)}</em>
         </strong>
       );
     }
-    // 6. Italic (*text* or _text_)
+    // 6. Bold (**text** or __text__)
     else if (match[8]) {
       elements.push(
-        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
+        <strong key={match.index} className="font-semibold text-slate-900 dark:text-slate-100">
           {formatInline(match[8], depth + 1)}
+        </strong>
+      );
+    }
+    // 7. Italic with asterisk (*text*)
+    else if (match[9]) {
+      elements.push(
+        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
+          {formatInline(match[9], depth + 1)}
         </em>
       );
     }
-    // 7. Strikethrough (~~text~~)
-    else if (match[9]) {
-      const struckText = match[9].slice(2, -2);
+    // 8. Italic with underscore (_text_)
+    else if (match[10]) {
+      elements.push(
+        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
+          {formatInline(match[10], depth + 1)}
+        </em>
+      );
+    }
+    // 9. Strikethrough (~~text~~)
+    else if (match[11]) {
+      const struckText = match[11].slice(2, -2);
       elements.push(
         <del key={match.index} className="line-through text-slate-400 dark:text-slate-500">
           {formatInline(struckText, depth + 1)}

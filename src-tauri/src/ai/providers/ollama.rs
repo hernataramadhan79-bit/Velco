@@ -140,6 +140,7 @@ impl AiProvider for OllamaProvider {
             }
 
             let mut full_text = String::new();
+            let mut raw_buffer: Vec<u8> = Vec::new();
             let mut chunk_buffer = String::new();
             let mut last_emit = std::time::Instant::now();
             loop {
@@ -172,20 +173,24 @@ impl AiProvider for OllamaProvider {
                     None => break,
                 };
 
-                let text = String::from_utf8_lossy(&chunk);
-                for line in text.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    if let Ok(val) = serde_json::from_str::<Value>(line) {
-                        if let Some(content) = val
-                            .get("message")
-                            .and_then(|m| m.get("content"))
-                            .and_then(|c| c.as_str())
-                        {
-                            full_text.push_str(content);
-                            chunk_buffer.push_str(content);
+                raw_buffer.extend_from_slice(&chunk);
+
+                while let Some(pos) = raw_buffer.iter().position(|&b| b == b'\n') {
+                    let line_bytes: Vec<u8> = raw_buffer.drain(..=pos).collect();
+                    if let Ok(line_str) = std::str::from_utf8(&line_bytes) {
+                        let line = line_str.trim();
+                        if line.is_empty() {
+                            continue;
+                        }
+                        if let Ok(val) = serde_json::from_str::<Value>(line) {
+                            if let Some(content) = val
+                                .get("message")
+                                .and_then(|m| m.get("content"))
+                                .and_then(|c| c.as_str())
+                            {
+                                full_text.push_str(content);
+                                chunk_buffer.push_str(content);
+                            }
                         }
                     }
                 }
@@ -199,6 +204,24 @@ impl AiProvider for OllamaProvider {
                     });
                     chunk_buffer.clear();
                     last_emit = std::time::Instant::now();
+                }
+            }
+
+            if !raw_buffer.is_empty() {
+                if let Ok(line_str) = std::str::from_utf8(&raw_buffer) {
+                    let line = line_str.trim();
+                    if !line.is_empty() {
+                        if let Ok(val) = serde_json::from_str::<Value>(line) {
+                            if let Some(content) = val
+                                .get("message")
+                                .and_then(|m| m.get("content"))
+                                .and_then(|c| c.as_str())
+                            {
+                                full_text.push_str(content);
+                                chunk_buffer.push_str(content);
+                            }
+                        }
+                    }
                 }
             }
 

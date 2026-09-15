@@ -39,20 +39,8 @@ export const PlaygroundHeader: React.FC<PlaygroundHeaderProps> = ({
         />
       </div>
 
-      {/* Right: New Chat button (shortcut, selain dari popover) */}
-      <div className="flex items-center gap-1 shrink-0">
-        {hasMessages && (
-          <button
-            onClick={onNewChat}
-            disabled={isGenerating}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.05] text-xs font-medium transition-colors cursor-pointer disabled:opacity-40"
-            title="Start new conversation (keeps previous in history)"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2]" />
-            <span>New Chat</span>
-          </button>
-        )}
-      </div>
+      {/* Right slot reserved for future contextual controls */}
+      <div className="flex items-center gap-1 shrink-0" />
     </div>
   );
 };

@@ -31,6 +31,7 @@ impl Database {
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_items_title ON items(title)", []);
         let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_attachments_name ON attachments(file_name)", []);
         let _ = conn.execute("UPDATE items SET type = 'note' WHERE type = 'text'", []);
+        let _ = conn.execute("DELETE FROM chat_sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM chat_messages)", []);
 
         let manager = SqliteConnectionManager::file(path.as_ref());
         let pool = Pool::builder()

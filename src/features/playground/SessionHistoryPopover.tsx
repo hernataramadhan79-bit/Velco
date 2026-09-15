@@ -259,9 +259,16 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
   const searchRef = useRef<HTMLInputElement>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
-  const activeTitle = activeSession?.title ?? 'Playground';
+  const activeTitle = activeSession?.title ?? 'New Chat';
   const truncatedTitle =
     activeTitle.length > 24 ? activeTitle.slice(0, 24) + '…' : activeTitle;
+
+  // Filter out any ghost/empty sessions without messages
+  const validSessions = useMemo(() => {
+    return sessions.filter(
+      (s) => s.message_count > 0 || (s.last_message_preview && s.last_message_preview.trim().length > 0)
+    );
+  }, [sessions]);
 
   // Tutup saat klik di luar popover
   useEffect(() => {
@@ -298,14 +305,14 @@ export const SessionHistoryPopover: React.FC<SessionHistoryPopoverProps> = ({
   }, [isOpen]);
 
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
+    if (!searchQuery.trim()) return validSessions;
     const q = searchQuery.toLowerCase();
-    return sessions.filter(
+    return validSessions.filter(
       (s) =>
         s.title.toLowerCase().includes(q) ||
         (s.last_message_preview ?? '').toLowerCase().includes(q)
     );
-  }, [sessions, searchQuery]);
+  }, [validSessions, searchQuery]);
 
   const grouped = useMemo(() => {
     const map: Record<string, ChatSessionSummary[]> = {};

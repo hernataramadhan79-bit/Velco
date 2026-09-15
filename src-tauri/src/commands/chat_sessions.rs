@@ -157,6 +157,7 @@ pub fn list_chat_sessions(db: State<'_, Database>) -> Result<Vec<ChatSessionSumm
             FROM chat_sessions s
             LEFT JOIN chat_messages m ON m.session_id = s.id
             GROUP BY s.id
+            HAVING COUNT(m.id) > 0
             ORDER BY s.updated_at DESC
             "#,
         )

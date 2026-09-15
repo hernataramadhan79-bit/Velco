@@ -278,6 +278,7 @@ pub fn run() {
             commands::p2p::broadcast_p2p_task_toggle,
             commands::p2p::broadcast_p2p_item_removed,
             // Updater
+            commands::updater::get_app_version,
             commands::updater::check_for_updates,
             commands::updater::install_update,
             // Chat Sessions

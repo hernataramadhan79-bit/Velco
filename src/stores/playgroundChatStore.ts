@@ -93,19 +93,11 @@ export const usePlaygroundChatStore = create<PlaygroundChatState>()(
 
       newSession: async () => {
         if (get().isGenerating) return;
-        try {
-          // Buat sesi baru tanpa first_message (judul "New Chat")
-          const newId = await chatSessionService.createSession('playground');
-          const sessions = await chatSessionService.listSessions();
-          set({
-            activeSessionId: newId,
-            messages: [],
-            sessions,
-            estimatedTokenCount: 0,
-          });
-        } catch (err) {
-          console.error('[PlaygroundChat] newSession error:', err);
-        }
+        set({
+          activeSessionId: null,
+          messages: [],
+          estimatedTokenCount: 0,
+        });
       },
 
       renameSession: async (id: string, newTitle: string) => {

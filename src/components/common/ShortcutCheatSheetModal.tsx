@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Command, X, Keyboard } from 'lucide-react';
 import { modKey, formatShortcut } from '../../utils/platformUtils';
 
@@ -21,6 +22,20 @@ export const ShortcutCheatSheetModal: React.FC<ShortcutCheatSheetModalProps> = (
   isOpen,
   onClose,
 }) => {
+  const [appVersion, setAppVersion] = useState<string>('0.2.5');
+
+  useEffect(() => {
+    let isMounted = true;
+    invoke<string>('get_app_version')
+      .then((ver) => {
+        if (isMounted && ver) setAppVersion(ver);
+      })
+      .catch((err) => console.debug('Failed to get app version:', err));
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,7 +122,7 @@ export const ShortcutCheatSheetModal: React.FC<ShortcutCheatSheetModalProps> = (
         {/* Footer */}
         <div className="px-5 py-3 bg-slate-50 dark:bg-[#101014] border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500">
           <span>Press <kbd className="font-mono text-[10px] px-1 py-0.5 rounded bg-white dark:bg-white/[0.08] border border-slate-200 dark:border-white/[0.08]">Esc</kbd> anytime to dismiss</span>
-          <span className="font-mono">Velco v0.2.1</span>
+          <span className="font-mono">Velco v{appVersion}</span>
         </div>
       </div>
     </div>

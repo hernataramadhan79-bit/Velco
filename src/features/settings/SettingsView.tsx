@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useSettings } from '../../stores/settingsStore';
 import {
   ArrowLeft,
@@ -24,6 +25,23 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const { settings } = useSettings();
   const [activeSection, setActiveSection] = useState<SettingsSection>('ai');
+  const [appVersion, setAppVersion] = useState<string>('0.2.5');
+
+  useEffect(() => {
+    let isMounted = true;
+    invoke<string>('get_app_version')
+      .then((ver) => {
+        if (isMounted && ver) {
+          setAppVersion(ver);
+        }
+      })
+      .catch((err) => {
+        console.debug('Failed to get app version:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Allow Escape key to return to workspace
   useEffect(() => {
@@ -137,7 +155,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         {/* Footer telemetry */}
         <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-zinc-500 font-mono border-t border-slate-200 dark:border-white/[0.07] flex items-center justify-between">
           <span>Velco Desktop</span>
-          <span className="font-semibold text-slate-600 dark:text-zinc-400">v0.2.1</span>
+          <span className="font-semibold text-slate-600 dark:text-zinc-400">v{appVersion}</span>
         </div>
       </aside>
 

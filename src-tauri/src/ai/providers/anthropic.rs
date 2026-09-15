@@ -226,6 +226,7 @@ impl AiProvider for AnthropicProvider {
             }
 
             let mut full_text = String::new();
+            let mut raw_buffer: Vec<u8> = Vec::new();
             let mut chunk_buffer = String::new();
             let mut last_emit = std::time::Instant::now();
             loop {
@@ -258,9 +259,47 @@ impl AiProvider for AnthropicProvider {
                     None => break,
                 };
 
-                let text = String::from_utf8_lossy(&chunk);
-                for line in text.lines() {
-                    let line = line.trim();
+                raw_buffer.extend_from_slice(&chunk);
+
+                while let Some(pos) = raw_buffer.iter().position(|&b| b == b'\n') {
+                    let line_bytes: Vec<u8> = raw_buffer.drain(..=pos).collect();
+                    if let Ok(line_str) = std::str::from_utf8(&line_bytes) {
+                        let line = line_str.trim();
+                        if let Some(data_str) = line.strip_prefix("data:") {
+                            let data_str = data_str.trim();
+                            if let Ok(val) = serde_json::from_str::<Value>(data_str) {
+                                if let Some(event_type) = val.get("type").and_then(|t| t.as_str()) {
+                                    if event_type == "content_block_delta" {
+                                        if let Some(token) = val
+                                            .get("delta")
+                                            .and_then(|d| d.get("text"))
+                                            .and_then(|t| t.as_str())
+                                        {
+                                            full_text.push_str(token);
+                                            chunk_buffer.push_str(token);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !chunk_buffer.is_empty() && (last_emit.elapsed() >= std::time::Duration::from_millis(32) || chunk_buffer.len() >= 64) {
+                    let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
+                        request_id: request_id.to_string(),
+                        delta: chunk_buffer.clone(),
+                        done: false,
+                        error: None,
+                    });
+                    chunk_buffer.clear();
+                    last_emit = std::time::Instant::now();
+                }
+            }
+
+            if !raw_buffer.is_empty() {
+                if let Ok(line_str) = std::str::from_utf8(&raw_buffer) {
+                    let line = line_str.trim();
                     if let Some(data_str) = line.strip_prefix("data:") {
                         let data_str = data_str.trim();
                         if let Ok(val) = serde_json::from_str::<Value>(data_str) {
@@ -278,17 +317,6 @@ impl AiProvider for AnthropicProvider {
                             }
                         }
                     }
-                }
-
-                if !chunk_buffer.is_empty() && (last_emit.elapsed() >= std::time::Duration::from_millis(32) || chunk_buffer.len() >= 64) {
-                    let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
-                        request_id: request_id.to_string(),
-                        delta: chunk_buffer.clone(),
-                        done: false,
-                        error: None,
-                    });
-                    chunk_buffer.clear();
-                    last_emit = std::time::Instant::now();
                 }
             }
 
