@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import {
   Copy,
   Check,
@@ -85,14 +87,16 @@ function formatLanguageName(lang?: string): string {
   if (['html', 'css', 'json', 'sql', 'xml', 'yaml', 'csv', 'svg'].includes(l)) {
     return l.toUpperCase();
   }
-  if (l === 'js') return 'JavaScript';
-  if (l === 'ts') return 'TypeScript';
+  if (l === 'js' || l === 'javascript') return 'JavaScript';
+  if (l === 'ts' || l === 'typescript') return 'TypeScript';
   if (l === 'tsx') return 'TypeScript (React)';
   if (l === 'jsx') return 'JavaScript (React)';
-  if (l === 'py') return 'Python';
-  if (l === 'md') return 'Markdown';
-  if (l === 'rs') return 'Rust';
+  if (l === 'py' || l === 'python') return 'Python';
+  if (l === 'md' || l === 'markdown') return 'Markdown';
+  if (l === 'rs' || l === 'rust') return 'Rust';
   if (l === 'sh' || l === 'bash') return 'Shell';
+  if (l === 'cpp' || l === 'c++') return 'C++';
+  if (l === 'cs' || l === 'c#' || l === 'csharp') return 'C#';
   return lang.charAt(0).toUpperCase() + lang.slice(1);
 }
 
@@ -112,8 +116,8 @@ type Block =
   | { type: 'hr' }
   | { type: 'blockquote'; lines: string[] }
   | { type: 'task'; items: { checked: boolean; text: string; indent: number }[] }
-  | { type: 'ul'; items: { text: string; indent: number }[] }
-  | { type: 'ol'; items: { num: string; text: string; indent: number }[] }
+  | { type: 'ul'; items: { text: string; indent: number; depth?: number; isHeader?: boolean }[] }
+  | { type: 'ol'; items: { num: string; text: string; indent: number; depth?: number; isHeader?: boolean }[] }
   | { type: 'paragraph'; lines: string[] };
 
 const ThinkBlock: React.FC<{ content: string }> = ({ content }) => {
@@ -202,12 +206,62 @@ const AlertBlock: React.FC<{
 };
 
 const MathBlock: React.FC<{ math: string }> = ({ math }) => {
+  const renderedHtml = React.useMemo(() => {
+    try {
+      return katex.renderToString(math, {
+        displayMode: true,
+        throwOnError: false,
+        trust: true,
+      });
+    } catch {
+      return null;
+    }
+  }, [math]);
+
+  if (!renderedHtml) {
+    const plainText = math.replace(/^\\text\{(.+)\}$/, '$1').trim();
+    return (
+      <div className="my-2.5 p-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-[#121318] overflow-x-auto text-center font-sans text-xs text-slate-800 dark:text-zinc-200 shadow-2xs">
+        {plainText}
+      </div>
+    );
+  }
+
   return (
-    <div className="my-2.5 p-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-[#121318] overflow-x-auto text-center font-mono text-xs text-slate-800 dark:text-zinc-200 shadow-2xs">
-      <code className="inline-block py-1 tracking-wider text-indigo-600 dark:text-indigo-400 font-semibold">
-        {math}
+    <div
+      className="my-2.5 p-3 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-[#121318] overflow-x-auto text-center text-xs text-slate-800 dark:text-zinc-200 shadow-2xs"
+      dangerouslySetInnerHTML={{ __html: renderedHtml }}
+    />
+  );
+};
+
+const InlineMath: React.FC<{ math: string }> = ({ math }) => {
+  const renderedHtml = React.useMemo(() => {
+    try {
+      return katex.renderToString(math, {
+        displayMode: false,
+        throwOnError: false,
+        trust: true,
+      });
+    } catch {
+      return null;
+    }
+  }, [math]);
+
+  if (!renderedHtml) {
+    const plainText = math.replace(/^\\text\{(.+)\}$/, '$1').trim();
+    return (
+      <code className="px-1 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-mono text-[11px] font-medium border border-indigo-200/60 dark:border-indigo-800/40">
+        {plainText}
       </code>
-    </div>
+    );
+  }
+
+  return (
+    <span
+      className="inline-block px-0.5 align-baseline text-indigo-700 dark:text-indigo-300"
+      dangerouslySetInnerHTML={{ __html: renderedHtml }}
+    />
   );
 };
 
@@ -456,37 +510,86 @@ function renderBlock(block: Block, key: string): React.ReactNode {
 
     case 'ul':
       return (
-        <ul key={key} className="my-1.5 space-y-1 text-xs">
-          {block.items.map((item, idx) => (
-            <li
-              key={idx}
-              className={`flex items-start gap-2 ${item.indent > 0 ? 'ml-5' : 'ml-1'}`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 shrink-0 mt-1.5" />
-              <span className="flex-1 leading-relaxed text-slate-800 dark:text-slate-200">
-                {formatInline(item.text)}
-              </span>
-            </li>
-          ))}
+        <ul key={key} className="my-2 space-y-1.5 text-xs">
+          {block.items.map((item, idx) => {
+            const depth = item.depth ?? (item.indent > 0 ? 1 : 0);
+            const isHeader = Boolean(item.isHeader);
+            const indentClass =
+              depth === 0 ? 'ml-1' :
+              depth === 1 ? 'ml-5' :
+              depth === 2 ? 'ml-9' :
+              'ml-12';
+
+            return (
+              <li
+                key={idx}
+                className={`flex items-start gap-2.5 ${indentClass} ${
+                  isHeader ? 'mt-2.5 first:mt-0 pt-0.5' : ''
+                }`}
+              >
+                {depth === 0 ? (
+                  <span
+                    className={`shrink-0 rounded-full ${
+                      isHeader
+                        ? 'w-2 h-2 bg-indigo-600 dark:bg-indigo-400 mt-1.5 ring-2 ring-indigo-500/25 shadow-2xs'
+                        : 'w-1.5 h-1.5 bg-indigo-500 dark:bg-indigo-400 mt-1.5'
+                    }`}
+                  />
+                ) : depth === 1 ? (
+                  <span className="w-1.5 h-1.5 rounded-full border border-indigo-500/80 dark:border-indigo-400/80 bg-indigo-50/50 dark:bg-indigo-950/50 shrink-0 mt-1.5" />
+                ) : (
+                  <span className="w-1 h-1 rounded-xs bg-slate-400 dark:bg-zinc-500 shrink-0 mt-2" />
+                )}
+
+                <span
+                  className={`flex-1 leading-relaxed ${
+                    isHeader
+                      ? 'font-semibold text-slate-900 dark:text-zinc-100 text-[12px]'
+                      : 'text-slate-800 dark:text-zinc-200'
+                  }`}
+                >
+                  {formatInline(item.text)}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       );
 
     case 'ol':
       return (
-        <ol key={key} className="my-1.5 space-y-1 text-xs">
-          {block.items.map((item, idx) => (
-            <li
-              key={idx}
-              className={`flex items-start gap-1.5 ${item.indent > 0 ? 'ml-5' : 'ml-1'}`}
-            >
-              <span className="font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 min-w-4 text-right">
-                {item.num}.
-              </span>
-              <span className="flex-1 leading-relaxed text-slate-800 dark:text-slate-200">
-                {formatInline(item.text)}
-              </span>
-            </li>
-          ))}
+        <ol key={key} className="my-2 space-y-1.5 text-xs">
+          {block.items.map((item, idx) => {
+            const depth = item.depth ?? (item.indent > 0 ? 1 : 0);
+            const isHeader = Boolean(item.isHeader);
+            const indentClass =
+              depth === 0 ? 'ml-1' :
+              depth === 1 ? 'ml-5' :
+              depth === 2 ? 'ml-9' :
+              'ml-12';
+
+            return (
+              <li
+                key={idx}
+                className={`flex items-start gap-1.5 ${indentClass} ${
+                  isHeader ? 'mt-2.5 first:mt-0 pt-0.5' : ''
+                }`}
+              >
+                <span className="font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 min-w-4 text-right">
+                  {item.num}.
+                </span>
+                <span
+                  className={`flex-1 leading-relaxed ${
+                    isHeader
+                      ? 'font-semibold text-slate-900 dark:text-zinc-100 text-[12px]'
+                      : 'text-slate-800 dark:text-zinc-200'
+                  }`}
+                >
+                  {formatInline(item.text)}
+                </span>
+              </li>
+            );
+          })}
         </ol>
       );
 
@@ -534,6 +637,39 @@ function parseTableAlignments(sepLine: string): ('left' | 'center' | 'right')[] 
     if (hasLeft && hasRight) return 'center';
     if (hasRight) return 'right';
     return 'left';
+  });
+}
+
+function isCategoryHeader(text: string): boolean {
+  const clean = text.trim().replace(/[*_~`]+$/, '').trim();
+  return clean.endsWith(':');
+}
+
+function computeListHierarchy<T extends { text: string; indent: number }>(
+  rawItems: T[]
+): (T & { depth: number; isHeader: boolean })[] {
+  let activeCategoryDepth: number | null = null;
+
+  return rawItems.map((item) => {
+    const isHeader = isCategoryHeader(item.text);
+    const explicitDepth = item.indent > 0 ? Math.max(1, Math.round(item.indent / 2)) : 0;
+
+    let depth = explicitDepth;
+
+    if (isHeader) {
+      depth = explicitDepth;
+      activeCategoryDepth = explicitDepth;
+    } else if (item.indent > 0) {
+      depth = explicitDepth;
+    } else if (activeCategoryDepth !== null) {
+      depth = activeCategoryDepth + 1;
+    }
+
+    return {
+      ...item,
+      depth,
+      isHeader,
+    };
   });
 }
 
@@ -610,27 +746,38 @@ function parseMarkdownBlocks(content: string): Block[] {
       continue;
     }
 
-    // 1b. Display Math Block ($$...$$)
-    if (line.trim().startsWith('$$')) {
+    // 1b. Display Math Block ($$...$$ or \[...\])
+    const trimmedLine = line.trim();
+    if (trimmedLine.startsWith('$$') || trimmedLine.startsWith('\\[')) {
+      const isBracket = trimmedLine.startsWith('\\[');
+      const closeDelim = isBracket ? '\\]' : '$$';
+      const openLen = 2;
       const mathLines: string[] = [];
-      const remainder = line.trim().slice(2);
-      if (remainder.endsWith('$$') && remainder.length > 2) {
-        blocks.push({ type: 'math', math: remainder.slice(0, -2).trim() });
+      const remainder = trimmedLine.slice(openLen);
+      if (remainder.endsWith(closeDelim) && remainder.length >= 2) {
+        blocks.push({ type: 'math', math: remainder.slice(0, -closeDelim.length).trim() });
         i++;
         continue;
       }
       if (remainder.trim()) mathLines.push(remainder);
       i++;
-      while (i < lines.length && !lines[i].trim().endsWith('$$')) {
+      while (i < lines.length && !lines[i].trim().endsWith(closeDelim)) {
         mathLines.push(lines[i]);
         i++;
       }
-      if (i < lines.length && lines[i].trim().endsWith('$$')) {
-        const lastLine = lines[i].trim().slice(0, -2);
+      if (i < lines.length && lines[i].trim().endsWith(closeDelim)) {
+        const lastLine = lines[i].trim().slice(0, -closeDelim.length);
         if (lastLine.trim()) mathLines.push(lastLine);
         i++;
       }
       blocks.push({ type: 'math', math: mathLines.join('\n').trim() });
+      continue;
+    }
+
+    // 1c. Standalone LaTeX \text{...} block
+    if (/^\\text\{.*\}$/.test(trimmedLine)) {
+      blocks.push({ type: 'math', math: trimmedLine });
+      i++;
       continue;
     }
 
@@ -721,35 +868,35 @@ function parseMarkdownBlocks(content: string): Block[] {
 
     // 7. Unordered List (- or * or +)
     if (BULLET_REGEX.test(line)) {
-      const items: { text: string; indent: number }[] = [];
+      const rawItems: { text: string; indent: number }[] = [];
       while (i < lines.length) {
         if (TASK_REGEX.test(lines[i])) break;
         const bMatch = lines[i].match(BULLET_REGEX);
         if (!bMatch) break;
-        items.push({
+        rawItems.push({
           indent: bMatch[1].length,
           text: bMatch[2],
         });
         i++;
       }
-      blocks.push({ type: 'ul', items });
+      blocks.push({ type: 'ul', items: computeListHierarchy(rawItems) });
       continue;
     }
 
     // 8. Ordered List (1. 2. etc)
     if (NUM_REGEX.test(line)) {
-      const items: { num: string; text: string; indent: number }[] = [];
+      const rawItems: { num: string; text: string; indent: number }[] = [];
       while (i < lines.length) {
         const nMatch = lines[i].match(NUM_REGEX);
         if (!nMatch) break;
-        items.push({
+        rawItems.push({
           indent: nMatch[1].length,
           num: nMatch[2],
           text: nMatch[3],
         });
         i++;
       }
-      blocks.push({ type: 'ol', items });
+      blocks.push({ type: 'ol', items: computeListHierarchy(rawItems) });
       continue;
     }
 
@@ -767,6 +914,8 @@ function parseMarkdownBlocks(content: string): Block[] {
       !lines[i].trim().startsWith('<think>') &&
       !lines[i].trim().startsWith('```') &&
       !lines[i].trim().startsWith('$$') &&
+      !lines[i].trim().startsWith('\\[') &&
+      !/^\\text\{.*\}$/.test(lines[i].trim()) &&
       !HEADING_REGEX.test(lines[i]) &&
       !HR_REGEX.test(lines[i].trim()) &&
       !lines[i].trim().startsWith('>') &&
@@ -805,7 +954,7 @@ function formatInline(text: string, depth = 0): React.ReactNode {
   // 8. Italic _: \b_([^\s_].*?[^\s_]|[^\s_])_\b (requires word boundary so snake_case is preserved)
   // 9. Strikethrough: ~~...~~
   const INLINE_REGEX =
-    /(`[^`\n]+`)|(?:\$([^$\n]+?)\$)|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*(?!\s)([^*]+?)(?<!\s)\*)|(?:\b_([^\s_].*?[^\s_]|[^\s_])_\b)|(~~.+?~~)/g;
+    /(`[^`\n]+`)|(?:\$([^$\n]+?)\$|\\\(([^\n]+?)\\\))|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*(?!\s)((?:[^*]|\*\*[^*]+?\*\*)+?)(?<!\s)\*)|(?:\b_([^\s_].*?[^\s_]|[^\s_])_\b)|(~~.+?~~)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -830,21 +979,17 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </code>
       );
     }
-    // 2. Inline Math ($...$)
-    else if (match[2]) {
+    // 2. Inline Math ($...$ or \(...\))
+    else if (match[2] || match[3]) {
+      const mathContent = match[2] || match[3];
       elements.push(
-        <code
-          key={match.index}
-          className="px-1 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-mono text-[11px] font-medium border border-indigo-200/60 dark:border-indigo-800/40"
-        >
-          {match[2]}
-        </code>
+        <InlineMath key={match.index} math={mathContent} />
       );
     }
     // 3. Markdown Link [label](url)
-    else if (match[3]) {
-      const linkLabel = match[4];
-      const linkUrl = match[5];
+    else if (match[4]) {
+      const linkLabel = match[5];
+      const linkUrl = match[6];
       const safeUrl = sanitizeUrl(linkUrl);
       elements.push(
         <a
@@ -866,8 +1011,8 @@ function formatInline(text: string, depth = 0): React.ReactNode {
       );
     }
     // 4. Plain URL
-    else if (match[6]) {
-      const url = match[6];
+    else if (match[7]) {
+      const url = match[7];
       const safePlain = sanitizeUrl(url);
       elements.push(
         <a
@@ -888,30 +1033,22 @@ function formatInline(text: string, depth = 0): React.ReactNode {
       );
     }
     // 5. Bold + Italic (***text*** or ___text___)
-    else if (match[7]) {
+    else if (match[8]) {
       elements.push(
         <strong key={match.index} className="font-bold text-slate-900 dark:text-slate-100">
-          <em className="italic">{formatInline(match[7], depth + 1)}</em>
+          <em className="italic">{formatInline(match[8], depth + 1)}</em>
         </strong>
       );
     }
     // 6. Bold (**text** or __text__)
-    else if (match[8]) {
+    else if (match[9]) {
       elements.push(
         <strong key={match.index} className="font-semibold text-slate-900 dark:text-slate-100">
-          {formatInline(match[8], depth + 1)}
+          {formatInline(match[9], depth + 1)}
         </strong>
       );
     }
     // 7. Italic with asterisk (*text*)
-    else if (match[9]) {
-      elements.push(
-        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
-          {formatInline(match[9], depth + 1)}
-        </em>
-      );
-    }
-    // 8. Italic with underscore (_text_)
     else if (match[10]) {
       elements.push(
         <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
@@ -919,9 +1056,17 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </em>
       );
     }
-    // 9. Strikethrough (~~text~~)
+    // 8. Italic with underscore (_text_)
     else if (match[11]) {
-      const struckText = match[11].slice(2, -2);
+      elements.push(
+        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
+          {formatInline(match[11], depth + 1)}
+        </em>
+      );
+    }
+    // 9. Strikethrough (~~text~~)
+    else if (match[12]) {
+      const struckText = match[12].slice(2, -2);
       elements.push(
         <del key={match.index} className="line-through text-slate-400 dark:text-slate-500">
           {formatInline(struckText, depth + 1)}

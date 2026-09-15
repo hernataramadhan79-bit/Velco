@@ -130,7 +130,7 @@ impl AiProvider for OllamaProvider {
                 let status = resp.status();
                 let err_text = resp.text().await.unwrap_or_default();
                 let err = format!("Ollama error (HTTP {}): {}", status, err_text);
-                let _ = app.emit_to("main", "velco://ai-chat-error", ChatChunkPayload {
+                let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                     request_id: request_id.to_string(),
                     delta: String::new(),
                     done: true,
@@ -145,9 +145,9 @@ impl AiProvider for OllamaProvider {
             let mut last_emit = std::time::Instant::now();
             loop {
                 if cancel_token.is_cancelled() {
-                    let _ = app.emit_to("main", "velco://ai-chat-done", ChatChunkPayload {
+                    let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                         request_id: request_id.to_string(),
-                        delta: full_text.clone(),
+                        delta: String::new(),
                         done: true,
                         error: None,
                     });
@@ -158,7 +158,7 @@ impl AiProvider for OllamaProvider {
                     Ok(c) => c,
                     Err(e) => {
                         let err = format!("Error reading Ollama stream: {}", e);
-                        let _ = app.emit_to("main", "velco://ai-chat-error", ChatChunkPayload {
+                        let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                             request_id: request_id.to_string(),
                             delta: String::new(),
                             done: true,
@@ -195,8 +195,13 @@ impl AiProvider for OllamaProvider {
                     }
                 }
 
-                if !chunk_buffer.is_empty() && (last_emit.elapsed() >= std::time::Duration::from_millis(32) || chunk_buffer.len() >= 64) {
-                    let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
+                let is_first_chunk = full_text.len() == chunk_buffer.len();
+                if !chunk_buffer.is_empty()
+                    && (is_first_chunk
+                        || last_emit.elapsed() >= std::time::Duration::from_millis(32)
+                        || chunk_buffer.len() >= 64)
+                {
+                    let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                         request_id: request_id.to_string(),
                         delta: chunk_buffer.clone(),
                         done: false,
@@ -226,7 +231,7 @@ impl AiProvider for OllamaProvider {
             }
 
             if !chunk_buffer.is_empty() {
-                let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
+                let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                     request_id: request_id.to_string(),
                     delta: chunk_buffer,
                     done: false,
@@ -234,9 +239,9 @@ impl AiProvider for OllamaProvider {
                 });
             }
 
-            let _ = app.emit_to("main", "velco://ai-chat-done", ChatChunkPayload {
+            let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                 request_id: request_id.to_string(),
-                delta: full_text.clone(),
+                delta: String::new(),
                 done: true,
                 error: None,
             });

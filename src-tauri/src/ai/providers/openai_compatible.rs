@@ -213,7 +213,7 @@ impl AiProvider for OpenAiCompatibleProvider {
 
             let mut resp = req.send().await.map_err(|e| {
                 let err = format!("AI request failed: {}", e);
-                let _ = app.emit_to("main", "velco://ai-chat-error", ChatChunkPayload {
+                let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                     request_id: request_id.to_string(),
                     delta: String::new(),
                     done: true,
@@ -238,7 +238,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                     })
                     .unwrap_or(err_text);
                 let err = format!("AI provider error (HTTP {}): {}", status, err_msg);
-                let _ = app.emit_to("main", "velco://ai-chat-error", ChatChunkPayload {
+                let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                     request_id: request_id.to_string(),
                     delta: String::new(),
                     done: true,
@@ -253,9 +253,9 @@ impl AiProvider for OpenAiCompatibleProvider {
             let mut last_emit = std::time::Instant::now();
             loop {
                 if cancel_token.is_cancelled() {
-                    let _ = app.emit_to("main", "velco://ai-chat-done", ChatChunkPayload {
+                    let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                         request_id: request_id.to_string(),
-                        delta: full_text.clone(),
+                        delta: String::new(),
                         done: true,
                         error: None,
                     });
@@ -266,7 +266,7 @@ impl AiProvider for OpenAiCompatibleProvider {
                     Ok(c) => c,
                     Err(e) => {
                         let err = format!("Error reading AI stream: {}", e);
-                        let _ = app.emit_to("main", "velco://ai-chat-error", ChatChunkPayload {
+                        let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                             request_id: request_id.to_string(),
                             delta: String::new(),
                             done: true,
@@ -311,8 +311,13 @@ impl AiProvider for OpenAiCompatibleProvider {
                     }
                 }
 
-                if !chunk_buffer.is_empty() && (last_emit.elapsed() >= std::time::Duration::from_millis(32) || chunk_buffer.len() >= 64) {
-                    let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
+                let is_first_chunk = full_text.len() == chunk_buffer.len();
+                if !chunk_buffer.is_empty()
+                    && (is_first_chunk
+                        || last_emit.elapsed() >= std::time::Duration::from_millis(32)
+                        || chunk_buffer.len() >= 64)
+                {
+                    let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                         request_id: request_id.to_string(),
                         delta: chunk_buffer.clone(),
                         done: false,
@@ -347,7 +352,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             }
 
             if !chunk_buffer.is_empty() {
-                let _ = app.emit_to("main", "velco://ai-chat-token", ChatChunkPayload {
+                let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                     request_id: request_id.to_string(),
                     delta: chunk_buffer,
                     done: false,
@@ -355,9 +360,9 @@ impl AiProvider for OpenAiCompatibleProvider {
                 });
             }
 
-            let _ = app.emit_to("main", "velco://ai-chat-done", ChatChunkPayload {
+            let _ = app.emit("ai-chat-chunk", ChatChunkPayload {
                 request_id: request_id.to_string(),
-                delta: full_text.clone(),
+                delta: String::new(),
                 done: true,
                 error: None,
             });
