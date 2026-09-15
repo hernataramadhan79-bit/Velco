@@ -3,6 +3,12 @@ import { vi } from 'vitest';
 
 // Mock window.matchMedia and element measurements for JSDOM
 if (typeof window !== 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
