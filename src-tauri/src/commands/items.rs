@@ -308,9 +308,11 @@ pub fn get_item(db: State<'_, Database>, id: String) -> Result<ItemRecord, Strin
     fetch_item_by_id(&conn, &id)
 }
 
-/// Ambil daftar item ringkas (ItemSummary) dengan tags via JSON aggregation — 1 round-trip
+/// Ambil daftar item ringkas (ItemSummary) dengan batch relational lookup terindeks
 #[tauri::command]
-pub fn get_items_summary(limit: Option<i32>, offset: Option<i32>,
+pub fn get_items_summary(
+    limit: Option<i32>,
+    offset: Option<i32>,
     db: State<'_, Database>,
     filter_type: Option<String>,
     include_trash: Option<bool>,
@@ -340,133 +342,268 @@ pub fn get_items_summary(limit: Option<i32>, offset: Option<i32>,
             " AND (i.type = 'note' OR i.type = 'text')".to_string(),
             None,
         ),
-        Some(t) if ALLOWED_TYPES.contains(&t) => (" AND i.type = ?".to_string(), Some(t.to_string())),
-        Some(_) => (" AND 1=0".to_string(), None), // tipe tak dikenal → kosong, bukan error
+        Some(t) if ALLOWED_TYPES.contains(&t) => (" AND i.type = ?1".to_string(), Some(t.to_string())),
+        Some(_) => (" AND 1=0".to_string(), None),
         None => (String::new(), None),
     };
 
-    let sql = format!(
+    let limit_val = limit.unwrap_or(100).max(1);
+    let offset_val = offset.unwrap_or(0).max(0);
+
+    // 1. Primary indexed query: ambil field item inti tanpa subquery berat
+    struct BaseItem {
+        id: String,
+        item_type: String,
+        title: String,
+        excerpt: String,
+        pinned: bool,
+        archived: bool,
+        trashed: bool,
+        created_at: String,
+        updated_at: String,
+    }
+
+    let mut base_items = Vec::new();
+
+    if let Some(t) = type_param {
+        let sql = format!(
+            r#"
+            SELECT
+                i.id,
+                COALESCE(CASE WHEN i.type = 'text' THEN 'note' ELSE i.type END, 'note'),
+                COALESCE(i.title, ''),
+                COALESCE(SUBSTR(i.content, 1, 120), ''),
+                CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END,
+                COALESCE(i.archived, 0),
+                CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END,
+                COALESCE(i.created_at, ''),
+                COALESCE(i.updated_at, '')
+            FROM items i
+            WHERE {where_clause}{type_filter_sql}
+            ORDER BY i.created_at DESC
+            LIMIT ?2 OFFSET ?3
+            "#
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![t, limit_val, offset_val], |row| {
+                let pinned_val: i64 = row.get(4)?;
+                let archived_val: i64 = row.get(5)?;
+                let trashed_val: i64 = row.get(6)?;
+                Ok(BaseItem {
+                    id: row.get(0)?,
+                    item_type: row.get(1)?,
+                    title: row.get(2)?,
+                    excerpt: row.get(3)?,
+                    pinned: pinned_val != 0,
+                    archived: archived_val != 0,
+                    trashed: trashed_val != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        for r in rows {
+            base_items.push(r.map_err(|e| e.to_string())?);
+        }
+    } else {
+        let sql = format!(
+            r#"
+            SELECT
+                i.id,
+                COALESCE(CASE WHEN i.type = 'text' THEN 'note' ELSE i.type END, 'note'),
+                COALESCE(i.title, ''),
+                COALESCE(SUBSTR(i.content, 1, 120), ''),
+                CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END,
+                COALESCE(i.archived, 0),
+                CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END,
+                COALESCE(i.created_at, ''),
+                COALESCE(i.updated_at, '')
+            FROM items i
+            WHERE {where_clause}{type_filter_sql}
+            ORDER BY i.created_at DESC
+            LIMIT ?1 OFFSET ?2
+            "#
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit_val, offset_val], |row| {
+                let pinned_val: i64 = row.get(4)?;
+                let archived_val: i64 = row.get(5)?;
+                let trashed_val: i64 = row.get(6)?;
+                Ok(BaseItem {
+                    id: row.get(0)?,
+                    item_type: row.get(1)?,
+                    title: row.get(2)?,
+                    excerpt: row.get(3)?,
+                    pinned: pinned_val != 0,
+                    archived: archived_val != 0,
+                    trashed: trashed_val != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        for r in rows {
+            base_items.push(r.map_err(|e| e.to_string())?);
+        }
+    }
+
+    if base_items.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 2. Batch queries untuk metadata ID yang diambil
+    let item_ids: Vec<String> = base_items.iter().map(|b| b.id.clone()).collect();
+    let placeholders = item_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+    // A. Tasks
+    let mut task_map = std::collections::HashMap::new();
+    let task_sql = format!(
+        "SELECT item_id, due_date, priority, completed, completed_at FROM tasks WHERE item_id IN ({})",
+        placeholders
+    );
+    if let Ok(mut stmt) = conn.prepare(&task_sql) {
+        if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(item_ids.iter()), |row| {
+            let item_id: String = row.get(0)?;
+            let completed_val: i64 = row.get(3).unwrap_or(0);
+            Ok((
+                item_id,
+                TaskSubRecord {
+                    due_date: row.get(1).ok(),
+                    priority: row.get(2).unwrap_or_else(|_| "medium".to_string()),
+                    completed: completed_val != 0,
+                    completed_at: row.get(4).ok(),
+                },
+            ))
+        }) {
+            for r in rows.flatten() {
+                task_map.insert(r.0, r.1);
+            }
+        }
+    }
+
+    // B. Links
+    let mut link_map = std::collections::HashMap::new();
+    let link_sql = format!(
+        "SELECT item_id, url, domain, page_title, preview_image FROM links WHERE item_id IN ({})",
+        placeholders
+    );
+    if let Ok(mut stmt) = conn.prepare(&link_sql) {
+        if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(item_ids.iter()), |row| {
+            let item_id: String = row.get(0)?;
+            Ok((
+                item_id,
+                LinkSubRecord {
+                    url: row.get(1).unwrap_or_default(),
+                    domain: row.get(2).unwrap_or_default(),
+                    page_title: row.get(3).unwrap_or_default(),
+                    preview_image: row.get(4).ok(),
+                },
+            ))
+        }) {
+            for r in rows.flatten() {
+                link_map.insert(r.0, r.1);
+            }
+        }
+    }
+
+    // C. Tags
+    let mut tags_map: std::collections::HashMap<String, Vec<TagMinimal>> = std::collections::HashMap::new();
+    let tags_sql = format!(
+        "SELECT it.item_id, t.id, t.name, t.color FROM item_tags it JOIN tags t ON it.tag_id = t.id WHERE it.item_id IN ({})",
+        placeholders
+    );
+    if let Ok(mut stmt) = conn.prepare(&tags_sql) {
+        if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(item_ids.iter()), |row| {
+            let item_id: String = row.get(0)?;
+            let tag = TagMinimal {
+                id: row.get(1)?,
+                name: row.get(2)?,
+                color: row.get(3)?,
+            };
+            Ok((item_id, tag))
+        }) {
+            for r in rows.flatten() {
+                tags_map.entry(r.0).or_default().push(r.1);
+            }
+        }
+    }
+
+    // D. Attachments summary (count + image file_path thumbnail — TANPA data_url base64 biner!)
+    let mut att_map: std::collections::HashMap<String, (i64, Option<String>)> = std::collections::HashMap::new();
+    let att_sql = format!(
         r#"
         SELECT
-            i.id,
-            COALESCE(CASE WHEN i.type = 'text' THEN 'note' ELSE i.type END, 'note'),
-            COALESCE(i.title, ''),
-            COALESCE(SUBSTR(i.content, 1, 120), '') as excerpt,
-            CASE WHEN (i.pinned = 1 OR i.favorite = 1) THEN 1 ELSE 0 END as pinned,
-            COALESCE(i.archived, 0) as archived,
-            CASE WHEN i.deleted_at IS NOT NULL THEN 1 ELSE 0 END as trashed,
-            COALESCE(i.created_at, '') as created_at,
-            COALESCE(i.updated_at, '') as updated_at,
-            COALESCE(
-                (
-                    SELECT json_group_array(
-                        json_object('id', t.id, 'name', t.name, 'color', t.color)
-                    )
-                    FROM tags t
-                    JOIN item_tags it ON t.id = it.tag_id
-                    WHERE it.item_id = i.id
-                ),
-                '[]'
-            ) as tags_json,
-            (
-                SELECT json_object('due_date', tk.due_date, 'priority', tk.priority, 'completed', CASE WHEN tk.completed = 1 THEN json('true') ELSE json('false') END, 'completed_at', tk.completed_at)
-                FROM tasks tk WHERE tk.item_id = i.id
-            ) as task_json,
-            (
-                SELECT json_object('url', lk.url, 'domain', lk.domain, 'page_title', lk.page_title, 'preview_image', lk.preview_image)
-                FROM links lk WHERE lk.item_id = i.id
-            ) as link_json,
-            (
-                SELECT COUNT(*) FROM attachments att WHERE att.item_id = i.id
-            ) as attachments_count,
-            COALESCE(
-                (
-                    SELECT att.data_url FROM attachments att 
-                    WHERE att.item_id = i.id 
-                      AND (
-                          att.mime_type LIKE 'image/%' 
-                          OR att.file_name LIKE '%.png' 
-                          OR att.file_name LIKE '%.jpg' 
-                          OR att.file_name LIKE '%.jpeg' 
-                          OR att.file_name LIKE '%.webp' 
-                          OR att.file_name LIKE '%.gif'
-                          OR att.file_name LIKE '%.svg'
-                          OR att.file_name LIKE '%.bmp'
-                      )
-                      AND att.data_url IS NOT NULL 
-                      AND att.data_url != ''
-                    LIMIT 1
-                ),
-                (SELECT lk.preview_image FROM links lk WHERE lk.item_id = i.id)
-            ) as thumbnail_url
-        FROM items i
-        WHERE {where_clause}{type_filter_sql}
-        ORDER BY i.created_at DESC
-        LIMIT {limit} OFFSET {offset}
+            item_id,
+            COUNT(*) as att_count,
+            MIN(CASE WHEN mime_type LIKE 'image/%'
+                OR file_name LIKE '%.png'
+                OR file_name LIKE '%.jpg'
+                OR file_name LIKE '%.jpeg'
+                OR file_name LIKE '%.webp'
+                OR file_name LIKE '%.gif'
+                OR file_name LIKE '%.svg'
+                OR file_name LIKE '%.bmp'
+                THEN file_path ELSE NULL END) as thumb_path
+        FROM attachments
+        WHERE item_id IN ({})
+        GROUP BY item_id
         "#,
-        where_clause = where_clause, 
-        type_filter_sql = type_filter_sql,
-        limit = limit.unwrap_or(20000),
-        offset = offset.unwrap_or(0)
+        placeholders
     );
+    if let Ok(mut stmt) = conn.prepare(&att_sql) {
+        if let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(item_ids.iter()), |row| {
+            let item_id: String = row.get(0)?;
+            let count: i64 = row.get(1).unwrap_or(0);
+            let thumb_path: Option<String> = row.get(2).ok();
+            Ok((item_id, (count, thumb_path)))
+        }) {
+            for r in rows.flatten() {
+                att_map.insert(r.0, r.1);
+            }
+        }
+    }
 
-    fn map_summary_row(row: &rusqlite::Row) -> rusqlite::Result<ItemSummary> {
-        let pinned_val: i64 = row.get(4)?;
-        let archived_val: i64 = row.get(5)?;
-        let trashed_val: i64 = row.get(6)?;
-        let tags_json: String = row.get(9).unwrap_or_else(|_| "[]".to_string());
-        let task_json: Option<String> = row.get(10).ok();
-        let link_json: Option<String> = row.get(11).ok();
-        let attachments_count: i64 = row.get(12).unwrap_or(0);
-        let thumbnail_url: Option<String> = row.get(13).ok();
-        let tags: Vec<TagMinimal> = serde_json::from_str(&tags_json).unwrap_or_default();
-        let task: Option<TaskSubRecord> =
-            task_json.and_then(|s| serde_json::from_str(&s).ok());
-        let link: Option<LinkSubRecord> =
-            link_json.and_then(|s| serde_json::from_str(&s).ok());
-        Ok(ItemSummary {
-            id: row.get(0)?,
-            r#type: row.get(1)?,
-            title: row.get(2)?,
-            excerpt: row.get(3)?,
-            pinned: pinned_val != 0,
-            archived: archived_val != 0,
-            trashed: trashed_val != 0,
-            created_at: row.get(7)?,
-            updated_at: row.get(8)?,
+    // 3. Gabungkan hasil secara efisien di memori
+    let mut results = Vec::with_capacity(base_items.len());
+    for b in base_items {
+        let task = task_map.remove(&b.id);
+        let link = link_map.remove(&b.id);
+        let tags = tags_map.remove(&b.id).unwrap_or_default();
+        let att_info = att_map.remove(&b.id);
+        let attachments_count = att_info.as_ref().map(|(c, _)| *c).unwrap_or(0);
+        let thumbnail_url = att_info
+            .and_then(|(_, p)| p)
+            .or_else(|| link.as_ref().and_then(|l| l.preview_image.clone()));
+
+        results.push(ItemSummary {
+            id: b.id,
+            r#type: b.item_type,
+            title: b.title,
+            excerpt: b.excerpt,
+            pinned: b.pinned,
+            archived: b.archived,
+            trashed: b.trashed,
+            created_at: b.created_at,
+            updated_at: b.updated_at,
             tags,
             task,
             link,
             attachments_count,
             thumbnail_url,
-        })
+        });
     }
 
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    // Bind param tipe bila ada (hindari format! interpolasi)
-    let mut results = Vec::new();
-    if let Some(t) = type_param {
-        let rows = stmt
-            .query_map(rusqlite::params![t], map_summary_row)
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            results.push(row.map_err(|e| e.to_string())?);
-        }
-    } else {
-        let rows = stmt
-            .query_map([], map_summary_row)
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            results.push(row.map_err(|e| e.to_string())?);
-        }
-    }
     Ok(results)
 }
 
 /// Ambil detail penuh item (full content) — dipanggil saat item diklik
 #[tauri::command]
 pub fn get_item_detail(db: State<'_, Database>, id: String) -> Result<ItemRecord, String> {
-    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     fetch_item_by_id(&conn, &id)
 }
 
@@ -667,7 +804,7 @@ pub fn validate_create_item_payload(payload: &CreateItemPayload) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn create_item(
+pub async fn create_item(
     app: tauri::AppHandle,
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
@@ -730,9 +867,11 @@ pub fn create_item(
                                     file_path = target_path.to_string_lossy().to_string();
                                     checksum = computed_hash;
                                     file_size = written_size as i64;
-                                    // Jika gambar mentah berukuran besar (> 120KB), buat thumbnail ramping untuk SQLite
+                                    // Jika gambar mentah berukuran besar (> 120KB), buat thumbnail ramping untuk SQLite di background
                                     if bytes.len() > 120 * 1024 && (att.mime_type.starts_with("image/") || safe_name.ends_with(".png") || safe_name.ends_with(".jpg") || safe_name.ends_with(".jpeg") || safe_name.ends_with(".webp")) {
-                                        if let Some(thumb) = generate_thumbnail_data_url(&bytes, &att.mime_type) {
+                                        let bytes_clone = bytes.clone();
+                                        let mime_clone = att.mime_type.clone();
+                                        if let Some(thumb) = tokio::task::spawn_blocking(move || generate_thumbnail_data_url(&bytes_clone, &mime_clone)).await.ok().flatten() {
                                             final_data_url = Some(thumb);
                                         }
                                     }
@@ -1255,7 +1394,12 @@ pub async fn import_files_from_paths(
             .to_string();
 
         let data_url = if s.item_type == "image" {
-            generate_thumbnail_data_url(&s.file_bytes, &s.mime_type)
+            let bytes_clone = s.file_bytes.clone();
+            let mime_clone = s.mime_type.clone();
+            tokio::task::spawn_blocking(move || generate_thumbnail_data_url(&bytes_clone, &mime_clone))
+                .await
+                .ok()
+                .flatten()
         } else {
             None
         };
@@ -1277,11 +1421,13 @@ pub async fn import_files_from_paths(
                 content = text.chars().take(200_000).collect();
             }
         } else if s.extension == "docx" && file_size <= 15 * 1024 * 1024 {
-            if let Some(text) = extract_docx_text(&s.file_bytes) {
+            let bytes_clone = s.file_bytes.clone();
+            if let Some(text) = tokio::task::spawn_blocking(move || extract_docx_text(&bytes_clone)).await.ok().flatten() {
                 content = text.chars().take(200_000).collect();
             }
         } else if s.extension == "xlsx" && file_size <= 15 * 1024 * 1024 {
-            if let Some(text) = extract_xlsx_text(&s.file_bytes) {
+            let bytes_clone = s.file_bytes.clone();
+            if let Some(text) = tokio::task::spawn_blocking(move || extract_xlsx_text(&bytes_clone)).await.ok().flatten() {
                 content = text.chars().take(200_000).collect();
             }
         }
@@ -1323,8 +1469,8 @@ pub async fn import_files_from_paths(
         tx.commit().map_err(|e| e.to_string())?;
     }
 
-    // 4. Fetch records (read-only, tanpa menahan transaction)
-    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+    // 4. Fetch records via read_pool (read-only, tanpa menahan write_conn)
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     let mut imported_items = Vec::new();
     for item_id in imported_ids {
         if let Ok(rec) = fetch_item_by_id(&conn, &item_id) {
@@ -1424,12 +1570,12 @@ pub fn extract_xlsx_text(bytes: &[u8]) -> Option<String> {
 
 /// Ambil pratinjau konten berkas lengkap (teks, pdf, docx, xlsx, gambar, audio/video)
 #[tauri::command]
-pub fn get_attachment_preview(
+pub async fn get_attachment_preview(
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
     attachment_id: String,
 ) -> Result<FilePreviewContent, String> {
-    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
 
     // Query lampiran dari DB
     let query_res = conn.query_row(
@@ -1533,8 +1679,7 @@ pub fn get_attachment_preview(
     let _att_dir = storage.attachments_dir();
     let jailed_primary = storage.resolve_attachment_path(&file_path);
     
-    // Drop guard sebelum fs::read (conn masih dipinjam oleh query di atas; explicitly drop)
-    // NOTE: `conn` adalah MutexGuard — drop agar read file tidak menahan lock.
+    // Drop connection sebelum fs::read
     drop(conn);
 
     let mut found_bytes: Option<Vec<u8>> = None;
@@ -1591,12 +1736,20 @@ pub fn get_attachment_preview(
     } else if is_docx {
         preview_type = "docx".to_string();
         if let Some(bytes) = &found_bytes {
-            text_content = extract_docx_text(bytes);
+            let bytes_clone = bytes.clone();
+            text_content = tokio::task::spawn_blocking(move || extract_docx_text(&bytes_clone))
+                .await
+                .ok()
+                .flatten();
         }
     } else if is_xlsx {
         preview_type = "xlsx".to_string();
         if let Some(bytes) = &found_bytes {
-            text_content = extract_xlsx_text(bytes);
+            let bytes_clone = bytes.clone();
+            text_content = tokio::task::spawn_blocking(move || extract_xlsx_text(&bytes_clone))
+                .await
+                .ok()
+                .flatten();
         }
     } else if is_markdown || is_json || is_csv || is_code || is_text {
         preview_type = if is_markdown {
@@ -1625,9 +1778,9 @@ pub fn get_attachment_preview(
             }
         }
 
-        // Jika masih belum ada text_content, ambil dari content tabel items (lock singkat)
+        // Jika masih belum ada text_content, ambil dari content tabel items via read_pool
         if text_content.is_none() {
-            if let Ok(conn) = db.write_conn.lock() {
+            if let Ok(conn) = db.read_pool.get() {
                 if let Ok(raw_content) = conn.query_row(
                     "SELECT content FROM items WHERE id = ?1",
                     params![item_id],
@@ -1644,8 +1797,14 @@ pub fn get_attachment_preview(
         if data_url.is_none() || data_url.as_deref() == Some("") {
             if let Some(bytes) = &found_bytes {
                 if bytes.len() <= 30 * 1024 * 1024 {
-                    // Buat thumbnail ramping untuk di-cache di SQLite
-                    if let Some(thumb_url) = generate_thumbnail_data_url(bytes, &mime_type) {
+                    // Buat thumbnail ramping untuk di-cache di SQLite di background
+                    let bytes_clone = bytes.clone();
+                    let mime_clone = mime_type.clone();
+                    let thumb_res = tokio::task::spawn_blocking(move || generate_thumbnail_data_url(&bytes_clone, &mime_clone))
+                        .await
+                        .ok()
+                        .flatten();
+                    if let Some(thumb_url) = thumb_res {
                         cache_data_url(&id, &thumb_url);
                         data_url = Some(thumb_url);
                     } else if bytes.len() <= 10 * 1024 * 1024 {

@@ -35,8 +35,8 @@ const HANDSHAKE_TIMEOUT_SECS: u64 = 5;
 
 /// Serialise `msg` to JSON, encrypt with XChaCha20-Poly1305, write as a
 /// length-prefixed frame: `[4 bytes len BE][24 bytes nonce][ciphertext + 16-byte tag]`.
-async fn send_encrypted_frame(
-    stream: &mut TcpStream,
+async fn send_encrypted_frame<W: AsyncWriteExt + Unpin>(
+    stream: &mut W,
     msg: &SyncMessage,
     session_key: &[u8; 32],
 ) -> Result<(), String> {
@@ -74,8 +74,8 @@ async fn send_encrypted_frame(
 
 /// Read one encrypted frame, decrypt it, and deserialise into `SyncMessage`.
 /// Returns `None` on clean EOF or oversized frame.
-async fn recv_encrypted_frame(
-    stream: &mut TcpStream,
+async fn recv_encrypted_frame<R: AsyncReadExt + Unpin>(
+    stream: &mut R,
     session_key: &[u8; 32],
 ) -> Option<SyncMessage> {
     let mut len_buf = [0u8; 4];
@@ -220,7 +220,7 @@ async fn listener_handle_incoming(
     }
 
     // ── Encrypted session ─────────────────────────────────────────────────────
-    handle_peer_stream(app, p2p_state, stream, addr, &session_key).await;
+    handle_peer_stream(app, p2p_state, stream, addr, &session_key, None).await;
 }
 
 /// Returns `true` if the remote peer correctly proves it holds `session_key`.
@@ -352,7 +352,7 @@ pub async fn connect_to_peer(
         "addr": addr.to_string(),
     }));
 
-    handle_peer_stream(app, p2p_state, peer_stream, addr, &session_key).await;
+    handle_peer_stream(app, p2p_state, peer_stream, addr, &session_key, Some(peer_id)).await;
 }
 
 /// Initiator: receive challenge, respond with HMAC proof.
@@ -377,14 +377,32 @@ async fn perform_initiator_handshake(
 async fn handle_peer_stream(
     app: tauri::AppHandle,
     p2p_state: P2PState,
-    mut stream: TcpStream,
+    stream: TcpStream,
     addr: SocketAddr,
     session_key: &[u8; 32],
+    initial_peer_id: Option<String>,
 ) {
-    let mut current_peer_id: Option<String> = None;
+    let (mut read_half, mut write_half) = stream.into_split();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SyncMessage>();
+    let session_key_copy = *session_key;
+
+    let writer_task = tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            if let Err(e) = send_encrypted_frame(&mut write_half, &msg, &session_key_copy).await {
+                eprintln!("[P2P Writer] Failed to send frame to peer: {}", e);
+                break;
+            }
+        }
+    });
+
+    let mut current_peer_id: Option<String> = initial_peer_id.clone();
+    if let Some(ref pid) = initial_peer_id {
+        let mut inner = p2p_state.inner.write().await;
+        inner.peer_senders.insert(pid.clone(), tx.clone());
+    }
 
     loop {
-        let msg = match recv_encrypted_frame(&mut stream, session_key).await {
+        let msg = match recv_encrypted_frame(&mut read_half, session_key).await {
             Some(m) => m,
             None => break, // Connection closed or decryption failed (tampered data)
         };
@@ -393,6 +411,7 @@ async fn handle_peer_stream(
             SyncMessage::Hello { peer_id, capsule_id: _, device_name } => {
                 current_peer_id = Some(peer_id.clone());
                 let mut inner = p2p_state.inner.write().await;
+                inner.peer_senders.insert(peer_id.clone(), tx.clone());
                 inner.connected_peers.insert(
                     peer_id.clone(),
                     ConnectedPeer {
@@ -497,8 +516,11 @@ async fn handle_peer_stream(
     }
 
     // Peer disconnected — cleanup
+    writer_task.abort();
+
     if let Some(pid) = current_peer_id {
         let mut inner = p2p_state.inner.write().await;
+        inner.peer_senders.remove(&pid);
         inner.connected_peers.remove(&pid);
         drop(inner);
 
@@ -513,36 +535,13 @@ async fn handle_peer_stream(
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub async fn broadcast_to_peers(p2p_state: &P2PState, msg: &SyncMessage) {
-    let (peers, session_key) = {
+    let senders: Vec<tokio::sync::mpsc::UnboundedSender<SyncMessage>> = {
         let inner = p2p_state.inner.read().await;
-        let addrs: Vec<SocketAddr> = inner.connected_peers.values().map(|p| p.addr).collect();
-        let key = inner.session_key;
-        (addrs, key)
+        inner.peer_senders.values().cloned().collect()
     };
 
-    let session_key = match session_key {
-        Some(k) => k,
-        None => {
-            eprintln!("[P2P Broadcast] No session key — cannot send encrypted frame");
-            return;
-        }
-    };
-
-    for addr in peers {
-        let msg_clone = msg.clone();
-        tokio::spawn(async move {
-            if let Ok(mut stream) = TcpStream::connect(addr).await {
-                // Outbound broadcast: we are the initiator side — complete handshake first
-                let hs = timeout(
-                    Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
-                    perform_initiator_handshake(&mut stream, &session_key),
-                )
-                .await;
-                if matches!(hs, Ok(true)) {
-                    let _ = send_encrypted_frame(&mut stream, &msg_clone, &session_key).await;
-                }
-            }
-        });
+    for sender in senders {
+        let _ = sender.send(msg.clone());
     }
 }
 

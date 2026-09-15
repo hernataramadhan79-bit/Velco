@@ -33,9 +33,9 @@ pub fn export_notes_to_folder(
 
     fs::create_dir_all(&target_dir).map_err(|e| format!("Cannot create folder: {}", e))?;
 
-    // 1. Ambil rows di bawah lock singkat, lalu LEPASKAN lock sebelum I/O file.
+    // 1. Ambil rows via read_pool sebelum I/O file.
     let rows_data: Vec<(String, String, String, String, String)> = {
-        let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.read_pool.get().map_err(|e| e.to_string())?;
         // Gunakan bound params untuk item_ids (hindari filter di Rust + hindari interpolasi SQL)
         let (sql, param_ids): (String, Vec<String>) = match &item_ids {
             Some(ids) if !ids.is_empty() => {
@@ -236,7 +236,7 @@ pub fn scan_orphan_files(
     db: State<'_, Database>,
     storage: State<'_, StorageManager>,
 ) -> Result<Vec<String>, String> {
-    let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
     let att_dir = storage.attachments_dir();
 
     // Ambil semua file_path + file_name dari DB, normalisasi ke file_name
@@ -415,9 +415,9 @@ pub fn open_attachment_in_os(
     storage: State<'_, StorageManager>,
     attachment_id: String,
 ) -> Result<(), String> {
-    // 1. Ambil metadata di bawah lock singkat, lalu lepas sebelum I/O.
+    // 1. Ambil metadata via read_pool sebelum I/O.
     let (file_name, file_path, data_url): (String, String, Option<String>) = {
-        let conn = db.write_conn.lock().map_err(|e| e.to_string())?;
+        let conn = db.read_pool.get().map_err(|e| e.to_string())?;
         let query_res: rusqlite::Result<(String, String, Option<String>)> = conn.query_row(
             "SELECT file_name, file_path, data_url FROM attachments WHERE id = ?1 LIMIT 1",
             params![attachment_id],

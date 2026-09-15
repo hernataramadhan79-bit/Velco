@@ -137,7 +137,6 @@ export const AppLayout: React.FC = () => {
   // ── Zustand selectors (granular subscriptions) ───────────
   const currentView = useItemStore((s) => s.currentView);
   const appMode = useItemStore((s) => s.appMode);
-  const items = useItemStore((s) => s.items);
   const selectedItemId = useItemStore((s) => s.selectedItemId);
   const itemCounts = useItemStore((s) => s.itemCounts);
 
@@ -198,37 +197,21 @@ export const AppLayout: React.FC = () => {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Memoized categorized lists — avoids visual glitches and zero re-renders across views
-  const tasksList = useMemo(
-    () => items.filter((i) => i.type === 'task' && !i.archived && !i.trashed),
-    [items]
+  // In-memory overdue tasks count using primitive number selector — zero layout re-render cascades
+  const overdueCount = useItemStore((s) =>
+    s.items.reduce((count, i) => {
+      if (
+        i.type === 'task' &&
+        !i.archived &&
+        !i.trashed &&
+        !i.task?.completed &&
+        isTaskOverdue(i.task?.dueDate)
+      ) {
+        return count + 1;
+      }
+      return count;
+    }, 0)
   );
-  const notesList = useMemo(
-    () => items.filter((i) => (i.type === 'note' || i.type === 'text') && !i.archived && !i.trashed),
-    [items]
-  );
-  const filesList = useMemo(
-    () =>
-      items.filter(
-        (i) =>
-          (i.type === 'file' ||
-            i.type === 'image' ||
-            i.type === 'audio' ||
-            (i.attachmentsCount && i.attachmentsCount > 0)) &&
-          !i.archived &&
-          !i.trashed
-      ),
-    [items]
-  );
-  const linksList = useMemo(
-    () => items.filter((i) => i.type === 'link' && !i.archived && !i.trashed),
-    [items]
-  );
-
-  // In-memory overdue tasks count (0ms, zero IPC overhead)
-  const overdueCount = useMemo(() => {
-    return tasksList.filter((t) => !t.task?.completed && isTaskOverdue(t.task?.dueDate)).length;
-  }, [tasksList]);
 
   // ── Background Reminder Service ──────────────────────────
   useEffect(() => {
@@ -457,7 +440,6 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'tasks' && (
                 <TasksView
-                  tasks={tasksList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleTask={toggleTask}
@@ -468,7 +450,6 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'notes' && (
                 <NotesView
-                  notes={notesList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
@@ -478,7 +459,6 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'files' && (
                 <FilesView
-                  files={filesList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}
@@ -489,7 +469,6 @@ export const AppLayout: React.FC = () => {
 
               {currentView === 'links' && (
                 <LinksView
-                  links={linksList}
                   onCapture={captureItem}
                   onSelect={(item) => setSelectedItemId(item.id)}
                   onToggleFavorite={toggleFavorite}

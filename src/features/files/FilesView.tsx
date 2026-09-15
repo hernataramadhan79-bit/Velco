@@ -28,9 +28,11 @@ import {
 } from '../../utils/fileUtils';
 import { FileLightboxModal } from './FileLightboxModal';
 import { useSelectionStore } from '../../stores/selectionStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useItemStore } from '../../stores/itemStore';
 
 interface FilesViewProps {
-  files: ItemSummary[];
+  files?: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
   onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
@@ -43,13 +45,27 @@ type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 const VIEW_MODE_KEY = 'velco_files_view_mode';
 
 export const FilesView: React.FC<FilesViewProps> = ({
-  files,
+  files: propFiles,
   onCapture,
   onSelect,
   onToggleFavorite,
   onTrash,
   isDraggingFiles = false,
 }) => {
+  const storeFiles = useItemStore(
+    useShallow((s) =>
+      s.items.filter(
+        (i) =>
+          (i.type === 'file' ||
+            i.type === 'image' ||
+            i.type === 'audio' ||
+            (i.attachmentsCount && i.attachmentsCount > 0)) &&
+          !i.archived &&
+          !i.trashed
+      )
+    )
+  );
+  const files = propFiles ?? storeFiles;
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const activeDragging = isDragging || isDraggingFiles;

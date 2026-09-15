@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useItemStore } from '../../stores/itemStore';
 import { Item, ItemSummary, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Plus, FileText } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface NotesViewProps {
-  notes: ItemSummary[];
+  notes?: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
   onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
@@ -13,12 +15,16 @@ interface NotesViewProps {
 }
 
 export const NotesView: React.FC<NotesViewProps> = ({
-  notes,
+  notes: propNotes,
   onCapture,
   onSelect,
   onToggleFavorite,
   onTrash,
 }) => {
+  const storeNotes = useItemStore(
+    useShallow((s) => s.items.filter((i) => (i.type === 'note' || i.type === 'text') && !i.archived && !i.trashed))
+  );
+  const notes = propNotes ?? storeNotes;
   const [isCreating, setIsCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');

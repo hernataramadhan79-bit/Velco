@@ -99,9 +99,13 @@ export const AIPrivacyBadge: React.FC = () => {
         if (!document.hidden) {
           checkConnection();
         }
-      }, 3000);
+      }, 30000);
 
-      const handleFocus = () => checkConnection();
+      const handleFocus = () => {
+        if (!document.hidden) {
+          checkConnection();
+        }
+      };
       window.addEventListener('focus', handleFocus);
       document.addEventListener('visibilitychange', handleFocus);
 

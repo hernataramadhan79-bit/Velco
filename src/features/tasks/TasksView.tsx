@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useItemStore } from '../../stores/itemStore';
 import { Item, ItemSummary, CreateItemInput, PriorityLevel, parseTaskBatchSource, TaskBatchSource } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { TaskBatchSection } from '../../components/tasks/TaskBatchSection';
@@ -9,7 +11,7 @@ import { reminderService } from '../../services/reminder/reminderService';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface TasksViewProps {
-  tasks: ItemSummary[];
+  tasks?: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
   onSelect: (item: ItemSummary) => void;
   onToggleTask: (itemId: string, completed: boolean) => void;
@@ -20,13 +22,17 @@ interface TasksViewProps {
 type TaskFilter = 'pending' | 'due_today' | 'overdue' | 'completed' | 'all';
 
 export const TasksView: React.FC<TasksViewProps> = ({
-  tasks,
+  tasks: propTasks,
   onCapture,
   onSelect,
   onToggleTask,
   onToggleFavorite,
   onTrash,
 }) => {
+  const storeTasks = useItemStore(
+    useShallow((s) => s.items.filter((i) => i.type === 'task' && !i.archived && !i.trashed))
+  );
+  const tasks = propTasks ?? storeTasks;
   const [taskText, setTaskText] = useState('');
   const [priority, setPriority] = useState<PriorityLevel>('medium');
   const [dueDate, setDueDate] = useState('');

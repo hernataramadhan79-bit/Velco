@@ -32,6 +32,7 @@ pub async fn start_p2p_session(
             let _ = sender.send(());
         }
         inner.connected_peers.clear();
+        inner.peer_senders.clear();
     }
 
     let (stop_tx, stop_rx1) = broadcast::channel::<()>(16);
@@ -97,6 +98,7 @@ pub async fn stop_p2p_session(
         let _ = sender.send(());
     }
     inner.connected_peers.clear();
+    inner.peer_senders.clear();
     inner.stop_sender = None;
     Ok(())
 }

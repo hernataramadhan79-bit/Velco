@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useItemStore } from '../../stores/itemStore';
 import { ItemSummary, CreateItemInput } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { Link2, Plus } from 'lucide-react';
 import { EmptyState } from '../../components/common/EmptyState';
 
 interface LinksViewProps {
-  links: ItemSummary[];
+  links?: ItemSummary[];
   onCapture: (input: CreateItemInput) => Promise<any>;
   onSelect: (item: ItemSummary) => void;
   onToggleFavorite: (itemId: string) => void;
@@ -13,12 +15,16 @@ interface LinksViewProps {
 }
 
 export const LinksView: React.FC<LinksViewProps> = ({
-  links,
+  links: propLinks,
   onCapture,
   onSelect,
   onToggleFavorite,
   onTrash,
 }) => {
+  const storeLinks = useItemStore(
+    useShallow((s) => s.items.filter((i) => i.type === 'link' && !i.archived && !i.trashed))
+  );
+  const links = propLinks ?? storeLinks;
   const [url, setUrl] = useState('');
 
   const handleAddLink = async (e: React.FormEvent) => {

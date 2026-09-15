@@ -105,6 +105,7 @@ pub struct P2PInner {
     pub beacon_mac_key: Option<[u8; 32]>,
     pub listen_port: u16,
     pub connected_peers: HashMap<String, ConnectedPeer>,
+    pub peer_senders: HashMap<String, tokio::sync::mpsc::UnboundedSender<SyncMessage>>,
     pub stop_sender: Option<tokio::sync::broadcast::Sender<()>>,
 }
 
@@ -127,6 +128,7 @@ impl Default for P2PState {
                 beacon_mac_key: None,
                 listen_port: 0,
                 connected_peers: HashMap::new(),
+                peer_senders: HashMap::new(),
                 stop_sender: None,
             })),
         }

@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Bot,
 } from 'lucide-react';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { Item, ItemSummary } from '../../types/item';
 import { useContextStore, itemToStagedItem } from '../../stores/contextStore';
 import { useSelectionStore } from '../../stores/selectionStore';
@@ -35,7 +36,7 @@ interface ItemCardProps {
   isTrashView?: boolean;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({
+export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
   item,
   onSelect,
   onToggleTask,
@@ -45,16 +46,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({
   onRestore,
   onPermanentDelete,
   isTrashView = false,
-}) => {
-  // Global Selection state
-  const isSelected = useSelectionStore((state) => state.isItemSelected(item.id));
+}) {
+  // Global Selection state — boolean selectors to prevent re-render cascades
+  const isSelected = useSelectionStore((state) => state.selectedIds.has(item.id));
   const toggleSelectItem = useSelectionStore((state) => state.toggleSelectItem);
-  const selectedCount = useSelectionStore((state) => state.selectedIds.size);
-  const hasAnySelection = selectedCount > 0;
+  const hasAnySelection = useSelectionStore((state) => state.selectedIds.size > 0);
 
-  // Dual-channel context status
-  const isChatContext = useContextStore((state) => state.isChatContext(item.id));
-  const isFoundryStaged = useContextStore((state) => state.isFoundryStaged(item.id));
+  // Dual-channel context status — boolean selectors
+  const isChatContext = useContextStore((state) => state.chatContextItems.some((i) => i.id === item.id));
+  const isFoundryStaged = useContextStore((state) => state.foundryStagedItems.some((i) => i.id === item.id));
   const toggleChatContextItem = useContextStore((state) => state.toggleChatContextItem);
   const toggleFoundryItem = useContextStore((state) => state.toggleFoundryItem);
 
@@ -86,7 +86,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
 
   const [thumbError, setThumbError] = React.useState(false);
 
-  const rawThumbnail =
+  const rawThumbnailSource =
     item.thumbnailUrl && item.thumbnailUrl.trim() !== ''
       ? item.thumbnailUrl
       : item.attachments?.find(
@@ -99,6 +99,23 @@ export const ItemCard: React.FC<ItemCardProps> = ({
         (item.link?.previewImage && item.link.previewImage.trim() !== ''
           ? item.link.previewImage
           : null);
+
+  const rawThumbnail = React.useMemo(() => {
+    if (!rawThumbnailSource) return null;
+    if (
+      rawThumbnailSource.startsWith('http://') ||
+      rawThumbnailSource.startsWith('https://') ||
+      rawThumbnailSource.startsWith('data:') ||
+      rawThumbnailSource.startsWith('asset:')
+    ) {
+      return rawThumbnailSource;
+    }
+    try {
+      return convertFileSrc(rawThumbnailSource);
+    } catch {
+      return rawThumbnailSource;
+    }
+  }, [rawThumbnailSource]);
 
   const thumbnail = thumbError ? null : rawThumbnail;
 
@@ -394,4 +411,5 @@ export const ItemCard: React.FC<ItemCardProps> = ({
       </div>
     </div>
   );
-};
+});
+ItemCard.displayName = 'ItemCard';

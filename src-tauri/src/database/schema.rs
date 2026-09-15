@@ -40,6 +40,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V6)?;
         conn.pragma_update(None, "user_version", 6)?;
     }
+    if version < 7 {
+        conn.execute_batch(MIGRATION_V7)?;
+        conn.pragma_update(None, "user_version", 7)?;
+    }
 
     Ok(())
 }
@@ -268,3 +272,10 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, timestamp ASC);
 "#;
+
+/// V7: Composite indexes untuk query feed utama (items & tasks)
+const MIGRATION_V7: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_items_feed ON items(deleted_at, archived, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_feed ON tasks(completed, due_date);
+"#;
+
