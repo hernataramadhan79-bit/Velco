@@ -42,10 +42,12 @@ import { MarkdownViewer } from '../common/MarkdownViewer';
 import { db } from '../../services/database';
 import { getLlmProviderConfig } from '../../utils/aiUtils';
 
-interface LandingHeroAiChatProps {
+interface ChatCanvasProps {
   onArtifactCreated?: (msg: string) => void;
   onOpenSettings?: () => void;
 }
+
+export type LandingHeroAiChatProps = ChatCanvasProps;
 
 interface SmartPromptChip {
   icon: React.ComponentType<{ className?: string }>;
@@ -76,7 +78,7 @@ const DEVELOPER_PROMPT_CHIPS: SmartPromptChip[] = [
   },
 ];
 
-export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
+export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   onArtifactCreated,
   onOpenSettings,
 }) => {
@@ -836,3 +838,5 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
     </div>
   );
 };
+
+export { ChatCanvas as LandingHeroAiChat };

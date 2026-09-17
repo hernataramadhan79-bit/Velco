@@ -38,7 +38,7 @@ import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { StructuredTaskItem } from '../../services/ai/taskExtractor';
 import { getLlmProviderConfig } from '../../utils/aiUtils';
 
-interface TheFoundryProps {
+interface StudioWorkbenchProps {
   onClose?: () => void;
   onArtifactsApplied?: () => void;
   isExpanded?: boolean;
@@ -46,6 +46,8 @@ interface TheFoundryProps {
   onArtifactCreated?: (msg: string) => void;
   onOpenSettings?: () => void;
 }
+
+export type TheFoundryProps = StudioWorkbenchProps;
 
 type ForgeRecipeKey = 'synthesize' | 'extract_tasks' | 'cross_analyze' | 'triage' | 'custom';
 
@@ -89,7 +91,7 @@ const FORGE_RECIPES: ForgeRecipeConfig[] = [
   },
 ];
 
-export const TheFoundry: React.FC<TheFoundryProps> = ({
+export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
   onClose,
   onArtifactsApplied,
   isExpanded = false,
@@ -689,3 +691,5 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
     </div>
   );
 };
+
+export { StudioWorkbench as TheFoundry };

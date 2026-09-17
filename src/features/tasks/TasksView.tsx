@@ -244,10 +244,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           <button
             onClick={() => setFilter('completed')}
-            className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
               filter === 'completed'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-2xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-2xs font-semibold'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             Completed ({completedCount})
@@ -255,10 +255,10 @@ export const TasksView: React.FC<TasksViewProps> = ({
 
           <button
             onClick={() => setFilter('all')}
-            className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer ${
               filter === 'all'
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-2xs font-semibold'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-2xs font-semibold'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
             All ({tasks.length})

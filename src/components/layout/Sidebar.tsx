@@ -175,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           {onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
-              className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.05] transition-colors cursor-pointer"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
               title={`Hide sidebar (${modKey}+B)`}
             >
               <PanelLeftClose className="w-4 h-4 stroke-[1.5]" />

@@ -8,7 +8,7 @@ import { chatSessionService } from '../services/chatSessionService';
 import { getSettings } from '../stores/settingsStore';
 
 /**
- * useEphemeralChat — hook untuk sesi chat ephemeral di Inbox (LandingHeroAiChat).
+ * useEphemeralChat — hook untuk sesi chat ephemeral di Inbox (ChatCanvas).
  *
  * - State lokal (useState), BUKAN Zustand persist
  * - sessionId null sampai pesan pertama dikirim, lalu di-create via backend

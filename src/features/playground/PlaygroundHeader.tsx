@@ -1,5 +1,4 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
 import { ChatSessionSummary } from '../../types/chat';
 import { SessionHistoryPopover } from './SessionHistoryPopover';
 

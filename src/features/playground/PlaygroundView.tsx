@@ -63,13 +63,13 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const isUserScrolledUpRef = useRef(false);
 
-  // ── Init: load sessions + resume last session on mount ─────────────────
+  // ── Init: load sessions list on mount, always default to a clean New Chat ───
   useEffect(() => {
     const init = async () => {
       await loadSessions();
-      // Resume sesi terakhir (persisted activeSessionId)
-      if (activeSessionId) {
-        await switchSession(activeSessionId);
+      // Selalu mulai dalam mode New Chat bersih (history tetap tersedia di popover)
+      if (!usePlaygroundChatStore.getState().activeSessionId) {
+        newSession();
       }
     };
     init();

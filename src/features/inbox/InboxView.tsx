@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Bot, PenTool } from 'lucide-react';
-import { UniversalCapture } from '../../components/capture/UniversalCapture';
+import { QuickCapture } from '../../components/capture/QuickCapture';
 import { ItemList } from '../../components/items/ItemList';
-import { LandingHeroAiChat } from '../../components/chat/LandingHeroAiChat';
+import { ChatCanvas } from '../../components/chat/ChatCanvas';
 import {
   InboxDropdownFilter,
   InboxCategoryFilter,
@@ -92,12 +92,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
         {/* Selected Mode Component */}
         {activeTab === 'chat' ? (
-          <LandingHeroAiChat
+          <ChatCanvas
             onArtifactCreated={onArtifactCreated}
             onOpenSettings={onOpenSettings}
           />
         ) : (
-          <UniversalCapture onCapture={onCapture} />
+          <QuickCapture onCapture={onCapture} />
         )}
       </div>
 

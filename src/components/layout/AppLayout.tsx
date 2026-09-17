@@ -7,7 +7,7 @@ import { UpdateBanner } from '../updater/UpdateBanner';
 import { BackupReminderBanner, dismissBackupReminderForSession } from '../backup/BackupReminderBanner';
 import { OnboardingOverlay } from '../onboarding/OnboardingOverlay';
 import { ShortcutCheatSheetModal } from '../common/ShortcutCheatSheetModal';
-import { TheFoundry } from '../workstation/TheFoundry';
+import { StudioWorkbench } from '../workstation/StudioWorkbench';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { useTagStore } from '../../stores/tagStore';
 import { useContextStore } from '../../stores/contextStore';
@@ -50,8 +50,8 @@ const TrashView = lazy(() =>
 const SettingsView = lazy(() =>
   import('../../features/settings/SettingsView').then((m) => ({ default: m.SettingsView }))
 );
-const TheBridgeView = lazy(() =>
-  import('../../features/bridge/TheBridgeView').then((m) => ({ default: m.TheBridgeView }))
+const ContextHubView = lazy(() =>
+  import('../../features/bridge/ContextHubView').then((m) => ({ default: m.ContextHubView }))
 );
 const PlaygroundView = lazy(() =>
   import('../../features/playground/PlaygroundView').then((m) => ({ default: m.PlaygroundView }))
@@ -208,6 +208,9 @@ export const AppLayout: React.FC = () => {
       setIsFoundryOpen(true);
       setIsFoundryExpanded(true);
       return;
+    }
+    if (view === 'playground' && current !== 'playground') {
+      usePlaygroundChatStore.getState().newSession();
     }
     setCurrentView(view);
   }, [setCurrentView]);
@@ -439,7 +442,7 @@ export const AppLayout: React.FC = () => {
           <ErrorBoundary onReset={() => refreshItems()}>
             <Suspense fallback={<ViewSkeleton />}>
               {appMode === 'context-hub' ? (
-                <TheBridgeView onNotify={(msg, type) => notify(msg, type)} />
+                <ContextHubView onNotify={(msg, type) => notify(msg, type)} />
               ) : (
               <div
                 className={`view-enter ${
@@ -542,7 +545,7 @@ export const AppLayout: React.FC = () => {
                 />
               )}
 
-              {/* TheBridgeView is now rendered exclusively in Context Hub mode */}
+              {/* ContextHubView is now rendered exclusively in Context Hub mode */}
 
               {currentView === 'playground' && (
                 <PlaygroundView
@@ -561,14 +564,14 @@ export const AppLayout: React.FC = () => {
         </main>
       </div>
 
-      {/* Pane 3: The Foundry (Context Workstation) */}
+      {/* Pane 3: Studio Workbench (Context Workstation) */}
       {isFoundryOpen && (
         <aside
           className={`${
             isFoundryExpanded ? 'w-[520px] xl:w-[600px]' : 'w-88 xl:w-96'
           } shrink-0 h-full overflow-hidden transition-all duration-200 shadow-xl z-20`}
         >
-          <TheFoundry
+          <StudioWorkbench
             onClose={() => setIsFoundryOpen(false)}
             isExpanded={isFoundryExpanded}
             onToggleExpand={() => setIsFoundryExpanded((prev) => !prev)}

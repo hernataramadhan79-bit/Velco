@@ -12,11 +12,13 @@ import { DueDatePicker } from '../tasks/DueDatePicker';
 import { createImageThumbnail, inferMimeType, isImageFile } from '../../utils/fileUtils';
 import { modKey } from '../../utils/platformUtils';
 
-interface UniversalCaptureProps {
+interface QuickCaptureProps {
   onCapture: (input: CreateItemInput) => Promise<any>;
 }
 
-export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture }) => {
+export type UniversalCaptureProps = QuickCaptureProps;
+
+export const QuickCapture: React.FC<QuickCaptureProps> = ({ onCapture }) => {
   const [text, setText] = useState('');
   const [forcedType, setForcedType] = useState<ItemType | null>(null);
   const [taskPriority, setTaskPriority] = useState<PriorityLevel>('medium');
@@ -407,3 +409,5 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
     </div>
   );
 };
+
+export { QuickCapture as UniversalCapture };

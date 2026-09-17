@@ -332,10 +332,8 @@ export const usePlaygroundChatStore = create<PlaygroundChatState>()(
     }),
     {
       name: 'velco-playground-session',
-      // Hanya persist activeSessionId — messages di-load ulang dari SQLite
-      partialize: (state) => ({
-        activeSessionId: state.activeSessionId,
-      }),
+      // Always start fresh on reload/navigation — session history is retrieved on-demand from SQLite
+      partialize: () => ({}),
     }
   )
 );

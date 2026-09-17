@@ -28,11 +28,13 @@ import { NewDocModal } from './components/NewDocModal';
 import { AttachItemModal } from './components/AttachItemModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 
-interface TheBridgeViewProps {
+interface ContextHubViewProps {
   onNotify?: (msg: string, type?: 'info' | 'success' | 'error' | 'reminder') => void;
 }
 
-export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
+export type TheBridgeViewProps = ContextHubViewProps;
+
+export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
   const { settings, updateSettings } = useSettings();
   const {
     capsules,
@@ -877,3 +879,5 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     </div>
   );
 };
+
+export { ContextHubView as TheBridgeView };
