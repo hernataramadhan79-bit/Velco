@@ -14,7 +14,6 @@ import {
   smartHeuristicTaskExtraction,
 } from '../../services/ai/taskExtractor';
 import { TaskExtractionModal } from '../../components/tasks/TaskExtractionModal';
-import { PlaygroundHeader } from './PlaygroundHeader';
 import { PlaygroundEmptyState } from './PlaygroundEmptyState';
 import { PlaygroundMessageItem } from './PlaygroundMessageItem';
 import { PlaygroundInputDock } from './PlaygroundInputDock';
@@ -146,13 +145,11 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
     [prompt, isGenerating, settings, chatContextItems, sendMessage]
   );
 
-  // New Chat Handler — buat sesi baru, sesi lama tetap ada di history
-  const handleNewChat = useCallback(() => {
-    if (isGenerating) return;
-    newSession();
+  // Reset prompt and scroll when activeSessionId changes (e.g. from header controls)
+  useEffect(() => {
     setPrompt('');
     isUserScrolledUpRef.current = false;
-  }, [isGenerating, newSession]);
+  }, [activeSessionId]);
 
   // Copy Message Handler
   const handleCopyMessage = useCallback((id: string, text: string) => {
@@ -283,34 +280,36 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
 
   return (
     <div className="h-full flex flex-col min-h-0 overflow-hidden bg-slate-50/50 dark:bg-[#09090b] select-none">
-      {/* 1. Dedicated Top Chat Navigation Bar */}
-      <PlaygroundHeader
-        onNewChat={handleNewChat}
-        isGenerating={isGenerating}
-        hasMessages={messages.length > 0}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSwitchSession={switchSession}
-        onRenameSession={renameSession}
-        onDeleteSession={deleteSession}
-      />
+      {/* Main Content Area */}
 
-      {/* 2. Scrollable Messages Viewport */}
-      <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
-        <div
-          ref={messagesScrollRef}
-          onScroll={handleScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        >
-          {messages.length === 0 ? (
-            <div className="p-4 sm:p-6">
-              <PlaygroundEmptyState
-                onSelectPrompt={(text) => handleSend(text)}
-                disabled={isGenerating}
+      {/* 2. Main Content Area */}
+      {messages.length === 0 ? (
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col px-4">
+          <div className="my-auto w-full">
+            <PlaygroundEmptyState
+              onSelectPrompt={(text) => handleSend(text)}
+              disabled={isGenerating}
+            >
+              <PlaygroundInputDock
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                onSend={() => handleSend()}
+                onStop={stopGenerating}
+                isGenerating={isGenerating}
+                variant="centered"
               />
-            </div>
-          ) : (
-            <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 px-4 sm:px-6 pt-4 pb-6">
+            </PlaygroundEmptyState>
+          </div>
+        </div>
+      ) : (
+        <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+          {/* Scrollable Messages Viewport */}
+          <div
+            ref={messagesScrollRef}
+            onScroll={handleScroll}
+            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+          >
+            <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 px-4 sm:px-6 pt-5 pb-6">
               {messages.map((msg) => (
                 <PlaygroundMessageItem
                   key={msg.id}
@@ -327,36 +326,37 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
               ))}
               <div className="h-2" />
             </div>
-          )}
-        </div>
-
-        {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
-        {showScrollBottom && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
-            <button
-              type="button"
-              onClick={scrollToBottom}
-              className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-xl backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
-              title="Scroll to latest message"
-              aria-label="Scroll to latest message"
-            >
-              <ChevronDown className="w-4 h-4 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
-              {isGenerating && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
-              )}
-            </button>
           </div>
-        )}
-      </div>
 
-      {/* 3. Floating Bottom Input Dock */}
-      <PlaygroundInputDock
-        prompt={prompt}
-        onPromptChange={setPrompt}
-        onSend={() => handleSend()}
-        onStop={stopGenerating}
-        isGenerating={isGenerating}
-      />
+          {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
+          {showScrollBottom && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-xl backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
+                title="Scroll to latest message"
+                aria-label="Scroll to latest message"
+              >
+                <ChevronDown className="w-4 h-4 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
+                {isGenerating && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Pinned Bottom Input Dock in Conversation Mode */}
+          <PlaygroundInputDock
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            onSend={() => handleSend()}
+            onStop={stopGenerating}
+            isGenerating={isGenerating}
+            variant="docked"
+          />
+        </div>
+      )}
 
       {/* 4. Task Extraction Modal Dialog */}
       <TaskExtractionModal

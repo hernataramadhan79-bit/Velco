@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Square,
+  ArrowUp,
   CornerDownLeft,
   Paperclip,
   X,
@@ -26,6 +27,7 @@ interface PlaygroundInputDockProps {
   onSend: () => void;
   onStop: () => void;
   isGenerating: boolean;
+  variant?: 'centered' | 'docked';
 }
 
 export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
@@ -34,6 +36,7 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
   onSend,
   onStop,
   isGenerating,
+  variant = 'docked',
 }) => {
   const { settings } = useSettings();
   const {
@@ -96,11 +99,14 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
     }
   }, [isPickerOpen]);
 
-  // Adjust textarea height on prompt change
+  // Adjust textarea height dynamically: minimalist 24px initial height, expands smoothly up to 220px
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 220)}px`;
+      const targetHeight = prompt.trim() === ''
+        ? 24
+        : Math.min(Math.max(textareaRef.current.scrollHeight, 24), 220);
+      textareaRef.current.style.height = `${targetHeight}px`;
     }
   }, [prompt]);
 
@@ -320,59 +326,62 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
     }
   };
 
+  const isCentered = variant === 'centered';
+
   return (
-    <div className="relative w-full shrink-0 select-none">
-      {/* Soft gradient blur edge behind input dock */}
-      <div className="pointer-events-none absolute -top-8 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 dark:from-[#09090b] to-transparent z-10" />
+    <div className={`select-none ${isCentered ? 'relative w-full max-w-3xl mx-auto' : 'relative w-full shrink-0'}`}>
+      {/* Soft gradient blur edge behind input dock only when docked */}
+      {!isCentered && (
+        <div className="pointer-events-none absolute -top-8 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 dark:from-[#09090b] to-transparent z-10" />
+      )}
 
-      <div className="max-w-3xl xl:max-w-4xl mx-auto px-4 pb-4 pt-1 flex flex-col relative z-20">
-        {/* Attached Context Tray (Sleek Pills Strip) */}
-        {chatContextItems.length > 0 && (
-          <div className="mb-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-[#141418]/90 border border-slate-200/80 dark:border-white/[0.08] backdrop-blur-md flex flex-wrap items-center gap-1.5 text-xs shadow-2xs">
-            <div className="flex items-center gap-1 text-[11px] font-mono text-slate-500 dark:text-zinc-400 mr-1">
-              <Layers className="w-3.5 h-3.5 text-blue-500" />
-              <span className="font-semibold">Context ({chatContextItems.length}):</span>
-            </div>
-
-            {chatContextItems.map((item) => (
-              <div
-                key={item.id}
-                className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-lg bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/[0.08] text-[11px] font-mono text-slate-700 dark:text-zinc-300 shadow-2xs group"
-              >
-                {getItemTypeIcon(item.type)}
-                <span className="truncate max-w-[140px]">{item.title}</span>
-                <button
-                  type="button"
-                  onClick={() => removeChatContextItem(item.id)}
-                  className="p-0.5 rounded text-slate-400 hover:text-rose-600 dark:text-zinc-500 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-white/[0.1] transition-colors cursor-pointer"
-                  title="Remove from context"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-
-            <div className="ml-auto flex items-center gap-2">
-              <span className="font-mono text-[10px] text-slate-400 dark:text-zinc-500">
-                {chatTokens.toLocaleString()} tokens
-              </span>
-              <button
-                type="button"
-                onClick={clearChatContext}
-                className="text-[10px] font-mono text-slate-400 hover:text-rose-600 dark:text-zinc-500 dark:hover:text-rose-400 hover:underline cursor-pointer"
-              >
-                Clear all
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Input Card */}
+      <div className={isCentered ? 'w-full' : 'max-w-3xl xl:max-w-4xl mx-auto px-4 pb-4 pt-1 flex flex-col relative z-20'}>
+        {/* Sleek Input Card */}
         <div
-          className={`relative w-full rounded-2xl bg-white dark:bg-[#141418] border border-slate-200 dark:border-white/[0.1] focus-within:border-blue-500/60 dark:focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/10 shadow-lg dark:shadow-2xl transition-all p-2.5 sm:p-3 flex flex-col gap-2 ${
+          className={`relative w-full rounded-2xl bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md border border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300/90 dark:hover:border-white/[0.14] focus-within:border-blue-500/50 dark:focus-within:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-500/10 shadow-sm dark:shadow-2xl transition-all flex flex-col ${
             !settings.aiEnabled ? 'opacity-60 cursor-not-allowed' : ''
           }`}
         >
+          {/* Attached Context Strip inside Card */}
+          {chatContextItems.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3.5 py-1.5 border-b border-slate-100 dark:border-white/[0.05] bg-slate-50/50 dark:bg-white/[0.02] rounded-t-2xl text-[11px] font-mono">
+              <span className="text-slate-400 dark:text-zinc-500 flex items-center gap-1 mr-1">
+                <Layers className="w-3 h-3 text-blue-500" />
+                <span className="font-medium">Context ({chatContextItems.length}):</span>
+              </span>
+
+              {chatContextItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-md bg-white dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/[0.08] text-[10px] font-mono text-slate-700 dark:text-zinc-300 shadow-2xs group"
+                >
+                  {getItemTypeIcon(item.type)}
+                  <span className="truncate max-w-[120px]">{item.title}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeChatContextItem(item.id)}
+                    className="p-0.5 rounded text-slate-400 hover:text-rose-500 dark:text-zinc-500 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                    title="Remove from context"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+              ))}
+
+              <div className="ml-auto flex items-center gap-2 text-[10px]">
+                <span className="font-mono text-slate-400 dark:text-zinc-500">
+                  {chatTokens.toLocaleString()} tok
+                </span>
+                <button
+                  type="button"
+                  onClick={clearChatContext}
+                  className="text-slate-400 hover:text-rose-500 dark:text-zinc-500 dark:hover:text-rose-400 hover:underline cursor-pointer"
+                >
+                  Clear all
+                </button>
+              </div>
+            </div>
+          )}
           {/* Inline Context Picker Popover Dialog */}
           {isPickerOpen && (
             <div
@@ -563,32 +572,34 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
             </div>
           )}
 
-          {/* Dynamic Auto-Expanding Textarea */}
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={!settings.aiEnabled}
-            placeholder={
-              settings.aiEnabled
-                ? `Message AI... (Enter to send, Shift+Enter for newline, ${modKey}+V to paste screenshot)`
-                : "AI engine is disabled in Settings..."
-            }
-            className="w-full bg-transparent border-none outline-none resize-none text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-600 min-h-[42px] max-h-56 py-1 px-1 leading-relaxed disabled:cursor-not-allowed select-text"
-          />
+          {/* Minimalist Auto-Expanding Textarea */}
+          <div className="px-3.5 pt-2.5 pb-1">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={prompt}
+              onChange={(e) => onPromptChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              disabled={!settings.aiEnabled}
+              placeholder={
+                settings.aiEnabled
+                  ? "Ask AI anything, synthesize notes, or attach files..."
+                  : "AI engine is disabled in Settings..."
+              }
+              className="w-full bg-transparent border-none outline-none resize-none p-0 text-[13px] sm:text-sm text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 min-h-[24px] max-h-52 leading-[22px] disabled:cursor-not-allowed select-text overflow-y-auto"
+            />
+          </div>
 
-          {/* Bottom Toolbar inside Card */}
-          <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/[0.05] text-xs">
-            {/* Left Controls: Attach Context Button & Upload Button */}
-            <div className="flex items-center gap-1.5">
+          {/* Symmetrical Minimalist Bottom Toolbar */}
+          <div className="flex items-center justify-between px-2.5 pb-2 pt-0.5 text-xs select-none">
+            {/* Left Controls: Attach Context Button & Upload Button (unified h-7) */}
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => settings.aiEnabled && setIsPickerOpen(!isPickerOpen)}
                 disabled={!settings.aiEnabled}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                className={`h-7 px-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
                   isPickerOpen || chatContextItems.length > 0
                     ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
                     : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05]'
@@ -596,15 +607,15 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
                 title="Attach context from SQLite database"
               >
                 <Paperclip className="w-3.5 h-3.5 stroke-[1.75]" />
-                <span className="hidden sm:inline">Attach</span>
+                <span className="text-[11px] font-medium hidden sm:inline">Attach</span>
                 {chatContextItems.length > 0 && (
-                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[10px] font-mono font-bold">
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-blue-600 text-white text-[9px] font-mono font-bold">
                     {chatContextItems.length}
                   </span>
                 )}
               </button>
 
-              {/* Direct file/image upload input & button */}
+              {/* Direct file/image upload input & button (unified h-7) */}
               <input
                 type="file"
                 ref={fileInputRef}
@@ -617,24 +628,27 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
                 type="button"
                 onClick={() => settings.aiEnabled && fileInputRef.current?.click()}
                 disabled={!settings.aiEnabled}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-7 px-2.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
                 title="Upload image or file directly into chat context"
               >
-                <ImageIcon className="w-3.5 h-3.5 text-purple-500 stroke-[1.75]" />
-                <span className="hidden sm:inline">Upload</span>
+                <ImageIcon className="w-3.5 h-3.5 text-purple-500/80 stroke-[1.75]" />
+                <span className="text-[11px] font-medium hidden sm:inline">Upload</span>
               </button>
             </div>
 
-            {/* Right Controls: Send / Stop Button */}
+            {/* Right Controls: Shortcut Guide & Send / Stop Button (unified h-7) */}
             <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 hidden sm:inline mr-0.5">
+                Shift+Enter for newline
+              </span>
               {isGenerating ? (
                 <button
                   type="button"
                   onClick={onStop}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-medium text-xs transition-colors cursor-pointer shadow-xs"
+                  className="h-7 px-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-medium text-xs font-mono transition-colors cursor-pointer shadow-2xs flex items-center gap-1.5"
                   title="Stop generation"
                 >
-                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <Square className="w-2.5 h-2.5 fill-current" />
                   <span>Stop</span>
                 </button>
               ) : (
@@ -642,11 +656,10 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
                   type="button"
                   onClick={onSend}
                   disabled={!prompt.trim() || !settings.aiEnabled}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 font-semibold text-xs transition-all cursor-pointer shadow-xs disabled:opacity-30 disabled:pointer-events-none"
+                  className="h-7 w-7 rounded-lg flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 transition-all cursor-pointer shadow-2xs disabled:opacity-25 disabled:pointer-events-none active:scale-95 shrink-0"
                   title="Send message (Enter)"
                 >
-                  <CornerDownLeft className="w-3.5 h-3.5 stroke-[2]" />
-                  <span>Send</span>
+                  <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
               )}
             </div>

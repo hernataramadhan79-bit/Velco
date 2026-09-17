@@ -2,9 +2,11 @@ import React from 'react';
 import { AIPrivacyBadge } from './AIPrivacyBadge';
 import { useSettings } from '../../stores/settingsStore';
 import { useContextStore } from '../../stores/contextStore';
-import { PanelLeft, Search, Zap, HelpCircle } from 'lucide-react';
+import { PanelLeft, Search, Zap, HelpCircle, Plus } from 'lucide-react';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { modKey, formatShortcut } from '../../utils/platformUtils';
+import { usePlaygroundChatStore } from '../../stores/playgroundChatStore';
+import { SessionHistoryPopover } from '../../features/playground/SessionHistoryPopover';
 
 interface HeaderProps {
   currentView: NavigationView;
@@ -32,45 +34,87 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   const appMode = useItemStore((s) => s.appMode);
   const setAppMode = useItemStore((s) => s.setAppMode);
 
-  const breadcrumbs: Record<NavigationView, string> = {
-    inbox: 'VELCO / WORKSTATION / INBOX',
-    playground: 'VELCO / PLAYGROUND',
-    workbench: 'VELCO / WORKBENCH',
-    bridge: 'VELCO / CONTEXT HUB',
-    tasks: 'VELCO / WORKSTATION / TASKS',
-    notes: 'VELCO / WORKSTATION / NOTES',
-    files: 'VELCO / WORKSTATION / FILES',
-    links: 'VELCO / WORKSTATION / LINKS',
-    tags: 'VELCO / TAXONOMY / TAGS',
-    archive: 'VELCO / ARCHIVE',
-    trash: 'VELCO / SYSTEM / TRASH',
-    settings: 'VELCO / SYSTEM / SETTINGS',
+  const PAGE_TITLES: Record<NavigationView, string> = {
+    inbox: 'Inbox',
+    playground: 'Playground',
+    workbench: 'Workbench',
+    bridge: 'Context Hub',
+    tasks: 'Tasks',
+    notes: 'Notes',
+    files: 'Files',
+    links: 'Links',
+    tags: 'Tags',
+    archive: 'Archive',
+    trash: 'Trash',
+    settings: 'Settings',
   };
 
 
+
+const PlaygroundHeaderControls: React.FC = React.memo(() => {
+  const {
+    sessions,
+    activeSessionId,
+    isGenerating,
+    newSession,
+    switchSession,
+    renameSession,
+    deleteSession,
+    messages,
+  } = usePlaygroundChatStore();
+
+  return (
+    <div className="flex items-center gap-1 ml-0.5 not-italic font-sans">
+      <SessionHistoryPopover
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        isGenerating={isGenerating}
+        onNewSession={newSession}
+        onSwitchSession={switchSession}
+        onRenameSession={renameSession}
+        onDeleteSession={deleteSession}
+      />
+      <button
+        type="button"
+        onClick={newSession}
+        disabled={isGenerating || (!activeSessionId && messages.length === 0)}
+        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+        title="New Chat Session"
+      >
+        <Plus className="w-3.5 h-3.5 stroke-[2]" />
+        <span className="hidden sm:inline text-[11px]">New Chat</span>
+      </button>
+    </div>
+  );
+});
+PlaygroundHeaderControls.displayName = 'PlaygroundHeaderControls';
 
   return (
     <header
       data-tauri-drag-region
       className="h-11 border-b border-slate-200 dark:border-white/[0.07] bg-white dark:bg-[#09090b] px-4 flex items-center justify-between shrink-0 select-none z-10 text-slate-800 dark:text-zinc-100"
     >
-      {/* Left: Sidebar Toggle + Uppercase Mono Breadcrumb */}
-      <div className="flex items-center gap-3 min-w-0" data-tauri-drag-region>
+      {/* Left: Sidebar Toggle + Uppercase Mono Breadcrumb + Playground Controls */}
+      <div className="flex items-center gap-2 min-w-0" data-tauri-drag-region>
         {!isSidebarOpen && onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer"
+            className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-white/[0.05] transition-colors cursor-pointer shrink-0"
             title={`Open sidebar (${modKey}+B)`}
           >
             <PanelLeft className="w-3.5 h-3.5 stroke-[1.5]" />
           </button>
         )}
 
-        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400 dark:text-zinc-500 tracking-wider truncate" data-tauri-drag-region>
-          <span className="text-slate-800 dark:text-zinc-300 font-semibold">
-            {appMode === 'context-hub' ? 'VELCO / CONTEXT HUB' : (breadcrumbs[currentView] || 'VELCO')}
+        <div className="flex items-center gap-2 shrink-0" data-tauri-drag-region>
+          <span className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
+            {appMode === 'context-hub' ? 'Context Hub' : (PAGE_TITLES[currentView] || 'Velco')}
           </span>
         </div>
+
+        {currentView === 'playground' && appMode !== 'context-hub' && (
+          <PlaygroundHeaderControls />
+        )}
       </div>
 
       {/* Center: Command Palette Trigger Pill */}
