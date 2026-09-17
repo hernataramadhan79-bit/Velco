@@ -623,7 +623,7 @@ export const AppLayout: React.FC = () => {
       <DragDropIndicator isDragging={isGlobalDragging} />
 
       {/* Global Multi-Select Action Bar */}
-      <ErrorBoundary onReset={() => useSelectionStore.getState().clearSelection()}>
+      <ErrorBoundary fallback={null} onReset={() => useSelectionStore.getState().clearSelection()}>
         <SelectionActionBar
           onOpenFoundry={() => setIsFoundryOpen(true)}
           onFocusChat={() => {

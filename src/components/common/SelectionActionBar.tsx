@@ -20,6 +20,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
   onOpenFoundry,
   onFocusChat,
 }) => {
+  const [isBatchTrashing, setIsBatchTrashing] = useState(false);
   const items = useItemStore((s) => s.items);
   const archiveItems = useItemStore((s) => s.archiveItems);
   const trashItems = useItemStore((s) => s.trashItems);
@@ -58,8 +59,6 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
       onOpenFoundry();
     }
   };
-
-  const [isBatchTrashing, setIsBatchTrashing] = useState(false);
 
   const handleBatchTrash = async () => {
     if (selectedItems.length === 0 || isBatchTrashing) return;
