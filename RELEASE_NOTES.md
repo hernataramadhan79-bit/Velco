@@ -1,3 +1,44 @@
+# Velco v0.3.1 — Playground UI/UX Overhaul & Minimalist Navigation
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/logo.png" width="120" height="120" alt="Velco Logo" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/hernataramadhan79-bit/Velco/releases/tag/v0.3.1">
+    <img src="https://img.shields.io/badge/Release-v0.3.1-blue?style=for-the-badge&logo=github" alt="Version 0.3.1">
+  </a>
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-emerald?style=for-the-badge" alt="Production Ready">
+  <img src="https://img.shields.io/badge/Release%20Date-September%2017%2C%202026-black?style=for-the-badge" alt="Date">
+</p>
+
+---
+
+## 🌟 Executive Release Summary
+
+Velco **v0.3.1** introduces a major UI/UX overhaul of the **Playground** environment and a streamlined desktop header navigation architecture:
+1. **Symmetrical & Centered Empty State**: Eliminates the massive vertical void on new chats by uniting greeting, AI indicators, input dock, and prompt cards into a focused center stage.
+2. **Minimalist & Adaptive Input Dock**: Redesigned chat input card with compact initial height (24px single-line), auto-expanding dynamically up to 220px for multi-line prompts, and pixel-aligned action buttons (`h-7` / 28px).
+3. **Double Header Elimination**: Merged chat session history dropdown and quick New Chat controls directly into the top main header, saving vertical screen real estate.
+4. **Streamlined Page Titles**: Replaced verbose file-explorer path breadcrumbs (`VELCO / WORKSTATION / ...`) with clean, elegant page titles (`Inbox`, `Playground`, `Tasks`, `Notes`, `Files`, `Settings`).
+
+---
+
+## 💾 Native Platform Installers & Binaries (v0.3.1)
+
+| Operating System | Target Architecture | Distribution Type | File Size | Direct Download |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS Apple Silicon** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_aarch64.dmg) |
+| **macOS Intel** | 64-bit Intel Core (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64.dmg) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64-setup.exe) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64_en-US.msi) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/velco.exe) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_amd64.AppImage) |
+| **Linux (Debian / Ubuntu)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_amd64.deb) |
+| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco-0.3.1-1.x86_64.rpm) |
+
+---
+
 # Velco v0.2.0 — Production Multi-Platform Release
 
 <p align="center">
