@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Bot,
   User,
@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Layers,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { ChatMessage } from '../../types/ai';
 import { MarkdownViewer } from '../../components/common/MarkdownViewer';
@@ -39,6 +40,7 @@ export const PlaygroundMessageItem: React.FC<PlaygroundMessageItemProps> = ({
   onDelete,
 }) => {
   const isUser = msg.role === 'user';
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   return (
     <div
@@ -176,14 +178,40 @@ export const PlaygroundMessageItem: React.FC<PlaygroundMessageItemProps> = ({
               <span>{isSavedBatch ? 'Extracted' : 'Extract Tasks'}</span>
             </button>
 
-            {/* Delete Single Message */}
-            <button
-              onClick={() => onDelete(msg.id)}
-              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:text-zinc-500 dark:hover:text-rose-400 dark:hover:bg-rose-500/10 transition-colors cursor-pointer ml-1"
-              title="Delete this message"
-            >
-              <Trash2 className="w-3 h-3 stroke-[1.5]" />
-            </button>
+            {/* Delete Single Message with Confirmation */}
+            {isConfirmingDelete ? (
+              <div className="flex items-center gap-1 ml-1 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-md px-1.5 py-0.5 animate-in fade-in duration-100">
+                <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-semibold">Delete?</span>
+                <button
+                  onClick={() => {
+                    setIsConfirmingDelete(false);
+                    onDelete(msg.id);
+                  }}
+                  className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer transition-colors shadow-2xs"
+                  title="Confirm delete"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setIsConfirmingDelete(false)}
+                  className="p-0.5 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
+                  title="Cancel"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsConfirmingDelete(true);
+                  setTimeout(() => setIsConfirmingDelete(false), 3500);
+                }}
+                className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:text-zinc-500 dark:hover:text-rose-400 dark:hover:bg-rose-500/10 transition-colors cursor-pointer ml-1"
+                title="Delete this message"
+              >
+                <Trash2 className="w-3 h-3 stroke-[1.5]" />
+              </button>
+            )}
           </div>
         )}
       </div>

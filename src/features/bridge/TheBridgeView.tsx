@@ -26,6 +26,7 @@ import { NewCapsuleModal } from './components/NewCapsuleModal';
 import { EditCapsuleModal } from './components/EditCapsuleModal';
 import { NewDocModal } from './components/NewDocModal';
 import { AttachItemModal } from './components/AttachItemModal';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 
 interface TheBridgeViewProps {
   onNotify?: (msg: string, type?: 'info' | 'success' | 'error' | 'reminder') => void;
@@ -75,6 +76,7 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
   const [isNewDocOpen, setIsNewDocOpen] = useState(false);
   const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
   const [attachSearchQuery, setAttachSearchQuery] = useState('');
+  const [deleteConfirmCapsule, setDeleteConfirmCapsule] = useState<{ id: string; name: string } | null>(null);
 
   // Active Capsule Menu state
   const [isOptionsMenuOpen, setIsOptionsMenuOpen] = useState(false);
@@ -243,14 +245,19 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
     }
   };
 
-  const handleDeleteCapsule = async (id: string, name: string) => {
-    if (window.confirm(`Delete capsule "${name}"? Items inside will remain safe in your workspace.`)) {
-      try {
-        await deleteCapsule(id);
-        onNotify?.(`Capsule "${name}" deleted`, 'info');
-      } catch (err: any) {
-        onNotify?.(`Failed to delete capsule: ${err.message || err}`, 'error');
-      }
+  const handleDeleteCapsule = (id: string, name: string) => {
+    setDeleteConfirmCapsule({ id, name });
+  };
+
+  const confirmDeleteCapsuleAction = async () => {
+    if (!deleteConfirmCapsule) return;
+    const { id, name } = deleteConfirmCapsule;
+    setDeleteConfirmCapsule(null);
+    try {
+      await deleteCapsule(id);
+      onNotify?.(`Capsule "${name}" deleted`, 'info');
+    } catch (err: any) {
+      onNotify?.(`Failed to delete capsule: ${err.message || err}`, 'error');
     }
   };
 
@@ -856,6 +863,16 @@ export const TheBridgeView: React.FC<TheBridgeViewProps> = ({ onNotify }) => {
         onSearchChange={setAttachSearchQuery}
         onAttachItem={(item) => void handleAttachItem(item)}
         onClose={() => setIsAttachModalOpen(false)}
+      />
+
+      <ConfirmModal
+        isOpen={deleteConfirmCapsule !== null}
+        onClose={() => setDeleteConfirmCapsule(null)}
+        onConfirm={confirmDeleteCapsuleAction}
+        title="Delete Capsule?"
+        message={`Are you sure you want to delete capsule "${deleteConfirmCapsule?.name || ''}"? Items inside will remain safe in your workspace.`}
+        confirmText="Delete Capsule"
+        variant="danger"
       />
     </div>
   );

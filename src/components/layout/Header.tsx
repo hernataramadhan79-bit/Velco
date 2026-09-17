@@ -84,7 +84,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               <Search className="w-3 h-3 stroke-[1.5]" />
               <span className="text-[11px] text-slate-600 dark:text-zinc-400">Search workstation...</span>
             </span>
-            <kbd className="px-1.5 py-0.2 rounded bg-slate-200/80 dark:bg-white/[0.04] border border-slate-300/80 dark:border-white/[0.07] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-white/[0.04] border border-slate-300/80 dark:border-white/[0.07] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
               {formatShortcut('K')}
             </kbd>
           </button>

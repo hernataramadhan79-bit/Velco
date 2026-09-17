@@ -220,7 +220,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           >
             <span>Due Today</span>
             {dueTodayCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
                 {dueTodayCount}
               </span>
             )}
@@ -236,7 +236,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
           >
             <span>Overdue</span>
             {overdueCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold">
                 {overdueCount}
               </span>
             )}

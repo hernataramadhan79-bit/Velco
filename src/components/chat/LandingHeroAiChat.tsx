@@ -116,21 +116,24 @@ export const LandingHeroAiChat: React.FC<LandingHeroAiChatProps> = ({
   const chatTokens = totalChatTokens();
 
   // Load all workspace items directly from SQLite
-  const loadWorkspaceItems = useCallback(async () => {
+  const lastLoadedRef = useRef<number>(0);
+
+  const loadWorkspaceItems = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastLoadedRef.current < 20000 && workspaceItems.length > 0) {
+      return;
+    }
     setIsLoadingItems(true);
     try {
       const items = await db.getItems({ includeTrash: false, includeArchived: false });
       setWorkspaceItems(items);
+      lastLoadedRef.current = Date.now();
     } catch (err) {
       console.error('Failed to load workspace items for context:', err);
     } finally {
       setIsLoadingItems(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void loadWorkspaceItems();
-  }, [loadWorkspaceItems]);
+  }, [workspaceItems.length]);
 
   useEffect(() => {
     if (isContextPickerOpen) {

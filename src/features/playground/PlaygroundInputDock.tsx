@@ -57,23 +57,25 @@ export const PlaygroundInputDock: React.FC<PlaygroundInputDockProps> = ({
 
   const chatTokens = totalChatTokens();
 
+  const lastLoadedRef = useRef<number>(0);
+
   // Load all workspace items directly from SQLite (bypassing view/tag restrictions)
-  const loadWorkspaceItems = useCallback(async () => {
+  const loadWorkspaceItems = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastLoadedRef.current < 20000 && workspaceItems.length > 0) {
+      return;
+    }
     setIsLoadingItems(true);
     try {
       const items = await db.getItems({ includeTrash: false, includeArchived: false });
       setWorkspaceItems(items);
+      lastLoadedRef.current = Date.now();
     } catch (err) {
       console.error('Failed to load workspace items for context picker:', err);
     } finally {
       setIsLoadingItems(false);
     }
-  }, []);
-
-  // Initial load and reload when picker opens
-  useEffect(() => {
-    void loadWorkspaceItems();
-  }, [loadWorkspaceItems]);
+  }, [workspaceItems.length]);
 
   useEffect(() => {
     if (isPickerOpen) {

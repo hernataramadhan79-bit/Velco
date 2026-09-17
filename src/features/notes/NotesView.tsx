@@ -29,19 +29,28 @@ export const NotesView: React.FC<NotesViewProps> = ({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() && !content.trim()) return;
+    if (isSaving) return;
 
-    await onCapture({
-      type: 'note',
-      title: title.trim() || 'Untitled Note',
-      content: content.trim(),
-    });
-
-    setTitle('');
-    setContent('');
-    setIsCreating(false);
+    setIsSaving(true);
+    try {
+      await onCapture({
+        type: 'note',
+        title: title.trim() || 'Untitled Note',
+        content: content.trim(),
+      });
+      setTitle('');
+      setContent('');
+      setIsCreating(false);
+    } catch (err) {
+      console.error('Failed to create note:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -85,9 +94,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
             </button>
             <button
               type="submit"
-              className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold cursor-pointer shadow-2xs"
+              disabled={isSaving}
+              className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold cursor-pointer shadow-2xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Note
+              {isSaving ? 'Saving...' : 'Save Note'}
             </button>
           </div>
         </form>

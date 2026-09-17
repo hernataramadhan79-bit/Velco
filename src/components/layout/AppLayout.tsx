@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from 'react';
-import { Upload, Bell, X } from 'lucide-react';
+import { Upload, Bell, X, AlertCircle } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -65,14 +65,14 @@ interface DragDropIndicatorProps {
 const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => {
   if (!isDragging) return null;
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white dark:bg-[#141418] text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-white/[0.12] transform-gpu">
+    <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white dark:bg-[#141418] text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-white/[0.12] transform-gpu toast-enter">
       <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
         <Upload className="w-4 h-4" />
       </div>
       <div className="flex flex-col text-left">
         <div className="text-xs font-semibold text-slate-800 dark:text-zinc-100 flex items-center gap-1.5">
           Drop files to import
-          <span className="text-[10px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-300 px-1.5 py-0.2 rounded border border-slate-200 dark:border-white/[0.08]">Velco</span>
+          <span className="text-[10px] font-mono bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/[0.08]">Velco</span>
         </div>
         <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
           Release anywhere to attach
@@ -86,20 +86,48 @@ const DragDropIndicator: React.FC<DragDropIndicatorProps> = ({ isDragging }) => 
 const NotificationToast: React.FC = React.memo(() => {
   const notification = useItemStore((s) => s.notification);
   const dismissNotification = useItemStore((s) => s.dismissNotification);
+  const [isExiting, setIsExiting] = useState(false);
+
+  const handleDismiss = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      dismissNotification();
+      setIsExiting(false);
+    }, 150);
+  };
 
   if (!notification) return null;
 
   const isReminder = notification.type === 'reminder';
+  const isError = notification.type === 'error';
 
   return (
     <div
       className={`fixed bottom-6 right-6 z-50 px-3.5 py-2.5 rounded-lg shadow-2xl flex items-center gap-3 transform-gpu border select-none max-w-sm ${
-        isReminder
-          ? 'bg-white dark:bg-[#141418] text-slate-900 dark:text-white border-blue-500/50 shadow-blue-500/10 ring-1 ring-blue-500/20'
+        isExiting ? 'notification-exit' : 'toast-enter'
+      } ${
+        isError
+          ? 'bg-white dark:bg-[#141418] text-slate-900 dark:text-zinc-100 border-rose-500/50 shadow-rose-500/10 ring-1 ring-rose-500/20'
+          : isReminder
+          ? 'bg-white dark:bg-[#141418] text-slate-900 dark:text-zinc-100 border-blue-500/50 shadow-blue-500/10 ring-1 ring-blue-500/20'
           : 'bg-white dark:bg-[#141418] text-slate-900 dark:text-zinc-100 border-slate-200 dark:border-white/[0.1]'
       }`}
     >
-      {isReminder ? (
+      {isError ? (
+        <>
+          <div className="w-7 h-7 rounded-md bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
+            <AlertCircle className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0 pr-1 flex-1">
+            <div className="text-[10px] uppercase tracking-wider font-semibold text-rose-400 font-mono">
+              Error
+            </div>
+            <div className="text-xs font-medium text-slate-800 dark:text-zinc-200 truncate">
+              {notification.message}
+            </div>
+          </div>
+        </>
+      ) : isReminder ? (
         <>
           <div className="w-7 h-7 rounded-md bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
             <Bell className="w-3.5 h-3.5" />
@@ -108,19 +136,19 @@ const NotificationToast: React.FC = React.memo(() => {
             <div className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 font-mono">
               Task Reminder
             </div>
-            <div className="text-xs font-medium text-zinc-200 truncate">
+            <div className="text-xs font-medium text-slate-800 dark:text-zinc-200 truncate">
               {notification.message}
             </div>
           </div>
         </>
       ) : (
-        <span className="text-xs font-medium text-zinc-200 flex-1">{notification.message}</span>
+        <span className="text-xs font-medium text-slate-800 dark:text-zinc-200 flex-1">{notification.message}</span>
       )}
 
       {/* Dismiss button */}
       <button
-        onClick={dismissNotification}
-        className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
+        onClick={handleDismiss}
+        className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
         aria-label="Dismiss notification"
       >
         <X className="w-3.5 h-3.5" />
@@ -364,8 +392,8 @@ export const AppLayout: React.FC = () => {
       {/* Pane 1: Collapsible Sidebar */}
       {appMode === 'personal' && (
         <div
-          className={`transition-all duration-200 ease-in-out flex shrink-0 overflow-hidden ${
-            isSidebarOpen ? 'w-64' : 'w-0'
+          className={`transition-[width,opacity] duration-200 ease-in-out flex shrink-0 overflow-hidden ${
+            isSidebarOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 pointer-events-none'
           }`}
         >
           <Sidebar

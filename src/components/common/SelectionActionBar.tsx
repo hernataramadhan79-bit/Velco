@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Layers,
   Zap,
   Trash2,
+  Loader2,
   X,
 } from 'lucide-react';
 import { useSelectionStore } from '../../stores/selectionStore';
@@ -58,14 +59,24 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
     }
   };
 
+  const [isBatchTrashing, setIsBatchTrashing] = useState(false);
+
   const handleBatchTrash = async () => {
-    if (selectedItems.length === 0) return;
+    if (selectedItems.length === 0 || isBatchTrashing) return;
+    setIsBatchTrashing(true);
     const count = selectedItems.length;
-    for (const item of selectedItems) {
-      await trashItem(item.id);
+    try {
+      for (const item of selectedItems) {
+        await trashItem(item.id);
+      }
+      notify(`Moved ${count} item${count > 1 ? 's' : ''} to Trash`, 'info');
+      clearSelection();
+    } catch (err) {
+      console.error('Batch trash failed:', err);
+      notify('Failed to move some items to Trash', 'error');
+    } finally {
+      setIsBatchTrashing(false);
     }
-    notify(`Moved ${count} item${count > 1 ? 's' : ''} to Trash`, 'info');
-    clearSelection();
   };
 
   return (
@@ -104,10 +115,13 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
         {/* Action 3: Move to Trash */}
         <button
           onClick={handleBatchTrash}
-          className="p-1.5 rounded-md text-slate-400 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+          disabled={isBatchTrashing}
+          className="p-1.5 rounded-md text-slate-400 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50"
           title="Move selected items to Trash"
         >
-          <Trash2 className="w-3.5 h-3.5 stroke-[1.5]" />
+          {isBatchTrashing
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Trash2 className="w-3.5 h-3.5 stroke-[1.5]" />}
         </button>
 
         {/* Action 4: Clear Selection */}

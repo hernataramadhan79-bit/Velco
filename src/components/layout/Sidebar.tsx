@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   Inbox,
   CheckSquare,
@@ -77,6 +78,13 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
 
   const selectedTag = tags.find((t) => t.id === selectedTagId);
 
+  const [appVersion, setAppVersion] = useState('...');
+  useEffect(() => {
+    invoke<string>('get_app_version')
+      .then((v) => { if (v) setAppVersion(v); })
+      .catch(() => setAppVersion('0.2.x'));
+  }, []);
+
   const renderNavGroup = (title: string, items: NavEntry[]) => (
     <div className="space-y-1">
       <div className="text-[10px] font-mono tracking-wider text-slate-400 dark:text-zinc-500 uppercase px-3 py-1 font-semibold select-none">
@@ -111,20 +119,20 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
               <div className="flex items-center gap-1.5 shrink-0">
                 {item.id === 'tasks' && overdueCount > 0 && (
                   <span
-                    className="px-1.5 py-0.2 rounded font-mono bg-rose-500/15 border border-rose-500/30 text-rose-500 dark:text-rose-400 text-[10px] font-bold"
+                    className="px-1.5 py-0.5 rounded font-mono bg-rose-500/15 border border-rose-500/30 text-rose-500 dark:text-rose-400 text-[10px] font-bold"
                     title={`${overdueCount} task overdue`}
                   >
                     {overdueCount}
                   </span>
                 )}
                 {item.badge && (
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] text-slate-500 dark:text-zinc-400">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] text-slate-500 dark:text-zinc-400">
                     {item.badge}
                   </span>
                 )}
                 {item.count !== undefined && item.count > 0 && (
                   <span
-                    className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                       isActive
                         ? 'bg-slate-200/80 dark:bg-white/[0.08] text-slate-800 dark:text-zinc-200 border border-slate-300 dark:border-white/[0.06]'
                         : 'bg-slate-100 dark:bg-white/[0.03] text-slate-500 dark:text-zinc-500 border border-slate-200/60 dark:border-white/[0.03]'
@@ -159,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
                 VELCO
               </span>
               <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-500 bg-slate-100 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/[0.05]">
-                v0.2.x
+                v{appVersion}
               </span>
             </div>
           </div>
@@ -256,6 +264,14 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
                 );
               })}
             </div>
+            {tags.length > 8 && (
+              <button
+                onClick={() => onSelectView('tags')}
+                className="w-full text-center text-[10px] font-mono text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300 py-0.5 transition-colors cursor-pointer"
+              >
+                +{tags.length - 8} more tags
+              </button>
+            )}
           </div>
         )}
       </div>

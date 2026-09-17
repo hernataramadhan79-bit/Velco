@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   Download,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Item } from '../../../types/item';
 import { formatDisplayDate } from '../../../utils/dateUtils';
+import { ConfirmModal } from '../../common/ConfirmModal';
 
 interface ItemDetailHeaderProps {
   item: Item;
@@ -42,6 +43,8 @@ export const ItemDetailHeader: React.FC<ItemDetailHeaderProps> = ({
   onToggleFavorite,
   onToggleArchive,
 }) => {
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+
   return (
     <div className="flex items-center justify-between pb-3.5 border-b border-slate-200 dark:border-white/[0.08]">
       <div className="flex items-center gap-2.5 min-w-0">
@@ -52,7 +55,7 @@ export const ItemDetailHeader: React.FC<ItemDetailHeaderProps> = ({
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>
-          <kbd className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400 font-mono">
+          <kbd className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-white/[0.08] text-slate-500 dark:text-zinc-400 font-mono">
             Esc
           </kbd>
         </button>
@@ -102,18 +105,27 @@ export const ItemDetailHeader: React.FC<ItemDetailHeaderProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm('Delete this item permanently? This action cannot be undone.')) {
-                  if (onPermanentDelete) onPermanentDelete(item.id);
-                  onClose();
-                }
-              }}
+              onClick={() => setIsConfirmDeleteOpen(true)}
               className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Delete Permanently"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete</span>
             </button>
+
+            <ConfirmModal
+              isOpen={isConfirmDeleteOpen}
+              onClose={() => setIsConfirmDeleteOpen(false)}
+              onConfirm={() => {
+                setIsConfirmDeleteOpen(false);
+                if (onPermanentDelete) onPermanentDelete(item.id);
+                onClose();
+              }}
+              title="Delete Permanently?"
+              message="This item and its attachments will be permanently purged from your SQLite database. This action cannot be undone."
+              confirmText="Delete Forever"
+              variant="danger"
+            />
           </>
         ) : (
           <>

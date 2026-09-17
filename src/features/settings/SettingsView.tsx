@@ -25,7 +25,7 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const { settings } = useSettings();
   const [activeSection, setActiveSection] = useState<SettingsSection>('ai');
-  const [appVersion, setAppVersion] = useState<string>('0.2.6');
+  const [appVersion, setAppVersion] = useState<string>('0.2.8');
 
   useEffect(() => {
     let isMounted = true;

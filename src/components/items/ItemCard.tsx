@@ -52,9 +52,9 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
   const toggleSelectItem = useSelectionStore((state) => state.toggleSelectItem);
   const hasAnySelection = useSelectionStore((state) => state.selectedIds.size > 0);
 
-  // Dual-channel context status — boolean selectors
-  const isChatContext = useContextStore((state) => state.chatContextItems.some((i) => i.id === item.id));
-  const isFoundryStaged = useContextStore((state) => state.foundryStagedItems.some((i) => i.id === item.id));
+  // Dual-channel context status — O(1) Set selectors to eliminate array scan cascades
+  const isChatContext = useContextStore((state) => state.chatContextItemIds.has(item.id));
+  const isFoundryStaged = useContextStore((state) => state.foundryStagedItemIds.has(item.id));
   const toggleChatContextItem = useContextStore((state) => state.toggleChatContextItem);
   const toggleFoundryItem = useContextStore((state) => state.toggleFoundryItem);
 
@@ -203,7 +203,7 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
               </h3>
 
               {item.type === 'task' && item.task?.priority && item.task.priority !== 'medium' && (
-                <span className="text-[10px] font-mono uppercase px-1 py-0.2 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-400">
+                <span className="text-[10px] font-mono uppercase px-1 py-0.5 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.07] text-slate-600 dark:text-zinc-400">
                   {item.task.priority === 'urgent' ? 'P1' : item.task.priority === 'high' ? 'P2' : 'P3'}
                 </span>
               )}
@@ -282,24 +282,24 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
           </div>
         </div>
 
-        {/* Right Column: Badges & Actions (Hover revealed) */}
+        {/* Right Column: Badges & Actions (Hover / Focus revealed) */}
         <div className="flex flex-col items-end justify-between self-stretch shrink-0 gap-2">
           <div className="flex items-center gap-1.5">
             {isChatContext && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300">
                 Chat
               </span>
             )}
             {isFoundryStaged && (
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300">
                 Workbench
               </span>
             )}
             <div className="text-[11px] text-slate-400 dark:text-zinc-500 font-mono">{formattedDate}</div>
           </div>
 
-          {/* Quick Actions Bar (Revealed on hover) */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          {/* Quick Actions Bar (Revealed on hover or focus-within) */}
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
             {!isTrashView ? (
               <>
                 <button

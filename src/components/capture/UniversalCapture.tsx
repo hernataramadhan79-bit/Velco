@@ -26,6 +26,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
   >([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +200,8 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
       }
     } catch (err) {
       console.error('Failed to capture item:', err);
+      setSaveError('Failed to save. Please try again.');
+      setTimeout(() => setSaveError(null), 4000);
     } finally {
       setIsSaving(false);
     }
@@ -230,7 +233,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
             Quick Capture
           </label>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-zinc-400 uppercase border border-slate-200 dark:border-white/[0.06]">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-zinc-400 uppercase border border-slate-200 dark:border-white/[0.06]">
               AUTO: {(detectedType === 'text' || !detectedType ? 'note' : detectedType).toUpperCase()}
             </span>
           </div>
@@ -242,6 +245,7 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           value={text}
           onChange={(e) => {
             setText(e.target.value);
+            setSaveError(null);
             e.target.style.height = 'auto';
             e.target.style.height = `${Math.min(e.target.scrollHeight, 240)}px`;
           }}
@@ -392,6 +396,14 @@ export const UniversalCapture: React.FC<UniversalCaptureProps> = ({ onCapture })
           </button>
         </div>
       </div>
+
+      {/* Inline Error Message */}
+      {saveError && (
+        <div className="px-3.5 py-2 bg-rose-50 dark:bg-rose-500/10 border-t border-rose-200 dark:border-rose-500/20 rounded-b-xl text-[11px] text-rose-600 dark:text-rose-400 font-mono flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+          {saveError}
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useLayoutEffect, useCallback } from '
 import { Item, ItemSummary } from '../../types/item';
 import { ItemCard } from './ItemCard';
 import { Inbox, ChevronDown, ChevronRight } from 'lucide-react';
+import { EmptyState } from '../common/EmptyState';
 import { useSelectionStore } from '../../stores/selectionStore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatShortcut } from '../../utils/platformUtils';
@@ -16,6 +17,13 @@ interface ItemListProps {
   onPermanentDelete?: (itemId: string) => void;
   isTrashView?: boolean;
   emptyMessage?: string;
+  emptyDescription?: React.ReactNode;
+  emptyIcon?: React.ComponentType<{ className?: string }>;
+  emptyAction?: {
+    label: string;
+    onClick: () => void;
+    icon?: React.ComponentType<{ className?: string }>;
+  };
   groupByDate?: boolean;
 }
 
@@ -44,6 +52,9 @@ export const ItemList: React.FC<ItemListProps> = ({
   onPermanentDelete,
   isTrashView = false,
   emptyMessage = 'No items found in this view',
+  emptyDescription,
+  emptyIcon,
+  emptyAction,
   groupByDate = false,
 }) => {
   const selectedIds = useSelectionStore((state) => state.selectedIds);
@@ -71,13 +82,19 @@ export const ItemList: React.FC<ItemListProps> = ({
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useLayoutEffect(() => {
-    if (parentRef.current) {
-      const offset = parentRef.current.offsetTop;
-      if (offset !== scrollMargin) {
-        setScrollMargin(offset);
-      }
-    }
-  });
+    if (!parentRef.current) return;
+    const el = parentRef.current;
+    const update = () => {
+      const offset = el.offsetTop;
+      setScrollMargin((prev) => (prev !== offset ? offset : prev));
+    };
+    update();
+    // Re-measure if the container repositions (e.g. sidebar open/close)
+    const observer = new ResizeObserver(update);
+    const parent = el.closest('main') ?? el.parentElement;
+    if (parent) observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
 
   const getScrollElement = useCallback(() => {
     if (!parentRef.current) return null;
@@ -165,23 +182,26 @@ export const ItemList: React.FC<ItemListProps> = ({
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-4 text-center view-enter select-none">
-        <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] flex items-center justify-center text-slate-500 dark:text-zinc-400 mb-4 shadow-xs">
-          <Inbox className="w-5 h-5 stroke-[1.5]" />
-        </div>
-
-        <h3 className="text-xs font-semibold text-slate-800 dark:text-zinc-200 mb-1 tracking-tight">
-          {emptyMessage}
-        </h3>
-
-        <p className="text-xs text-slate-500 dark:text-zinc-500 max-w-xs leading-relaxed font-mono">
-          Capture notes, tasks, or drop attachments.
-          <br />
-          <span className="text-slate-600 dark:text-zinc-400">
-            Press <kbd className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-[10px] text-slate-700 dark:text-zinc-300">{formatShortcut('K')}</kbd> to search.
-          </span>
-        </p>
-      </div>
+      <EmptyState
+        icon={emptyIcon || Inbox}
+        title={emptyMessage}
+        description={
+          emptyDescription || (
+            <>
+              Capture notes, tasks, or drop attachments.
+              <br />
+              <span className="text-slate-600 dark:text-zinc-400">
+                Press{' '}
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-[10px] text-slate-700 dark:text-zinc-300 font-mono">
+                  {formatShortcut('K')}
+                </kbd>{' '}
+                to search.
+              </span>
+            </>
+          )
+        }
+        action={emptyAction}
+      />
     );
   }
 
@@ -263,7 +283,7 @@ export const ItemList: React.FC<ItemListProps> = ({
                       <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 group-hover:text-slate-800 dark:text-zinc-500 dark:group-hover:text-zinc-300 font-semibold">
                         {row.title}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-zinc-500 border border-slate-200/60 dark:border-white/[0.04]">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-zinc-500 border border-slate-200/60 dark:border-white/[0.04]">
                         {row.count}
                       </span>
                     </div>

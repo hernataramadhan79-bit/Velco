@@ -33,6 +33,8 @@ export function itemToStagedItem(item: {
 interface ContextState {
   // ── Channel 1: Landing Hero AI Chat Context ────────────────
   chatContextItems: StagedItem[];
+  /** O(1) Set for fast membership checks in ItemCard */
+  chatContextItemIds: Set<string>;
   addChatContextItem: (item: StagedItem) => void;
   addChatContextItems: (items: StagedItem[]) => void;
   removeChatContextItem: (id: string) => void;
@@ -43,6 +45,8 @@ interface ContextState {
 
   // ── Channel 2: The Foundry Studio Context ──────────────────
   foundryStagedItems: StagedItem[];
+  /** O(1) Set for fast membership checks in ItemCard */
+  foundryStagedItemIds: Set<string>;
   // Backward-compatibility alias
   stagedItems: StagedItem[];
   addFoundryItem: (item: StagedItem) => void;
@@ -72,30 +76,30 @@ interface ContextState {
 export const useContextStore = create<ContextState>((set, get) => ({
   // ── Channel 1: Chat Context Implementation ─────────────────
   chatContextItems: [],
+  chatContextItemIds: new Set<string>(),
 
   addChatContextItem: (item) =>
-    set((state) => ({
-      chatContextItems: state.chatContextItems.some((i) => i.id === item.id)
-        ? state.chatContextItems
-        : [...state.chatContextItems, item],
-    })),
+    set((state) => {
+      if (state.chatContextItemIds.has(item.id)) return state;
+      const chatContextItems = [...state.chatContextItems, item];
+      return { chatContextItems, chatContextItemIds: new Set(chatContextItems.map((i) => i.id)) };
+    }),
 
   addChatContextItems: (newItems) =>
     set((state) => {
-      const existingIds = new Set(state.chatContextItems.map((i) => i.id));
-      const filtered = newItems.filter((i) => !existingIds.has(i.id));
-      return {
-        chatContextItems: [...state.chatContextItems, ...filtered],
-      };
+      const filtered = newItems.filter((i) => !state.chatContextItemIds.has(i.id));
+      const chatContextItems = [...state.chatContextItems, ...filtered];
+      return { chatContextItems, chatContextItemIds: new Set(chatContextItems.map((i) => i.id)) };
     }),
 
   removeChatContextItem: (id) =>
-    set((state) => ({
-      chatContextItems: state.chatContextItems.filter((i) => i.id !== id),
-    })),
+    set((state) => {
+      const chatContextItems = state.chatContextItems.filter((i) => i.id !== id);
+      return { chatContextItems, chatContextItemIds: new Set(chatContextItems.map((i) => i.id)) };
+    }),
 
   toggleChatContextItem: (item) => {
-    const exists = get().chatContextItems.some((i) => i.id === item.id);
+    const exists = get().chatContextItemIds.has(item.id);
     if (exists) {
       get().removeChatContextItem(item.id);
     } else {
@@ -103,40 +107,40 @@ export const useContextStore = create<ContextState>((set, get) => ({
     }
   },
 
-  clearChatContext: () => set({ chatContextItems: [] }),
+  clearChatContext: () => set({ chatContextItems: [], chatContextItemIds: new Set() }),
 
-  isChatContext: (id) => get().chatContextItems.some((i) => i.id === id),
+  isChatContext: (id) => get().chatContextItemIds.has(id),
 
   totalChatTokens: () =>
     get().chatContextItems.reduce((acc, curr) => acc + curr.estimatedTokens, 0),
 
   // ── Channel 2: The Foundry Context Implementation ──────────
   foundryStagedItems: [],
+  foundryStagedItemIds: new Set<string>(),
   stagedItems: [], // Backward-compatibility alias synced with foundryStagedItems
 
   addFoundryItem: (item) =>
     set((state) => {
-      if (state.foundryStagedItems.some((i) => i.id === item.id)) return state;
+      if (state.foundryStagedItemIds.has(item.id)) return state;
       const updated = [...state.foundryStagedItems, item];
-      return { foundryStagedItems: updated, stagedItems: updated };
+      return { foundryStagedItems: updated, stagedItems: updated, foundryStagedItemIds: new Set(updated.map((i) => i.id)) };
     }),
 
   addFoundryItems: (newItems) =>
     set((state) => {
-      const existingIds = new Set(state.foundryStagedItems.map((i) => i.id));
-      const filtered = newItems.filter((i) => !existingIds.has(i.id));
+      const filtered = newItems.filter((i) => !state.foundryStagedItemIds.has(i.id));
       const updated = [...state.foundryStagedItems, ...filtered];
-      return { foundryStagedItems: updated, stagedItems: updated };
+      return { foundryStagedItems: updated, stagedItems: updated, foundryStagedItemIds: new Set(updated.map((i) => i.id)) };
     }),
 
   removeFoundryItem: (id) =>
     set((state) => {
       const updated = state.foundryStagedItems.filter((i) => i.id !== id);
-      return { foundryStagedItems: updated, stagedItems: updated };
+      return { foundryStagedItems: updated, stagedItems: updated, foundryStagedItemIds: new Set(updated.map((i) => i.id)) };
     }),
 
   toggleFoundryItem: (item) => {
-    const exists = get().foundryStagedItems.some((i) => i.id === item.id);
+    const exists = get().foundryStagedItemIds.has(item.id);
     if (exists) {
       get().removeFoundryItem(item.id);
     } else {
@@ -145,9 +149,9 @@ export const useContextStore = create<ContextState>((set, get) => ({
   },
 
   clearFoundryContext: () =>
-    set({ foundryStagedItems: [], stagedItems: [] }),
+    set({ foundryStagedItems: [], stagedItems: [], foundryStagedItemIds: new Set() }),
 
-  isFoundryStaged: (id) => get().foundryStagedItems.some((i) => i.id === id),
+  isFoundryStaged: (id) => get().foundryStagedItemIds.has(id),
 
   totalFoundryTokens: () =>
     get().foundryStagedItems.reduce((acc, curr) => acc + curr.estimatedTokens, 0),

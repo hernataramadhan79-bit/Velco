@@ -94,31 +94,28 @@ export const AIPrivacyBadge: React.FC = () => {
       checkConnection();
     }, 0);
 
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const handleFocus = () => {
+      if (!document.hidden) {
+        checkConnection();
+      }
+    };
+
     if (isLocal) {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         if (!document.hidden) {
           checkConnection();
         }
       }, 30000);
-
-      const handleFocus = () => {
-        if (!document.hidden) {
-          checkConnection();
-        }
-      };
       window.addEventListener('focus', handleFocus);
       document.addEventListener('visibilitychange', handleFocus);
-
-      return () => {
-        clearTimeout(timer);
-        clearInterval(interval);
-        window.removeEventListener('focus', handleFocus);
-        document.removeEventListener('visibilitychange', handleFocus);
-      };
     }
 
     return () => {
       clearTimeout(timer);
+      if (interval) clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
     };
   }, [checkConnection, settings.aiEnabled, isLocal, settings.aiProvider]);
 

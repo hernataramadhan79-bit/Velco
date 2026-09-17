@@ -19,7 +19,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onSelectItem,
   onSwitchSession,
 }) => {
-    const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 200);
   const [results, setResults] = useState<Item[]>([]);
   const [activeFilter, setActiveFilter] = useState<ItemType | 'all'>('all');
@@ -133,12 +133,12 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     }
   }, [selectedIndex]);
 
-    const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setQuery(val);
   };
 
-    useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       search(debouncedQuery);
     }
@@ -152,14 +152,14 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24 p-4 bg-black/75 transform-gpu select-none"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-24 p-4 bg-black/75 transform-gpu select-none modal-backdrop-enter"
     >
       <div
         className="fixed inset-0"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative w-full max-w-xl bg-white dark:bg-[#141418] rounded-xl shadow-2xl border border-slate-200 dark:border-white/[0.1] overflow-hidden flex flex-col max-h-[70vh] z-10 view-enter">
+      <div className="relative w-full max-w-xl bg-white dark:bg-[#141418] rounded-xl shadow-2xl border border-slate-200 dark:border-white/[0.1] overflow-hidden flex flex-col max-h-[70vh] z-10 modal-content-enter">
         {/* Search input header */}
         <div className="flex items-center gap-3 px-3.5 py-3 border-b border-slate-200 dark:border-white/[0.07] bg-slate-50/80 dark:bg-[#101014]">
           {isLoading ? (

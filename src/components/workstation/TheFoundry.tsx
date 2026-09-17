@@ -627,7 +627,7 @@ export const TheFoundry: React.FC<TheFoundryProps> = ({
           <span className="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-200 tracking-wider uppercase">
             Studio Workbench
           </span>
-          <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-500 bg-slate-100 dark:bg-white/[0.04] px-1.5 py-0.2 rounded border border-slate-200 dark:border-white/[0.05]">
+          <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-500 bg-slate-100 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/[0.05]">
             {settings.aiEnabled ? activeModel : 'AI Disabled'}
           </span>
         </div>

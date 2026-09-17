@@ -60,13 +60,13 @@ export const InboxView: React.FC<InboxViewProps> = ({
       {/* Switcher Bar */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <div className="inline-flex p-0.5 rounded-md bg-[#141418] border border-white/[0.07] text-xs font-mono">
+          <div className="inline-flex p-0.5 rounded-md bg-slate-100 dark:bg-[#141418] border border-slate-200 dark:border-white/[0.07] text-xs font-mono">
             <button
               onClick={() => setActiveTab('capture')}
               className={`flex items-center gap-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
                 activeTab === 'capture'
-                  ? 'bg-white/[0.08] text-zinc-100 font-medium border border-white/[0.08] shadow-xs'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-white dark:bg-white/[0.08] text-slate-900 dark:text-zinc-100 font-medium border border-slate-200 dark:border-white/[0.08] shadow-xs'
+                  : 'text-slate-500 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'
               }`}
             >
               <PenTool className="w-3.5 h-3.5 stroke-[1.5]" />
@@ -76,8 +76,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
               onClick={() => setActiveTab('chat')}
               className={`flex items-center gap-1.5 px-3 py-1 rounded transition-all cursor-pointer ${
                 activeTab === 'chat'
-                  ? 'bg-white/[0.08] text-zinc-100 font-medium border border-white/[0.08] shadow-xs'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                  ? 'bg-white dark:bg-white/[0.08] text-slate-900 dark:text-zinc-100 font-medium border border-slate-200 dark:border-white/[0.08] shadow-xs'
+                  : 'text-slate-500 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'
               }`}
             >
               <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
@@ -85,7 +85,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
             </button>
           </div>
 
-          <span className="text-[11px] font-mono text-zinc-500">
+          <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-500">
             Workstation Stream
           </span>
         </div>
