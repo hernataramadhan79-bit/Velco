@@ -22,7 +22,7 @@ export const ShortcutCheatSheetModal: React.FC<ShortcutCheatSheetModalProps> = (
   isOpen,
   onClose,
 }) => {
-  const [appVersion, setAppVersion] = useState<string>('0.2.6');
+  const [appVersion, setAppVersion] = useState<string>('0.3.2');
 
   useEffect(() => {
     let isMounted = true;

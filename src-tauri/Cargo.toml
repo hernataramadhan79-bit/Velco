@@ -1,6 +1,6 @@
 [package]
 name = "velco"
-version = "0.3.1"
+version = "0.3.2"
 description = "Velco — The Local-First Context-Bound AI Workstation"
 authors = ["Velco Contributors"]
 edition = "2021"

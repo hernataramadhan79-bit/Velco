@@ -1,3 +1,45 @@
+# Velco v0.3.2 — Terminology Harmonization, Fluid Transitions & Performance Polish
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/logo.png" width="120" height="120" alt="Velco Logo" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/hernataramadhan79-bit/Velco/releases/tag/v0.3.2">
+    <img src="https://img.shields.io/badge/Release-v0.3.2-blue?style=for-the-badge&logo=github" alt="Version 0.3.2">
+  </a>
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-emerald?style=for-the-badge" alt="Production Ready">
+  <img src="https://img.shields.io/badge/Release%20Date-September%2020%2C%202026-black?style=for-the-badge" alt="Date">
+</p>
+
+---
+
+## 🌟 Executive Release Summary
+
+Velco **v0.3.2** delivers a complete architectural overhaul of feature terminology, buttery-smooth transition physics, and key scrolling performance fixes:
+1. **Unified Feature Naming & Codebase Cleansing**: Eradicated legacy and mixed nomenclatures (*Foundry*, *Studio Workbench*, *Context Workstation*, *The Bridge*, *Context Hub*, *Chat Canvas*) in favor of three definitive pillars: **Workbench**, **Capsules**, and **Playground**. Updated all files, directories, store states, actions, UI labels, and shortcuts accordingly.
+2. **Smooth Workbench Drawer Transition**: Replaced abrupt conditional unmounting with hardware-accelerated CSS width, opacity, and transform transitions (`transition-[width,opacity,transform]`), matching the fluid opening and closing animation of the main sidebar.
+3. **Workbench Header & Icon Harmonization**: Standardized the trigger and panel iconography to the unified lightning bolt (`Zap`) icon, and removed redundant AI model indicators already present in the primary top bar.
+4. **List Scrolling & Virtualization Performance**: Eliminated cascading re-render bottlenecks during item list scrolling by memoizing item selection callbacks (`handleSelectItem`) and stabilizing inline action handlers in `ItemCard` and `CapsulesView`.
+5. **UI & Keyboard Shortcuts Polish**: Cleaned up the shortcut cheat sheet modal, Onboarding Overlay, and settings views to ensure a clutter-free, consistent user experience.
+
+---
+
+## 💾 Native Platform Installers & Binaries (v0.3.2)
+
+| Operating System | Target Architecture | Distribution Type | File Size | Direct Download |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS Apple Silicon** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_aarch64.dmg) |
+| **macOS Intel** | 64-bit Intel Core (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64.dmg) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64-setup.exe) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64_en-US.msi) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/velco.exe) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.AppImage) |
+| **Linux (Debian / Ubuntu)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.deb) |
+| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco-0.3.2-1.x86_64.rpm) |
+
+---
+
 # Velco v0.3.1 — Playground UI/UX Overhaul & Minimalist Navigation
 
 <p align="center">

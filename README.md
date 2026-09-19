@@ -11,9 +11,9 @@
 
 <p align="center">
   <a href="https://github.com/hernataramadhan79-bit/Velco/releases/latest">
-    <img src="https://img.shields.io/badge/Release-v0.3.1-blue?style=for-the-badge&logo=github" alt="Version 0.3.1">
+    <img src="https://img.shields.io/badge/Release-v0.3.2-blue?style=for-the-badge&logo=github" alt="Version 0.3.2">
   </a>
-  <a href="#-multi-platform-downloads-v031">
+  <a href="#-multi-platform-downloads-v032">
     <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-10b981?style=for-the-badge&logo=apple" alt="Platforms">
   </a>
   <a href="https://v2.tauri.app">
@@ -32,20 +32,20 @@
 
 ---
 
-## 💾 Multi-Platform Downloads (v0.3.1)
+## 💾 Multi-Platform Downloads (v0.3.2)
 
 Official signed packages and portable binaries compiled via automated multi-architecture GitHub Actions:
 
 | Platform | Architecture | Format | Size | Direct Download |
 | :--- | :--- | :--- | :--- | :--- |
-| **macOS (Apple Silicon)** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_aarch64.dmg) |
-| **macOS (Intel Core)** | Intel 64-bit (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64.dmg) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64-setup.exe) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_x64_en-US.msi) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/velco.exe) |
-| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_amd64.AppImage) |
-| **Linux (Ubuntu / Debian)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco_0.3.1_amd64.deb) |
-| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.1/Velco-0.3.1-1.x86_64.rpm) |
+| **macOS (Apple Silicon)** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_aarch64.dmg) |
+| **macOS (Intel Core)** | Intel 64-bit (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64.dmg) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64-setup.exe) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64_en-US.msi) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/velco.exe) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.AppImage) |
+| **Linux (Ubuntu / Debian)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.deb) |
+| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco-0.3.2-1.x86_64.rpm) |
 
 > 📖 **Deep-Dive Audits & Technical Documentation**:
 > - [Comprehensive UI/UX Review & Design System Audit](docs/UI_UX_REVIEW.md)
@@ -115,8 +115,8 @@ Select one or more items to reveal the floating action bar. Attach artifacts dir
 
 ### macOS (Apple Silicon & Intel)
 1. Download the `.dmg` corresponding to your Mac:
-   - **M1 / M2 / M3 / M4**: `Velco_0.3.1_aarch64.dmg`
-   - **Intel Core**: `Velco_0.3.1_x64.dmg`
+   - **M1 / M2 / M3 / M4**: `Velco_0.3.2_aarch64.dmg`
+   - **Intel Core**: `Velco_0.3.2_x64.dmg`
 2. Open the disk image and drag **Velco** to your **Applications** folder.
 3. *First Launch Note*: If macOS displays a Gatekeeper prompt ("cannot be opened because the developer cannot be verified"), right-click the app and choose **Open**, or run the following command in Terminal:
    ```bash
@@ -124,22 +124,22 @@ Select one or more items to reveal the floating action bar. Attach artifacts dir
    ```
 
 ### Windows 10 / 11
-- **Setup Installer**: Run `Velco_0.3.1_x64-setup.exe` or `Velco_0.3.1_x64_en-US.msi`.
+- **Setup Installer**: Run `Velco_0.3.2_x64-setup.exe` or `Velco_0.3.2_x64_en-US.msi`.
 - **Portable Standalone**: Download `velco.exe` and run it directly without any installation or administrator privileges.
 
 ### Linux (Ubuntu, Debian, Fedora, Arch)
 - **Standalone AppImage**:
   ```bash
-  chmod +x Velco_0.3.1_amd64.AppImage
-  ./Velco_0.3.1_amd64.AppImage
+  chmod +x Velco_0.3.2_amd64.AppImage
+  ./Velco_0.3.2_amd64.AppImage
   ```
 - **Debian / Ubuntu Package**:
   ```bash
-  sudo dpkg -i Velco_0.3.1_amd64.deb
+  sudo dpkg -i Velco_0.3.2_amd64.deb
   ```
 - **Fedora / RHEL Package**:
   ```bash
-  sudo rpm -i Velco-0.3.1-1.x86_64.rpm
+  sudo rpm -i Velco-0.3.2-1.x86_64.rpm
   ```
 
 ---
@@ -149,7 +149,7 @@ Select one or more items to reveal the floating action bar. Attach artifacts dir
 | Shortcut | Action | Scope |
 | :--- | :--- | :--- |
 | <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd> | Toggle Global Full-Text Search (FTS5) | Global |
-| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>J</kbd> | Toggle Studio Workbench (The Foundry) | Global |
+| <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>J</kbd> | Toggle Workbench | Global |
 | <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>B</kbd> | Toggle Left Navigation Sidebar | Workstation |
 | <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>,</kbd> | Open Settings & AI Configuration | Global |
 | <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd> | Save Quick Capture Note / Task | Capture Dock |
