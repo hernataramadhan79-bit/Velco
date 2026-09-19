@@ -64,7 +64,7 @@ const DEVELOPER_PROMPT_CHIPS: SmartPromptChip[] = [
   {
     icon: BarChart3,
     label: 'Synthesize recent notes',
-    prompt: 'Please draft an executive synthesis of my recent notes, updates, and research stored in the workstation.',
+    prompt: 'Please draft an executive synthesis of my recent notes, updates, and research stored in the workspace.',
   },
   {
     icon: Lightbulb,
@@ -74,7 +74,7 @@ const DEVELOPER_PROMPT_CHIPS: SmartPromptChip[] = [
   {
     icon: Search,
     label: 'Analyze gaps & blockers',
-    prompt: 'Based on available workstation context, identify potential contradictions, gaps, or dependencies that require resolution.',
+    prompt: 'Based on available workspace context, identify potential contradictions, gaps, or dependencies that require resolution.',
   },
 ];
 
@@ -343,7 +343,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
       <div className="px-3.5 py-2 bg-slate-50 dark:bg-[#101014] border-b border-slate-200 dark:border-white/[0.07] flex items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-slate-800 dark:text-zinc-200 text-xs">
-            Chat Canvas
+            Playground
           </span>
 
           {chatContextItems.length > 0 && (

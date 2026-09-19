@@ -57,7 +57,7 @@ export const TrashView: React.FC<TrashViewProps> = ({
             <EmptyState
               icon={Trash2}
               title="Trash is clean"
-              description="Items deleted from your workstation will appear here before permanent removal."
+              description="Items deleted from your workspace will appear here before permanent removal."
               badgeIcon={Trash2}
             />
           ) : (

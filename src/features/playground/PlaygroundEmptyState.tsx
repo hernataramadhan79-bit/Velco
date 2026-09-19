@@ -37,8 +37,8 @@ const STARTER_PROMPTS: StarterPromptConfig[] = [
     icon: FileText,
     iconClass: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/80 dark:border-emerald-500/20',
     title: 'Synthesize Notes',
-    description: 'Draft an executive overview of recent workstation notes',
-    prompt: 'Please draft an executive synthesis of my recent notes, updates, and research stored in the workstation.',
+    description: 'Draft an executive overview of recent workspace notes',
+    prompt: 'Please draft an executive synthesis of my recent notes, updates, and research stored in the workspace.',
   },
   {
     icon: Lightbulb,
@@ -52,7 +52,7 @@ const STARTER_PROMPTS: StarterPromptConfig[] = [
     iconClass: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-500/10 border-purple-200/80 dark:border-purple-500/20',
     title: 'Analyze Blockers',
     description: 'Detect contradictions, missing context & dependencies',
-    prompt: 'Based on available workstation context, identify potential contradictions, gaps, or dependencies that require resolution.',
+    prompt: 'Based on available workspace context, identify potential contradictions, gaps, or dependencies that require resolution.',
   },
 ];
 
@@ -75,7 +75,7 @@ export const PlaygroundEmptyState: React.FC<PlaygroundEmptyStateProps> = ({
           How can I help you today?
         </h2>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mt-1 max-w-md leading-normal">
-          Ask questions, synthesize notes, or attach workstation items for local context reasoning.
+          Ask questions, synthesize notes, or attach workspace items for local context reasoning.
         </p>
       </div>
 

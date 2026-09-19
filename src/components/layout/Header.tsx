@@ -11,8 +11,8 @@ import { SessionHistoryPopover } from '../../features/playground/SessionHistoryP
 interface HeaderProps {
   currentView: NavigationView;
   onNewCaptureClick?: () => void;
-  isFoundryOpen?: boolean;
-  onToggleFoundry?: () => void;
+  isWorkbenchOpen?: boolean;
+  onToggleWorkbench?: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onOpenSearch?: () => void;
@@ -22,8 +22,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = React.memo(({
   currentView,
   onNewCaptureClick,
-  isFoundryOpen = false,
-  onToggleFoundry,
+  isWorkbenchOpen = false,
+  onToggleWorkbench,
   isSidebarOpen = true,
   onToggleSidebar,
   onOpenSearch,
@@ -38,7 +38,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     inbox: 'Inbox',
     playground: 'Playground',
     workbench: 'Workbench',
-    bridge: 'Context Hub',
+    capsules: 'Capsules',
     tasks: 'Tasks',
     notes: 'Notes',
     files: 'Files',
@@ -108,11 +108,11 @@ PlaygroundHeaderControls.displayName = 'PlaygroundHeaderControls';
 
         <div className="flex items-center gap-2 shrink-0" data-tauri-drag-region>
           <span className="text-xs font-semibold text-slate-800 dark:text-zinc-200">
-            {appMode === 'context-hub' ? 'Context Hub' : (PAGE_TITLES[currentView] || 'Velco')}
+            {appMode === 'capsules' ? 'Capsules' : (PAGE_TITLES[currentView] || 'Velco')}
           </span>
         </div>
 
-        {currentView === 'playground' && appMode !== 'context-hub' && (
+        {currentView === 'playground' && appMode !== 'capsules' && (
           <PlaygroundHeaderControls />
         )}
       </div>
@@ -126,7 +126,7 @@ PlaygroundHeaderControls.displayName = 'PlaygroundHeaderControls';
           >
             <span className="flex items-center gap-2">
               <Search className="w-3 h-3 stroke-[1.5]" />
-              <span className="text-[11px] text-slate-600 dark:text-zinc-400">Search workstation...</span>
+              <span className="text-[11px] text-slate-600 dark:text-zinc-400">Search workspace...</span>
             </span>
             <kbd className="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-white/[0.04] border border-slate-300/80 dark:border-white/[0.07] text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
               {formatShortcut('K')}
@@ -139,7 +139,7 @@ PlaygroundHeaderControls.displayName = 'PlaygroundHeaderControls';
       <div className="flex items-center gap-2 shrink-0">
         <AIPrivacyBadge />
 
-        {/* App Mode Toggle (Personal vs Context Hub) */}
+        {/* App Mode Toggle (Personal vs Capsules) */}
         <div className="flex items-center bg-slate-100 dark:bg-[#141418] p-0.5 rounded-md border border-slate-200 dark:border-white/[0.07]">
           <button
             onClick={() => setAppMode('personal')}
@@ -152,29 +152,29 @@ PlaygroundHeaderControls.displayName = 'PlaygroundHeaderControls';
             Personal
           </button>
           <button
-            onClick={() => setAppMode('context-hub')}
+            onClick={() => setAppMode('capsules')}
             className={`px-2.5 py-1 rounded-[4px] text-[11px] font-mono transition-all cursor-pointer ${
-              appMode === 'context-hub'
+              appMode === 'capsules'
                 ? 'bg-blue-500 text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
             }`}
           >
-            Context Hub
+            Capsules
           </button>
         </div>
 
-        {/* Studio / Workbench Toggle (Replaced theme toggle, same size & shape) */}
-        {onToggleFoundry && (
+        {/* Workbench Toggle (Replaced theme toggle, same size & shape) */}
+        {onToggleWorkbench && (
           <button
-            onClick={onToggleFoundry}
+            onClick={onToggleWorkbench}
             className={`relative p-1 rounded-md border border-slate-200 dark:border-white/[0.07] transition-colors cursor-pointer ${
-              isFoundryOpen
+              isWorkbenchOpen
                 ? 'bg-slate-200 dark:bg-white/[0.12] text-blue-500 border-blue-500/40 shadow-xs'
                 : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200 bg-slate-100 dark:bg-[#141418] hover:bg-slate-200/80 dark:hover:bg-[#1a1a20]'
             }`}
-            title={`Toggle Studio Workbench (${modKey}+J)`}
+            title={`Toggle Workbench (${modKey}+J)`}
           >
-            <Zap className={`w-3.5 h-3.5 stroke-[1.5] ${isFoundryOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
+            <Zap className={`w-3.5 h-3.5 stroke-[1.5] ${isWorkbenchOpen ? 'fill-blue-500 text-blue-500' : ''}`} />
             {stagedCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>

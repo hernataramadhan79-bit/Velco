@@ -55,7 +55,7 @@ export const ShortcutCheatSheetModal: React.FC<ShortcutCheatSheetModalProps> = (
       items: [
         { key: `${modKey} + B`, description: 'Toggle Left Navigation Sidebar' },
         { key: `${modKey} + K`, description: 'Open Global Search / Command Palette' },
-        { key: `${modKey} + J`, description: 'Toggle The Foundry (AI Workstation)' },
+        { key: `${modKey} + J`, description: 'Toggle Workbench' },
         { key: 'Esc', description: 'Close active modal, drawer, or search' },
       ],
     },

@@ -14,7 +14,7 @@ export type NavigationView =
   | 'trash'
   | 'archive'
   | 'settings'
-  | 'bridge'
+  | 'capsules'
   | 'playground'
   | 'workbench';
 
@@ -25,7 +25,7 @@ interface Notification {
   type: NotificationType;
 }
 
-export type AppMode = 'personal' | 'context-hub';
+export type AppMode = 'personal' | 'capsules';
 
 interface ItemState {
   // ── State ──────────────────────────────────────────────

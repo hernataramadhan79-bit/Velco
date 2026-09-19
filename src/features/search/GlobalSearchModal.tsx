@@ -173,7 +173,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             value={query}
             onChange={handleQueryChange}
             placeholder="Search notes, tasks, files, links..."
-            aria-label="Search workstation items"
+            aria-label="Search workspace items"
             className="flex-1 bg-transparent text-xs text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none font-sans"
           />
           {query && (

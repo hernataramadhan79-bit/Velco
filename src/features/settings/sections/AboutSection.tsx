@@ -117,7 +117,7 @@ export const AboutSection: React.FC = () => {
             Velco Desktop
           </div>
           <div className="text-xs text-slate-500 dark:text-zinc-400">
-            Local-First Context-Bound AI Workstation
+            Local-First Context-Bound AI Workspace
           </div>
         </div>
         <span className="px-2.5 py-1 rounded-md bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-zinc-300 font-mono text-xs font-semibold border border-slate-200 dark:border-white/[0.08]">
@@ -308,7 +308,7 @@ export const AboutSection: React.FC = () => {
           {[
             { key: 'Ctrl + B', label: 'Toggle Sidebar' },
             { key: 'Ctrl + K', label: 'Global Search' },
-            { key: 'Ctrl + J', label: 'Toggle The Foundry' },
+            { key: 'Ctrl + J', label: 'Toggle Workbench' },
             { key: 'Ctrl + Enter', label: 'Save capture' },
             { key: '?', label: 'Open Keyboard Shortcuts Sheet' },
             { key: 'Escape', label: 'Close modals / return to workspace' },

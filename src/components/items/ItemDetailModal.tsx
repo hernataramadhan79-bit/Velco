@@ -155,7 +155,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
   const [filePreview, setFilePreview] = useState<FilePreviewContent | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(hasFiles);
   const [copiedPreviewText, setCopiedPreviewText] = useState(false);
   const [textPreviewMode, setTextPreviewMode] = useState<'formatted' | 'raw'>('formatted');
   const notify = useItemStore((s) => s.notify);
@@ -165,28 +165,18 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
   // Pause media saat modal tutup (cegah audio jalan di background)
   React.useEffect(() => {
+    const audio = audioRef.current;
+    const video = videoRef.current;
     return () => {
       try {
-        audioRef.current?.pause();
-        videoRef.current?.pause();
+        audio?.pause();
+        video?.pause();
       } catch {
         /* ignore */
       }
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     };
   }, []);
-
-  // Keyboard accessibility: Escape key closes modal
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   const activeAttachment: Attachment | undefined =
     item.attachments && item.attachments.length > 0
@@ -196,7 +186,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
   useEffect(() => {
     let isMounted = true;
     if (!hasFiles) {
-      setFilePreview(null);
       return;
     }
 
@@ -292,7 +281,6 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
 
   useEffect(() => {
     if (!isPdf || !resolvedPreviewUrl) {
-      setPdfBlobUrl(null);
       return;
     }
 
@@ -413,12 +401,7 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
       ? item.content
       : null);
 
-  // Synchronize content state when displayedNotes changes and not editing
-  useEffect(() => {
-    if (!isEditing) {
-      setContent(displayedNotes);
-    }
-  }, [displayedNotes, isEditing]);
+
 
   const isTextLike =
     !isImage &&
@@ -883,7 +866,10 @@ const ItemDetailContent: React.FC<ItemDetailContentProps> = ({
           isAiLoading={isAiLoading}
           onTitleChange={setTitle}
           onSaveEdit={handleSaveEdit}
-          onStartEdit={() => setIsEditing(true)}
+          onStartEdit={() => {
+            setContent(displayedNotes);
+            setIsEditing(true);
+          }}
           onUpdate={onUpdate}
           onCreateTag={onCreateTag}
           onApplyRecommendedTags={handleApplyRecommendedTags}

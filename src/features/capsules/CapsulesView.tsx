@@ -28,13 +28,13 @@ import { NewDocModal } from './components/NewDocModal';
 import { AttachItemModal } from './components/AttachItemModal';
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 
-interface ContextHubViewProps {
+interface CapsulesViewProps {
   onNotify?: (msg: string, type?: 'info' | 'success' | 'error' | 'reminder') => void;
 }
 
-export type TheBridgeViewProps = ContextHubViewProps;
 
-export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
+
+export const CapsulesView: React.FC<CapsulesViewProps> = ({ onNotify }) => {
   const { settings, updateSettings } = useSettings();
   const {
     capsules,
@@ -127,13 +127,7 @@ export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
     return capsules.find((c) => c.id === activeCapsuleId) || null;
   }, [capsules, activeCapsuleId]);
 
-  // Sync edit capsule modal state when active capsule changes
-  useEffect(() => {
-    if (activeCapsule) {
-      setEditCapsuleName(activeCapsule.name);
-      setEditCapsuleDesc(activeCapsule.description || '');
-    }
-  }, [activeCapsule]);
+
 
   // Filtered capsules in sidebar
   const filteredCapsules = useMemo(() => {
@@ -637,7 +631,13 @@ export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
             onOpenShareModal={() => setIsShareModalOpen(true)}
             onToggleOptionsMenu={() => setIsOptionsMenuOpen((prev) => !prev)}
             onCloseOptionsMenu={() => setIsOptionsMenuOpen(false)}
-            onOpenEditModal={() => setIsEditCapsuleOpen(true)}
+            onOpenEditModal={() => {
+              if (activeCapsule) {
+                setEditCapsuleName(activeCapsule.name);
+                setEditCapsuleDesc(activeCapsule.description || '');
+              }
+              setIsEditCapsuleOpen(true);
+            }}
             onDeleteCapsule={() => void handleDeleteCapsule(activeCapsule.id, activeCapsule.name)}
           />
 
@@ -728,9 +728,9 @@ export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
               onPriorityChange={setNewTaskPriority}
               onDueDateChange={setNewTaskDueDate}
               onAddTask={handleAddTask}
-              onToggleTask={(t) => void handleToggleTask(t)}
-              onRemoveItem={(id, title) => void handleRemoveItem(id, title)}
-              onSelectItem={(id) => setSelectedItemId(id)}
+              onToggleTask={handleToggleTask}
+              onRemoveItem={handleRemoveItem}
+              onSelectItem={setSelectedItemId}
             />
           )}
 
@@ -880,4 +880,4 @@ export const ContextHubView: React.FC<ContextHubViewProps> = ({ onNotify }) => {
   );
 };
 
-export { ContextHubView as TheBridgeView };
+

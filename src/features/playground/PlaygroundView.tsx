@@ -302,49 +302,51 @@ export const PlaygroundView: React.FC<PlaygroundViewProps> = ({
           </div>
         </div>
       ) : (
-        <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {/* Scrollable Messages Viewport */}
-          <div
-            ref={messagesScrollRef}
-            onScroll={handleScroll}
-            className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-          >
-            <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 px-4 sm:px-6 pt-5 pb-6">
-              {messages.map((msg) => (
-                <PlaygroundMessageItem
-                  key={msg.id}
-                  msg={msg}
-                  onCopy={handleCopyMessage}
-                  isCopied={copiedId === msg.id}
-                  onSaveToNote={handleSaveToNote}
-                  isSavedNote={savedNoteId === msg.id}
-                  onExtractTasks={handleExtractTasksFromMessage}
-                  isExtracting={extractingMsgId === msg.id}
-                  isSavedBatch={savedBatchMsgId === msg.id}
-                  onDelete={deleteMessage}
-                />
-              ))}
-              <div className="h-2" />
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={messagesScrollRef}
+              onScroll={handleScroll}
+              className="h-full overflow-y-auto overflow-x-hidden"
+            >
+              <div className="max-w-3xl xl:max-w-4xl mx-auto w-full space-y-6 px-4 sm:px-6 pt-5 pb-6">
+                {messages.map((msg) => (
+                  <PlaygroundMessageItem
+                    key={msg.id}
+                    msg={msg}
+                    onCopy={handleCopyMessage}
+                    isCopied={copiedId === msg.id}
+                    onSaveToNote={handleSaveToNote}
+                    isSavedNote={savedNoteId === msg.id}
+                    onExtractTasks={handleExtractTasksFromMessage}
+                    isExtracting={extractingMsgId === msg.id}
+                    isSavedBatch={savedBatchMsgId === msg.id}
+                    onDelete={deleteMessage}
+                  />
+                ))}
+                <div className="h-2" />
+              </div>
             </div>
-          </div>
 
-          {/* Floating Jump to Latest Button (Small, Centered, Minimalist) */}
-          {showScrollBottom && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <button
-                type="button"
-                onClick={scrollToBottom}
-                className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-xl backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
-                title="Scroll to latest message"
-                aria-label="Scroll to latest message"
-              >
-                <ChevronDown className="w-4 h-4 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
-                {isGenerating && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
-                )}
-              </button>
-            </div>
-          )}
+            {/* Floating Jump to Latest Button (Small, Centered, Minimalist - Positioned above Input Dock) */}
+            {showScrollBottom && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <button
+                  type="button"
+                  onClick={scrollToBottom}
+                  className="w-8 h-8 rounded-full bg-slate-900/90 hover:bg-slate-900 text-white dark:bg-[#18181d]/95 dark:hover:bg-[#22222a] shadow-xl backdrop-blur-md border border-slate-700/60 dark:border-white/[0.15] flex items-center justify-center transition-all active:scale-90 hover:scale-105 cursor-pointer group select-none relative"
+                  title="Scroll to latest message"
+                  aria-label="Scroll to latest message"
+                >
+                  <ChevronDown className="w-4 h-4 stroke-[2.5] text-slate-300 group-hover:text-white group-hover:translate-y-0.5 transition-transform" />
+                  {isGenerating && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-slate-900 dark:ring-[#18181d] animate-pulse" />
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Pinned Bottom Input Dock in Conversation Mode */}
           <PlaygroundInputDock

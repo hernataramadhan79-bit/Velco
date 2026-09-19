@@ -185,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
       </div>
 
       {/* Scrollable Center Navigation */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2.5 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2.5 pt-3 pb-12 space-y-4">
         {/* Quick Search Trigger */}
         <div>
           <button

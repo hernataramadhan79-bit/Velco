@@ -38,7 +38,7 @@ import { TaskExtractionModal } from '../tasks/TaskExtractionModal';
 import { StructuredTaskItem } from '../../services/ai/taskExtractor';
 import { getLlmProviderConfig } from '../../utils/aiUtils';
 
-interface StudioWorkbenchProps {
+interface WorkbenchProps {
   onClose?: () => void;
   onArtifactsApplied?: () => void;
   isExpanded?: boolean;
@@ -47,7 +47,7 @@ interface StudioWorkbenchProps {
   onOpenSettings?: () => void;
 }
 
-export type TheFoundryProps = StudioWorkbenchProps;
+export type TheWorkbenchProps = WorkbenchProps;
 
 type ForgeRecipeKey = 'synthesize' | 'extract_tasks' | 'cross_analyze' | 'triage' | 'custom';
 
@@ -91,7 +91,7 @@ const FORGE_RECIPES: ForgeRecipeConfig[] = [
   },
 ];
 
-export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
+export const Workbench: React.FC<WorkbenchProps> = ({
   onClose,
   onArtifactsApplied,
   isExpanded = false,
@@ -249,7 +249,7 @@ export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
   const handleReviewExtractedTasks = () => {
     if (!output?.extracted_tasks || output.extracted_tasks.length === 0) return;
     const structured: StructuredTaskItem[] = output.extracted_tasks.map((task, idx) => ({
-      id: `foundry_task_${Date.now()}_${idx}`,
+      id: `workbench_task_${Date.now()}_${idx}`,
       title: task.title,
       priority: task.priority || 'medium',
       dueDate: task.due_date || null,
@@ -301,7 +301,7 @@ export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
     }
   };
 
-  const handleApplyTagsToStagedItems = async () => {
+  const _handleApplyTagsToStagedItems = async () => {
     if (!output?.tags || output.tags.length === 0 || stagedItems.length === 0) return;
     setIsApplyingTags(true);
     try {
@@ -352,7 +352,7 @@ export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
     }
   };
 
-  const handleCommitAllArtifacts = async () => {
+  const _handleCommitAllArtifacts = async () => {
     if (!output) return;
     setIsLoading(true);
     setError(null);
@@ -627,10 +627,7 @@ export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
         <div className="flex items-center gap-2 min-w-0">
           <Zap className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 fill-current" />
           <span className="font-mono text-xs font-semibold text-slate-800 dark:text-zinc-200 tracking-wider uppercase">
-            Studio Workbench
-          </span>
-          <span className="text-[10px] font-mono text-slate-500 dark:text-zinc-500 bg-slate-100 dark:bg-white/[0.04] px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/[0.05]">
-            {settings.aiEnabled ? activeModel : 'AI Disabled'}
+            Workbench
           </span>
         </div>
 
@@ -692,4 +689,4 @@ export const StudioWorkbench: React.FC<StudioWorkbenchProps> = ({
   );
 };
 
-export { StudioWorkbench as TheFoundry };
+export { Workbench as TheWorkbench };

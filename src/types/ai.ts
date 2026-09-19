@@ -31,13 +31,13 @@ export interface AIModelInfo {
   description?: string;
 }
 
-/** Recipe types available in the Context Foundry. */
+/** Recipe types available in the Context Workbench. */
 export type RecipeType = 'synthesize' | 'extract_tasks' | 'triage' | 'custom';
 
 /** Chat role definition. */
 export type ChatRole = 'user' | 'assistant' | 'system';
 
-/** A single chat message in the Context Workstation conversation. */
+/** A single chat message in the Workbench conversation. */
 export interface ChatMessage {
   id: string;
   role: ChatRole;

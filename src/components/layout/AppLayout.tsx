@@ -7,7 +7,7 @@ import { UpdateBanner } from '../updater/UpdateBanner';
 import { BackupReminderBanner, dismissBackupReminderForSession } from '../backup/BackupReminderBanner';
 import { OnboardingOverlay } from '../onboarding/OnboardingOverlay';
 import { ShortcutCheatSheetModal } from '../common/ShortcutCheatSheetModal';
-import { StudioWorkbench } from '../workstation/StudioWorkbench';
+import { Workbench } from '../workbench/Workbench';
 import { useItemStore, NavigationView } from '../../stores/itemStore';
 import { useTagStore } from '../../stores/tagStore';
 import { useContextStore } from '../../stores/contextStore';
@@ -50,8 +50,8 @@ const TrashView = lazy(() =>
 const SettingsView = lazy(() =>
   import('../../features/settings/SettingsView').then((m) => ({ default: m.SettingsView }))
 );
-const ContextHubView = lazy(() =>
-  import('../../features/bridge/ContextHubView').then((m) => ({ default: m.ContextHubView }))
+const CapsulesView = lazy(() =>
+  import('../../features/capsules/CapsulesView').then((m) => ({ default: m.CapsulesView }))
 );
 const PlaygroundView = lazy(() =>
   import('../../features/playground/PlaygroundView').then((m) => ({ default: m.PlaygroundView }))
@@ -171,6 +171,7 @@ export const AppLayout: React.FC = () => {
   // Zustand actions (stable references — never cause re-renders)
   const setCurrentView = useItemStore((s) => s.setCurrentView);
   const setSelectedItemId = useItemStore((s) => s.setSelectedItemId);
+  const handleSelectItem = useCallback((item: any) => setSelectedItemId(item.id), [setSelectedItemId]);
   const setActiveTagId = useItemStore((s) => s.setActiveTagId);
   const captureItem = useItemStore((s) => s.captureItem);
   const updateItem = useItemStore((s) => s.updateItem);
@@ -192,8 +193,8 @@ export const AppLayout: React.FC = () => {
 
   // Local UI state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isFoundryOpen, setIsFoundryOpen] = useState(false);
-  const [isFoundryExpanded, setIsFoundryExpanded] = useState(false);
+  const [isWorkbenchOpen, setIsWorkbenchOpen] = useState(false);
+  const [isWorkbenchExpanded, setIsWorkbenchExpanded] = useState(false);
   const [isGlobalDragging, setIsGlobalDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isCheatSheetOpen, setIsCheatSheetOpen] = useState(false);
@@ -205,8 +206,8 @@ export const AppLayout: React.FC = () => {
       previousViewRef.current = current;
     }
     if (view === 'workbench') {
-      setIsFoundryOpen(true);
-      setIsFoundryExpanded(true);
+      setIsWorkbenchOpen(true);
+      setIsWorkbenchExpanded(true);
       return;
     }
     if (view === 'playground' && current !== 'playground') {
@@ -305,14 +306,14 @@ export const AppLayout: React.FC = () => {
     };
   }, []);
 
-  // ── Auto-open The Foundry when items are staged ──────────
+  // ── Auto-open Workbench when items are staged ──────────
   // Jangan setState saat render (StrictMode double-render bisa auto-open 2x).
   const [prevStagedCount, setPrevStagedCount] = useState(stagedCount);
   useEffect(() => {
     if (stagedCount !== prevStagedCount) {
       setPrevStagedCount(stagedCount);
       if (stagedCount > prevStagedCount && stagedCount > 0) {
-        setIsFoundryOpen(true);
+        setIsWorkbenchOpen(true);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,7 +327,7 @@ export const AppLayout: React.FC = () => {
         setIsSearchOpen((prev) => !prev);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        setIsFoundryOpen((prev) => !prev);
+        setIsWorkbenchOpen((prev) => !prev);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault();
         setIsSidebarOpen((prev) => !prev);
@@ -423,8 +424,8 @@ export const AppLayout: React.FC = () => {
         <Header
           currentView={currentView}
           onNewCaptureClick={() => navigateToView('inbox')}
-          isFoundryOpen={isFoundryOpen}
-          onToggleFoundry={() => setIsFoundryOpen((prev) => !prev)}
+          isWorkbenchOpen={isWorkbenchOpen}
+          onToggleWorkbench={() => setIsWorkbenchOpen((prev) => !prev)}
           isSidebarOpen={appMode === 'personal' ? isSidebarOpen : true}
           onToggleSidebar={appMode === 'personal' ? () => setIsSidebarOpen((prev) => !prev) : undefined}
           onOpenSearch={() => setIsSearchOpen(true)}
@@ -434,15 +435,15 @@ export const AppLayout: React.FC = () => {
         {/* Scrollable View Content */}
         <main
           className={`flex-1 min-h-0 min-w-0 max-w-full ${
-            currentView === 'playground' || appMode === 'context-hub'
+            currentView === 'playground' || appMode === 'capsules'
               ? 'p-0 flex flex-col overflow-hidden'
               : 'overflow-y-auto overflow-x-hidden px-8 py-6'
           }`}
         >
           <ErrorBoundary onReset={() => refreshItems()}>
             <Suspense fallback={<ViewSkeleton />}>
-              {appMode === 'context-hub' ? (
-                <ContextHubView onNotify={(msg, type) => notify(msg, type)} />
+              {appMode === 'capsules' ? (
+                <CapsulesView onNotify={(msg, type) => notify(msg, type)} />
               ) : (
               <div
                 className={`view-enter ${
@@ -456,7 +457,7 @@ export const AppLayout: React.FC = () => {
                 <InboxView
                   
                   onCapture={captureItem}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleTask={toggleTask}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
@@ -472,7 +473,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'tasks' && (
                 <TasksView
                   onCapture={captureItem}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleTask={toggleTask}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
@@ -482,7 +483,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'notes' && (
                 <NotesView
                   onCapture={captureItem}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
                 />
@@ -491,7 +492,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'files' && (
                 <FilesView
                   onCapture={captureItem}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
                   isDraggingFiles={isGlobalDragging}
@@ -501,7 +502,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'links' && (
                 <LinksView
                   onCapture={captureItem}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
                 />
@@ -518,7 +519,7 @@ export const AppLayout: React.FC = () => {
                   }}
                   onAddTag={tagStore.addTag}
                   onRemoveTag={tagStore.removeTag}
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleTask={toggleTask}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
@@ -528,7 +529,7 @@ export const AppLayout: React.FC = () => {
               {currentView === 'archive' && (
                 <ArchiveView
                   
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onToggleFavorite={toggleFavorite}
                   onTrash={trashItem}
                   onToggleArchive={toggleArchive}
@@ -538,14 +539,14 @@ export const AppLayout: React.FC = () => {
               {currentView === 'trash' && (
                 <TrashView
                   
-                  onSelect={(item) => setSelectedItemId(item.id)}
+                  onSelect={handleSelectItem}
                   onRestore={restoreItem}
                   onPermanentDelete={permanentDeleteItem}
                   onEmptyTrash={handleEmptyTrash}
                 />
               )}
 
-              {/* ContextHubView is now rendered exclusively in Context Hub mode */}
+              {/* CapsulesView is now rendered exclusively in Capsules mode */}
 
               {currentView === 'playground' && (
                 <PlaygroundView
@@ -564,31 +565,33 @@ export const AppLayout: React.FC = () => {
         </main>
       </div>
 
-      {/* Pane 3: Studio Workbench (Context Workstation) */}
-      {isFoundryOpen && (
-        <aside
-          className={`${
-            isFoundryExpanded ? 'w-[520px] xl:w-[600px]' : 'w-88 xl:w-96'
-          } shrink-0 h-full overflow-hidden transition-all duration-200 shadow-xl z-20`}
-        >
-          <StudioWorkbench
-            onClose={() => setIsFoundryOpen(false)}
-            isExpanded={isFoundryExpanded}
-            onToggleExpand={() => setIsFoundryExpanded((prev) => !prev)}
-            onArtifactsApplied={() => {
-              refreshItems();
-              refreshCounts();
-              notify('Recipe artifacts committed to SQLite!', 'success');
-            }}
-            onArtifactCreated={(msg) => {
-              refreshItems();
-              refreshCounts();
-              notify(msg, 'success');
-            }}
-            onOpenSettings={() => navigateToView('settings')}
-          />
-        </aside>
-      )}
+      {/* Pane 3: Workbench (Workbench) */}
+      <aside
+        className={`shrink-0 h-full overflow-hidden transition-[width,opacity,transform] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] shadow-2xl z-20 ${
+          isWorkbenchOpen
+            ? isWorkbenchExpanded
+              ? 'w-[520px] xl:w-[600px] opacity-100 translate-x-0'
+              : 'w-88 xl:w-96 opacity-100 translate-x-0'
+            : 'w-0 opacity-0 translate-x-8 pointer-events-none'
+        }`}
+      >
+        <Workbench
+          onClose={() => setIsWorkbenchOpen(false)}
+          isExpanded={isWorkbenchExpanded}
+          onToggleExpand={() => setIsWorkbenchExpanded((prev) => !prev)}
+          onArtifactsApplied={() => {
+            refreshItems();
+            refreshCounts();
+            notify('Recipe artifacts committed to SQLite!', 'success');
+          }}
+          onArtifactCreated={(msg) => {
+            refreshItems();
+            refreshCounts();
+            notify(msg, 'success');
+          }}
+          onOpenSettings={() => navigateToView('settings')}
+        />
+      </aside>
 
       {/* Item Detail Inspector Modal */}
       <ErrorBoundary onReset={() => setSelectedItemId(null)}>
@@ -628,7 +631,7 @@ export const AppLayout: React.FC = () => {
       {/* Global Multi-Select Action Bar */}
       <ErrorBoundary fallback={null} onReset={() => useSelectionStore.getState().clearSelection()}>
         <SelectionActionBar
-          onOpenFoundry={() => setIsFoundryOpen(true)}
+          onOpenWorkbench={() => setIsWorkbenchOpen(true)}
           onFocusChat={() => {
             navigateToView('inbox');
           }}

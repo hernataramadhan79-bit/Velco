@@ -21,8 +21,8 @@ describe('itemStore', () => {
 
   it('updates appMode correctly', () => {
     expect(useItemStore.getState().appMode).toBe('personal');
-    useItemStore.getState().setAppMode('context-hub');
-    expect(useItemStore.getState().appMode).toBe('context-hub');
+    useItemStore.getState().setAppMode('capsules');
+    expect(useItemStore.getState().appMode).toBe('capsules');
   });
 
   it('sets navigation view and updates currentView', () => {

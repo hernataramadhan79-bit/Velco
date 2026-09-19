@@ -112,7 +112,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
           {/* Section Heading */}
           <div className="px-3 pt-1">
             <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
-              Settings &amp; Workstation
+              Settings &amp; workspace
             </h2>
           </div>
 

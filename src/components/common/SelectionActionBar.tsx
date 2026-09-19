@@ -12,12 +12,12 @@ import { useItemStore } from '../../stores/itemStore';
 import { Item, ItemSummary } from '../../types/item';
 
 interface SelectionActionBarProps {
-  onOpenFoundry?: () => void;
+  onOpenWorkbench?: () => void;
   onFocusChat?: () => void;
 }
 
 export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
-  onOpenFoundry,
+  onOpenWorkbench,
   onFocusChat,
 }) => {
   const [isBatchTrashing, setIsBatchTrashing] = useState(false);
@@ -25,7 +25,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
   const archiveItems = useItemStore((s) => s.archiveItems);
   const trashItems = useItemStore((s) => s.trashItems);
   const { selectedIds, clearSelection } = useSelectionStore();
-  const { addChatContextItems, addFoundryItems } = useContextStore();
+  const { addChatContextItems, addWorkbenchItems } = useContextStore();
   const { notify, trashItem } = useItemStore();
 
   const selectedCount = selectedIds.size;
@@ -52,11 +52,11 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
   const handleSendToWorkbench = () => {
     if (selectedItems.length === 0) return;
     const staged = selectedItems.map(itemToStagedItem);
-    addFoundryItems(staged);
+    addWorkbenchItems(staged);
     notify(`Staged ${staged.length} item${staged.length > 1 ? 's' : ''} to Workbench`, 'success');
     clearSelection();
-    if (onOpenFoundry) {
-      onOpenFoundry();
+    if (onOpenWorkbench) {
+      onOpenWorkbench();
     }
   };
 
@@ -105,7 +105,7 @@ export const SelectionActionBar: React.FC<SelectionActionBarProps> = ({
         <button
           onClick={handleSendToWorkbench}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-white/[0.08] hover:bg-slate-200 dark:hover:bg-white/[0.14] text-slate-800 dark:text-zinc-100 border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer shadow-xs text-xs font-medium"
-          title="Stage selected items to Studio Workbench for synthesis"
+          title="Stage selected items to Workbench for synthesis"
         >
           <Zap className="w-3.5 h-3.5 fill-amber-500 text-amber-500 dark:fill-current" />
           <span>Workbench</span>

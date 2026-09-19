@@ -81,12 +81,12 @@ export const InboxView: React.FC<InboxViewProps> = ({
               }`}
             >
               <Bot className="w-3.5 h-3.5 stroke-[1.5]" />
-              <span>Chat Canvas</span>
+              <span>Playground</span>
             </button>
           </div>
 
           <span className="text-[11px] font-mono text-slate-500 dark:text-zinc-500">
-            Workstation Stream
+            workspace Stream
           </span>
         </div>
 

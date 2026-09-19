@@ -54,9 +54,9 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
 
   // Dual-channel context status — O(1) Set selectors to eliminate array scan cascades
   const isChatContext = useContextStore((state) => state.chatContextItemIds.has(item.id));
-  const isFoundryStaged = useContextStore((state) => state.foundryStagedItemIds.has(item.id));
+  const isWorkbenchStaged = useContextStore((state) => state.workbenchItemIds.has(item.id));
   const toggleChatContextItem = useContextStore((state) => state.toggleChatContextItem);
-  const toggleFoundryItem = useContextStore((state) => state.toggleFoundryItem);
+  const toggleWorkbenchItem = useContextStore((state) => state.toggleWorkbenchItem);
 
   const getTypeIcon = () => {
     switch (item.type) {
@@ -125,7 +125,7 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
       className={`group relative rounded-lg p-3.5 transition-all duration-150 cursor-pointer select-none border w-full min-w-0 overflow-hidden ${
         isSelected
           ? 'bg-blue-50/70 dark:bg-white/[0.08] border-blue-300 dark:border-white/[0.2] ring-1 ring-blue-400/30 dark:ring-white/[0.15] shadow-xs'
-          : isChatContext || isFoundryStaged
+          : isChatContext || isWorkbenchStaged
           ? 'bg-white dark:bg-[#141418] border-slate-300 dark:border-white/[0.12] hover:bg-slate-50 dark:hover:bg-[#18181e] shadow-xs'
           : 'bg-white dark:bg-[#141418] hover:bg-slate-50 dark:hover:bg-[#18181e] border-slate-200 dark:border-white/[0.07] hover:border-slate-300 dark:hover:border-white/[0.14] shadow-2xs'
       }`}
@@ -290,7 +290,7 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
                 Chat
               </span>
             )}
-            {isFoundryStaged && (
+            {isWorkbenchStaged && (
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-300">
                 Workbench
               </span>
@@ -322,16 +322,16 @@ export const ItemCard = React.memo<ItemCardProps>(function ItemCard({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleFoundryItem(itemToStagedItem(item));
+                    toggleWorkbenchItem(itemToStagedItem(item));
                   }}
                   className={`p-1 rounded transition-colors cursor-pointer ${
-                    isFoundryStaged
+                    isWorkbenchStaged
                       ? 'text-amber-500 dark:text-amber-400 bg-amber-500/15'
                       : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-white/[0.05]'
                   }`}
-                  title={isFoundryStaged ? 'Remove from Workbench' : 'Add to Workbench'}
+                  title={isWorkbenchStaged ? 'Remove from Workbench' : 'Add to Workbench'}
                 >
-                  <Zap className={`w-3.5 h-3.5 ${isFoundryStaged ? 'fill-current' : ''}`} />
+                  <Zap className={`w-3.5 h-3.5 ${isWorkbenchStaged ? 'fill-current' : ''}`} />
                 </button>
 
                 {onToggleFavorite && (

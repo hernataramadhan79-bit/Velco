@@ -455,7 +455,7 @@ export const AiSection: React.FC = () => {
             <span>Enable AI Features</span>
           </div>
           <p className="text-xs text-slate-500 dark:text-zinc-400">
-            Powers The Foundry synthesis recipes, auto-tagging, and contextual summarization.
+            Powers Workbench synthesis recipes, auto-tagging, and contextual summarization.
           </p>
         </div>
         <label className="relative inline-flex items-center cursor-pointer">

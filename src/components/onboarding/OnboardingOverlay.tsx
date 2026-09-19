@@ -36,7 +36,7 @@ export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onDismiss 
             Welcome to Velco Desktop
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 max-w-md mx-auto">
-            Your local-first, context-bound AI workstation. Built for privacy, speed, and deep intellectual focus.
+            Your local-first, context-bound AI Workspace. Built for privacy, speed, and deep intellectual focus.
           </p>
         </div>
 
@@ -56,16 +56,16 @@ export const OnboardingOverlay: React.FC<OnboardingOverlayProps> = ({ onDismiss 
               </p>
             </div>
 
-            {/* Pillar 2: Context Foundry */}
+            {/* Pillar 2: Context Workbench */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#101014] border border-slate-200/80 dark:border-white/[0.06] space-y-2">
               <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                 <Layers className="w-4 h-4" />
               </div>
               <div className="font-semibold text-xs text-slate-900 dark:text-zinc-100">
-                The Context Queue
+                Workbench
               </div>
               <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
-                Stage relevant notes and files into The Foundry to execute executive summaries and task extraction without hallucinations.
+                Stage relevant notes and files into Workbench to execute executive summaries and task extraction without hallucinations.
               </p>
             </div>
 
