@@ -478,8 +478,10 @@ async fn handle_peer_stream(
                         let completed_val = if completed { 1 } else { 0 };
                         let completed_at = if completed { Some(chrono::Utc::now().to_rfc3339()) } else { None };
                         let _ = conn.execute(
-                            "UPDATE tasks SET completed = ?1, completed_at = ?2 WHERE item_id = ?3",
-                            rusqlite::params![completed_val, completed_at, item_id],
+                            "UPDATE tasks SET completed = ?1, completed_at = ?2 \
+                             WHERE item_id = ?3 \
+                             AND EXISTS (SELECT 1 FROM capsule_items WHERE capsule_id = ?4 AND item_id = ?3)",
+                            rusqlite::params![completed_val, completed_at, item_id, capsule_id],
                         );
                     }
                 }
@@ -566,6 +568,26 @@ fn apply_remote_item_upsert(
         Err(_) => return,
     };
     let now = chrono::Utc::now().to_rfc3339();
+
+    // Privilege Escalation Guard
+    let item_exists: bool = conn
+        .query_row("SELECT 1 FROM items WHERE id = ?1", rusqlite::params![item_id], |_| Ok(()))
+        .is_ok();
+
+    if item_exists {
+        let belongs_to_capsule: bool = conn
+            .query_row(
+                "SELECT 1 FROM capsule_items WHERE capsule_id = ?1 AND item_id = ?2",
+                rusqlite::params![capsule_id, item_id],
+                |_| Ok(()),
+            )
+            .is_ok();
+
+        if !belongs_to_capsule {
+            eprintln!("[P2P Sync] Warning: Item {} does not belong to capsule {}. Rejecting update.", item_id, capsule_id);
+            return;
+        }
+    }
 
     let _ = conn.execute(
         r#"

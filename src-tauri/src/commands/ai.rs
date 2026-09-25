@@ -225,45 +225,80 @@ pub fn extract_text_from_file_bytes(bytes: &[u8], ext: &str, mime_type: &str) ->
 }
 
 fn extract_pdf_heuristic(bytes: &[u8]) -> Option<String> {
+    // Strategy 1: Look for text between BT (Begin Text) and ET (End Text) operators
+    // These are standard PDF text blocks and may be uncompressed in simple PDFs
     let raw = String::from_utf8_lossy(bytes);
     let mut extracted = String::new();
 
-    let mut in_parentheses = false;
-    let mut current_buf = String::new();
-    let mut is_escaped = false;
+    // Try BT...ET block extraction first (works on uncompressed PDFs)
+    let mut search_start = 0;
+    while let Some(bt_pos) = raw[search_start..].find("BT") {
+        let abs_bt = search_start + bt_pos;
+        if let Some(et_pos) = raw[abs_bt..].find("ET") {
+            let block = &raw[abs_bt..abs_bt + et_pos + 2];
+            // Extract text from Tj and TJ operators: strings in () and <>
+            let mut in_parens = false;
+            let mut paren_buf = String::new();
+            let mut is_escaped = false;
+            for ch in block.chars() {
+                if in_parens {
+                    if is_escaped {
+                        if ch != 'n' && ch != 'r' && ch != 't' {
+                            paren_buf.push(ch);
+                        } else {
+                            paren_buf.push(' ');
+                        }
+                        is_escaped = false;
+                    } else if ch == '\\' {
+                        is_escaped = true;
+                    } else if ch == ')' {
+                        in_parens = false;
+                        if paren_buf.len() >= 2 && paren_buf.chars().any(|c| c.is_alphanumeric()) {
+                            extracted.push_str(&paren_buf);
+                            extracted.push(' ');
+                        }
+                        paren_buf.clear();
+                    } else if ch.is_ascii_graphic() || ch == ' ' {
+                        paren_buf.push(ch);
+                    }
+                } else if ch == '(' {
+                    in_parens = true;
+                    paren_buf.clear();
+                }
+                if extracted.len() > 60_000 { break; }
+            }
+            search_start = abs_bt + et_pos + 2;
+        } else {
+            break;
+        }
+        if extracted.len() > 60_000 { break; }
+    }
 
-    for ch in raw.chars() {
-        if in_parentheses {
-            if is_escaped {
-                current_buf.push(ch);
-                is_escaped = false;
-            } else if ch == '\\' {
-                is_escaped = true;
-            } else if ch == ')' {
-                in_parentheses = false;
-                if current_buf.len() >= 2 && current_buf.chars().any(|c| c.is_alphabetic()) {
-                    extracted.push_str(&current_buf);
+    // Strategy 2: If BT/ET yielded nothing, fall back to scanning for long ASCII runs
+    // (works on some older/simpler PDFs with uncompressed streams)
+    if extracted.trim().len() < 20 {
+        extracted.clear();
+        let mut run = String::new();
+        for ch in raw.chars() {
+            if ch.is_ascii_alphanumeric() || ch == ' ' || ch == '.' || ch == ',' || ch == '-' || ch == ':' {
+                run.push(ch);
+            } else {
+                if run.len() > 5 && run.trim().chars().any(|c| c.is_alphabetic()) {
+                    extracted.push_str(run.trim());
                     extracted.push(' ');
                 }
-                current_buf.clear();
-            } else if ch.is_ascii_graphic() || ch == ' ' {
-                current_buf.push(ch);
+                run.clear();
             }
-        } else if ch == '(' {
-            in_parentheses = true;
-            current_buf.clear();
-        }
-
-        if extracted.len() > 60_000 {
-            break;
+            if extracted.len() > 60_000 { break; }
         }
     }
 
     let trimmed = extracted.trim();
     if trimmed.len() > 20 {
-        Some(trimmed.to_string())
+        Some(format!("[PDF text extraction — limited support for compressed PDFs]\n\n{}", trimmed))
     } else {
-        None
+        // Return a clear message so the AI knows what type of file this is
+        Some("[PDF document — text extraction not available for this compressed PDF. The document has been attached for reference.]".to_string())
     }
 }
 

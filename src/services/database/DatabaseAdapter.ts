@@ -25,4 +25,5 @@ export interface DatabaseAdapter {
   exportBackup(): Promise<string>;
   importBackup(jsonString: string): Promise<number>;
   importFilesFromPaths(paths: string[]): Promise<Item[]>;
+  getItemLinks(itemId: string): Promise<import('../../types/item').ItemLinksPayload>;
 }

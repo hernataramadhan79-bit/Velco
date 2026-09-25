@@ -523,8 +523,11 @@ export const useItemStore = create<ItemState>()((set, get) => ({
   },
 
   toggleTask: async (itemId, completed) => {
-    const prevItems = get().items;
-    const prevDetail = get().activeItemDetail;
+    // Snapshot only the specific item's task state, not the entire array
+    // This prevents a failed rollback from erasing concurrent updates to other items
+    const prevItem = get().items.find((i) => i.id === itemId);
+    const prevTaskState = prevItem?.task ? { ...prevItem.task } : null;
+    const prevDetail = get().activeItemDetail?.id === itemId ? get().activeItemDetail : null;
     const nowIso = completed ? new Date().toISOString() : null;
 
     // Optimistic update pada item list dan active detail
@@ -566,55 +569,73 @@ export const useItemStore = create<ItemState>()((set, get) => ({
       }
       await get().refreshCounts();
     } catch (err: any) {
-      // Rollback jika gagal
-      set({ items: prevItems, activeItemDetail: prevDetail });
+      // Rollback ONLY this specific item — don't touch other items' state
+      set((state) => ({
+        items: state.items.map((item) =>
+          item.id === itemId && prevTaskState !== undefined
+            ? { ...item, task: prevTaskState }
+            : item
+        ),
+        activeItemDetail:
+          prevDetail !== null
+            ? prevDetail
+            : state.activeItemDetail,
+      }));
       get().notify(`Failed to toggle task: ${err.message}`, 'error');
     }
   },
 
   trashItem: async (id) => {
-    // Snapshot untuk rollback bila IPC gagal
-    const prevItems = get().items;
-    const prevArchiveItems = get().archiveItems;
-    const prevTrashItems = get().trashItems;
-    const prevSelected = get().selectedItemId;
-    const prevDetail = get().activeItemDetail;
-
-    const trashedItem =
-      prevItems.find((i) => i.id === id) ||
-      prevArchiveItems.find((i) => i.id === id) ||
-      (prevDetail?.id === id ? (prevDetail as any) : null);
+    // Snapshot target item only for granular rollback
+    const targetItem =
+      get().items.find((i) => i.id === id) ||
+      get().archiveItems.find((i) => i.id === id) ||
+      (get().activeItemDetail?.id === id ? (get().activeItemDetail as any) : null);
+    const wasInArchive = get().archiveItems.some((i) => i.id === id);
+    const wasSelected = get().selectedItemId === id;
+    const prevDetail = wasSelected ? get().activeItemDetail : null;
 
     // Optimistic update
     set((state) => ({
       items: state.items.filter((i) => i.id !== id),
       archiveItems: state.archiveItems.filter((i) => i.id !== id),
-      trashItems: trashedItem
-        ? [{ ...trashedItem, trashed: true }, ...state.trashItems.filter((i) => i.id !== id)]
+      trashItems: targetItem
+        ? [{ ...targetItem, trashed: true }, ...state.trashItems.filter((i) => i.id !== id)]
         : state.trashItems,
+      selectedItemId: wasSelected ? null : state.selectedItemId,
+      activeItemDetail: wasSelected ? null : state.activeItemDetail,
     }));
-    if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
+
     try {
       await db.trashItem(id);
       get().notify('Moved item to Trash', 'info');
       await get().refreshCounts();
     } catch (err: any) {
-      // Rollback
-      set({
-        items: prevItems,
-        archiveItems: prevArchiveItems,
-        trashItems: prevTrashItems,
-        selectedItemId: prevSelected,
-        activeItemDetail: prevDetail,
+      // Rollback ONLY the specific item without overwriting concurrent updates to other items
+      set((state) => {
+        if (!targetItem) return state;
+        return {
+          items: wasInArchive
+            ? state.items
+            : state.items.some((i) => i.id === id)
+            ? state.items
+            : [targetItem, ...state.items],
+          archiveItems: wasInArchive
+            ? state.archiveItems.some((i) => i.id === id)
+              ? state.archiveItems
+              : [targetItem, ...state.archiveItems]
+            : state.archiveItems,
+          trashItems: state.trashItems.filter((i) => i.id !== id),
+          selectedItemId: wasSelected ? id : state.selectedItemId,
+          activeItemDetail: wasSelected ? prevDetail : state.activeItemDetail,
+        };
       });
       get().notify(`Failed to trash item: ${err.message}`, 'error');
     }
   },
 
   restoreItem: async (id) => {
-    const prevItems = get().items;
-    const prevTrashItems = get().trashItems;
-    const restoredItem = prevTrashItems.find((i) => i.id === id);
+    const restoredItem = get().trashItems.find((i) => i.id === id);
     set((state) => ({
       trashItems: state.trashItems.filter((i) => i.id !== id),
       items: restoredItem
@@ -626,34 +647,56 @@ export const useItemStore = create<ItemState>()((set, get) => ({
       get().notify('Restored item to Inbox', 'success');
       await Promise.all([get().refreshItems(), get().refreshCounts()]);
     } catch (err: any) {
-      set({ items: prevItems, trashItems: prevTrashItems });
+      // Revert only this specific item back to trash
+      set((state) => ({
+        items: state.items.filter((i) => i.id !== id),
+        trashItems: restoredItem
+          ? [restoredItem, ...state.trashItems.filter((i) => i.id !== id)]
+          : state.trashItems,
+      }));
       get().notify(`Failed to restore item: ${err.message}`, 'error');
     }
   },
 
   permanentDeleteItem: async (id) => {
-    const prevItems = get().items;
-    const prevTrash = get().trashItems;
-    const prevArchive = get().archiveItems;
-    const prevSelected = get().selectedItemId;
-    const prevDetail = get().activeItemDetail;
+    const deletedItem =
+      get().trashItems.find((i) => i.id === id) ||
+      get().items.find((i) => i.id === id) ||
+      get().archiveItems.find((i) => i.id === id);
+    const wasInTrash = get().trashItems.some((i) => i.id === id);
+    const wasInArchive = get().archiveItems.some((i) => i.id === id);
+    const wasSelected = get().selectedItemId === id;
+    const prevDetail = wasSelected ? get().activeItemDetail : null;
+
     set((state) => ({
       trashItems: state.trashItems.filter((i) => i.id !== id),
       items: state.items.filter((i) => i.id !== id),
       archiveItems: state.archiveItems.filter((i) => i.id !== id),
+      selectedItemId: wasSelected ? null : state.selectedItemId,
+      activeItemDetail: wasSelected ? null : state.activeItemDetail,
     }));
-    if (get().selectedItemId === id) set({ selectedItemId: null, activeItemDetail: null });
+
     try {
       await db.permanentDeleteItem(id);
       get().notify('Item permanently deleted', 'info');
       await get().refreshCounts();
     } catch (err: any) {
-      set({
-        items: prevItems,
-        trashItems: prevTrash,
-        archiveItems: prevArchive,
-        selectedItemId: prevSelected,
-        activeItemDetail: prevDetail,
+      // Revert only the deleted item
+      set((state) => {
+        if (!deletedItem) return state;
+        return {
+          trashItems: wasInTrash
+            ? [deletedItem, ...state.trashItems.filter((i) => i.id !== id)]
+            : state.trashItems,
+          archiveItems: wasInArchive
+            ? [deletedItem, ...state.archiveItems.filter((i) => i.id !== id)]
+            : state.archiveItems,
+          items: (!wasInTrash && !wasInArchive)
+            ? [deletedItem, ...state.items.filter((i) => i.id !== id)]
+            : state.items,
+          selectedItemId: wasSelected ? id : state.selectedItemId,
+          activeItemDetail: wasSelected ? prevDetail : state.activeItemDetail,
+        };
       });
       get().notify(`Failed to delete item: ${err.message}`, 'error');
     }

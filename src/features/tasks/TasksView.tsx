@@ -4,11 +4,12 @@ import { useItemStore } from '../../stores/itemStore';
 import { Item, ItemSummary, CreateItemInput, PriorityLevel, parseTaskBatchSource, TaskBatchSource } from '../../types/item';
 import { ItemCard } from '../../components/items/ItemCard';
 import { TaskBatchSection } from '../../components/tasks/TaskBatchSection';
-import { Plus, CheckSquare, Bell, CheckCircle2 } from 'lucide-react';
+import { Plus, CheckSquare, Bell, CheckCircle2, List, CalendarDays } from 'lucide-react';
 import { DueDatePicker } from '../../components/tasks/DueDatePicker';
 import { isTaskDueToday, isTaskOverdue } from '../../utils/dateUtils';
 import { reminderService } from '../../services/reminder/reminderService';
 import { EmptyState } from '../../components/common/EmptyState';
+import { TaskCalendarView } from './TaskCalendarView';
 
 interface TasksViewProps {
   tasks?: ItemSummary[];
@@ -37,6 +38,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
   const [priority, setPriority] = useState<PriorityLevel>('medium');
   const [dueDate, setDueDate] = useState('');
   const [filter, setFilter] = useState<TaskFilter>('pending');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [isTesting, setIsTesting] = useState(false);
   const [testFeedback, setTestFeedback] = useState<string | null>(null);
 
@@ -265,25 +267,57 @@ export const TasksView: React.FC<TasksViewProps> = ({
           </button>
         </div>
 
-        {/* Diagnostic Test Button */}
-        <button
-          type="button"
-          onClick={handleQuickTestNotification}
-          disabled={isTesting}
-          className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#141418] dark:hover:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-zinc-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
-          title="Test Windows notification banner, audio chime, and in-app alerts"
-        >
-          {testFeedback ? (
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-          ) : (
-            <Bell className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          )}
-          <span>{isTesting ? 'Testing...' : testFeedback || 'Test Notification & Audio'}</span>
-        </button>
+
+        {/* Diagnostic Test Button + View Mode Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleQuickTestNotification}
+            disabled={isTesting}
+            className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#141418] dark:hover:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-zinc-300 text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+            title="Test Windows notification banner, audio chime, and in-app alerts"
+          >
+            {testFeedback ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <Bell className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            )}
+            <span>{isTesting ? 'Testing...' : testFeedback || 'Test Notification & Audio'}</span>
+          </button>
+
+          {/* List / Calendar toggle */}
+          <div className="flex items-center bg-slate-100 dark:bg-[#141418] p-0.5 rounded-lg border border-slate-200 dark:border-white/[0.08]">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              title="List view"
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-2xs' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('calendar')}
+              title="Calendar view"
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${viewMode === 'calendar' ? 'bg-white dark:bg-white/[0.1] text-slate-900 dark:text-zinc-100 shadow-2xs' : 'text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Tasks List (Grouped by Batches + Standalone) */}
-      <div className="space-y-4">
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
+        <TaskCalendarView
+          tasks={tasks}
+          onSelect={onSelect}
+          onToggleTask={onToggleTask}
+        />
+      )}
+
+      {/* Tasks List (Grouped by Batches + Standalone) — hidden in calendar mode */}
+      {viewMode === 'list' && <div className="space-y-4">
         {filteredTasks.length === 0 ? (
           <EmptyState
             icon={filter === 'overdue' || filter === 'pending' ? CheckCircle2 : CheckSquare}
@@ -351,7 +385,7 @@ export const TasksView: React.FC<TasksViewProps> = ({
             )}
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 };

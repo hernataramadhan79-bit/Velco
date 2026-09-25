@@ -364,4 +364,26 @@ export class TauriDbAdapter implements DatabaseAdapter {
   async resetTaskNotified(itemId: string): Promise<void> {
     await tauriInvoke('reset_task_notified', { itemId });
   }
+
+  async getItemLinks(itemId: string): Promise<import('../../types/item').ItemLinksPayload> {
+    const raw = await tauriInvoke<{
+      outlinks: Array<{ id: string; title: string; type: string; link_text: string }>;
+      backlinks: Array<{ id: string; title: string; type: string; link_text: string }>;
+    }>('get_item_links', { itemId });
+
+    return {
+      outlinks: (raw?.outlinks ?? []).map((l) => ({
+        id: l.id,
+        title: l.title,
+        type: l.type,
+        linkText: l.link_text,
+      })),
+      backlinks: (raw?.backlinks ?? []).map((l) => ({
+        id: l.id,
+        title: l.title,
+        type: l.type,
+        linkText: l.link_text,
+      })),
+    };
+  }
 }

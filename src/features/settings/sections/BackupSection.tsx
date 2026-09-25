@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Lock,
 } from 'lucide-react';
+import { DataExportPanel } from './DataExportPanel';
 
 export const BackupSection: React.FC = () => {
   const { settings, updateSettings } = useSettings();
@@ -131,6 +132,11 @@ export const BackupSection: React.FC = () => {
             </label>
           </div>
         </div>
+      </div>
+ 
+      {/* Multi-Format Data Portability (Markdown / JSON / CSV) */}
+      <div className="bg-white dark:bg-[#141418] rounded-xl border border-slate-200 dark:border-white/[0.07] p-5 shadow-2xs">
+        <DataExportPanel />
       </div>
 
       {/* Backup Safety Net & Reminders */}

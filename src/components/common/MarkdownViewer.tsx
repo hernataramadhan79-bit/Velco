@@ -15,12 +15,16 @@ import {
   AlertCircle,
   ShieldAlert,
   ChevronRight,
+  Link2,
 } from 'lucide-react';
 import { openExternalUrl } from '../../utils/urlUtils';
+
+export const WikilinkContext = React.createContext<((title: string) => void) | undefined>(undefined);
 
 interface MarkdownViewerProps {
   content: string;
   className?: string;
+  onWikilinkClick?: (targetTitle: string) => void;
 }
 
 function sanitizeUrl(url: string): string {
@@ -334,15 +338,21 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
   );
 };
 
-export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ content, className = '' }) => {
+export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
+  content,
+  className = '',
+  onWikilinkClick,
+}) => {
   if (!content) return null;
 
   const blocks = parseMarkdownBlocks(content);
 
   return (
-    <div className={`space-y-2 leading-relaxed text-xs break-words ${className}`}>
-      {blocks.map((block, idx) => renderBlock(block, `block-${idx}`))}
-    </div>
+    <WikilinkContext.Provider value={onWikilinkClick}>
+      <div className={`space-y-2 leading-relaxed text-xs break-words ${className}`}>
+        {blocks.map((block, idx) => renderBlock(block, `block-${idx}`))}
+      </div>
+    </WikilinkContext.Provider>
   );
 };
 
@@ -939,6 +949,33 @@ function parseMarkdownBlocks(content: string): Block[] {
   return blocks;
 }
 
+const WikilinkSpan: React.FC<{ target: string; alias?: string }> = ({ target, alias }) => {
+  const onWikilinkClick = React.useContext(WikilinkContext);
+  const displayText = alias || target;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onWikilinkClick) {
+          onWikilinkClick(target);
+        }
+      }}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-all ${
+        onWikilinkClick
+          ? 'bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 cursor-pointer shadow-2xs active:scale-95'
+          : 'bg-slate-100 dark:bg-slate-800/70 text-slate-700 dark:text-zinc-300 border border-slate-200/60 dark:border-white/[0.08]'
+      }`}
+      title={`Wikilink: [[${target}]]`}
+    >
+      <Link2 className="w-2.5 h-2.5 opacity-70 shrink-0 text-blue-600 dark:text-blue-400" />
+      <span className="font-semibold underline decoration-dotted underline-offset-2">{displayText}</span>
+    </button>
+  );
+};
+
 function formatInline(text: string, depth = 0): React.ReactNode {
   if (!text) return null;
   if (depth > 2) return text;
@@ -946,15 +983,16 @@ function formatInline(text: string, depth = 0): React.ReactNode {
   // Pattern captures:
   // 1. Inline code: `...`
   // 2. Inline math: $...$
-  // 3. Markdown link: [label](url)
-  // 4. Plain URL: https://...
-  // 5. Bold+Italic: ***...*** or ___...___
-  // 6. Bold: **...** or __...__
-  // 7. Italic *: *(?![\s*]).+?(?<![\s*])*
-  // 8. Italic _: \b_([^\s_].*?[^\s_]|[^\s_])_\b (requires word boundary so snake_case is preserved)
-  // 9. Strikethrough: ~~...~~
+  // 3. Wikilink: [[target]] or [[target|alias]]
+  // 4. Markdown link: [label](url)
+  // 5. Plain URL: https://...
+  // 6. Bold+Italic: ***...*** or ___...___
+  // 7. Bold: **...** or __...__
+  // 8. Italic *: *(?![\s*]).+?(?<![\s*])*
+  // 9. Italic _: \b_([^\s_].*?[^\s_]|[^\s_])_\b (requires word boundary so snake_case is preserved)
+  // 10. Strikethrough: ~~...~~
   const INLINE_REGEX =
-    /(`[^`\n]+`)|(?:\$([^$\n]+?)\$|\\\(([^\n]+?)\\\))|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*(?!\s)((?:[^*]|\*\*[^*]+?\*\*)+?)(?<!\s)\*)|(?:\b_([^\s_].*?[^\s_]|[^\s_])_\b)|(~~.+?~~)/g;
+    /(`[^`\n]+`)|(?:\$([^$\n]+?)\$|\\\(([^\n]+?)\\\))|(\[\[([^\]|\n]+?)(?:\|([^\]\n]+?))?\]\])|(\[([^\]]+)\]\(((?:https?:\/\/|#)[^\s)]+)\))|(https?:\/\/[^\s<)]+)|(?:\*\*\*|___)(.+?)(?:\*\*\*|___)|(?:\*\*|__)(.+?)(?:\*\*|__)|(?:\*(?!\s)((?:[^*]|\*\*[^*]+?\*\*)+?)(?<!\s)\*)|(?:\b_([^\s_].*?[^\s_]|[^\s_])_\b)|(~~.+?~~)/g;
 
   const elements: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -986,10 +1024,18 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         <InlineMath key={match.index} math={mathContent} />
       );
     }
-    // 3. Markdown Link [label](url)
+    // 3. Wikilink [[Target]] or [[Target|Alias]]
     else if (match[4]) {
-      const linkLabel = match[5];
-      const linkUrl = match[6];
+      const target = match[5]?.trim() ?? '';
+      const alias = match[6]?.trim();
+      elements.push(
+        <WikilinkSpan key={match.index} target={target} alias={alias} />
+      );
+    }
+    // 4. Markdown Link [label](url)
+    else if (match[7]) {
+      const linkLabel = match[8];
+      const linkUrl = match[9];
       const safeUrl = sanitizeUrl(linkUrl);
       elements.push(
         <a
@@ -1010,9 +1056,9 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </a>
       );
     }
-    // 4. Plain URL
-    else if (match[7]) {
-      const url = match[7];
+    // 5. Plain URL
+    else if (match[10]) {
+      const url = match[10];
       const safePlain = sanitizeUrl(url);
       elements.push(
         <a
@@ -1032,41 +1078,41 @@ function formatInline(text: string, depth = 0): React.ReactNode {
         </a>
       );
     }
-    // 5. Bold + Italic (***text*** or ___text___)
-    else if (match[8]) {
-      elements.push(
-        <strong key={match.index} className="font-bold text-slate-900 dark:text-slate-100">
-          <em className="italic">{formatInline(match[8], depth + 1)}</em>
-        </strong>
-      );
-    }
-    // 6. Bold (**text** or __text__)
-    else if (match[9]) {
-      elements.push(
-        <strong key={match.index} className="font-semibold text-slate-900 dark:text-slate-100">
-          {formatInline(match[9], depth + 1)}
-        </strong>
-      );
-    }
-    // 7. Italic with asterisk (*text*)
-    else if (match[10]) {
-      elements.push(
-        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
-          {formatInline(match[10], depth + 1)}
-        </em>
-      );
-    }
-    // 8. Italic with underscore (_text_)
+    // 6. Bold + Italic (***text*** or ___text___)
     else if (match[11]) {
       elements.push(
+        <strong key={match.index} className="font-bold text-slate-900 dark:text-slate-100">
+          <em className="italic">{formatInline(match[11], depth + 1)}</em>
+        </strong>
+      );
+    }
+    // 7. Bold (**text** or __text__)
+    else if (match[12]) {
+      elements.push(
+        <strong key={match.index} className="font-semibold text-slate-900 dark:text-slate-100">
+          {formatInline(match[12], depth + 1)}
+        </strong>
+      );
+    }
+    // 8. Italic with asterisk (*text*)
+    else if (match[13]) {
+      elements.push(
         <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
-          {formatInline(match[11], depth + 1)}
+          {formatInline(match[13], depth + 1)}
         </em>
       );
     }
-    // 9. Strikethrough (~~text~~)
-    else if (match[12]) {
-      const struckText = match[12].slice(2, -2);
+    // 9. Italic with underscore (_text_)
+    else if (match[14]) {
+      elements.push(
+        <em key={match.index} className="italic text-slate-800 dark:text-slate-200">
+          {formatInline(match[14], depth + 1)}
+        </em>
+      );
+    }
+    // 10. Strikethrough (~~text~~)
+    else if (match[15]) {
+      const struckText = match[15].slice(2, -2);
       elements.push(
         <del key={match.index} className="line-through text-slate-400 dark:text-slate-500">
           {formatInline(struckText, depth + 1)}

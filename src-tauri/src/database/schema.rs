@@ -44,6 +44,10 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATION_V7)?;
         conn.pragma_update(None, "user_version", 7)?;
     }
+    if version < 8 {
+        conn.execute_batch(MIGRATION_V8)?;
+        conn.pragma_update(None, "user_version", 8)?;
+    }
 
     Ok(())
 }
@@ -277,5 +281,21 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id
 const MIGRATION_V7: &str = r#"
 CREATE INDEX IF NOT EXISTS idx_items_feed ON items(deleted_at, archived, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_feed ON tasks(completed, due_date);
+"#;
+
+/// V8: Bidirectional item_links untuk wikilinks [[...]]
+const MIGRATION_V8: &str = r#"
+CREATE TABLE IF NOT EXISTS item_links (
+    id TEXT PRIMARY KEY NOT NULL,
+    source_item_id TEXT NOT NULL,
+    target_item_id TEXT NOT NULL,
+    link_text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(source_item_id) REFERENCES items(id) ON DELETE CASCADE,
+    FOREIGN KEY(target_item_id) REFERENCES items(id) ON DELETE CASCADE,
+    UNIQUE(source_item_id, target_item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_item_links_source ON item_links(source_item_id);
+CREATE INDEX IF NOT EXISTS idx_item_links_target ON item_links(target_item_id);
 "#;
 

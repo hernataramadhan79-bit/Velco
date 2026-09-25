@@ -33,18 +33,21 @@ impl Database {
         let _ = conn.execute("UPDATE items SET type = 'note' WHERE type = 'text'", []);
         let _ = conn.execute("DELETE FROM chat_sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM chat_messages)", []);
 
-        let manager = SqliteConnectionManager::file(path.as_ref());
+        let manager = SqliteConnectionManager::file(path.as_ref())
+            .with_init(|conn| {
+                conn.execute_batch("
+                    PRAGMA journal_mode = WAL;
+                    PRAGMA synchronous = NORMAL;
+                    PRAGMA busy_timeout = 5000;
+                    PRAGMA foreign_keys = ON;
+                    PRAGMA cache_size = -32000;
+                    PRAGMA temp_store = MEMORY;
+                ")
+            });
         let pool = Pool::builder()
             .max_size(4)
             .build(manager)
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(format!("Pool creation failed: {}", e).into()))?;
-
-        // Also configure pragmas for pool connections
-        let _ = pool.get().map(|pool_conn| {
-            apply_pragma(&pool_conn, "PRAGMA journal_mode = WAL", false);
-            apply_pragma(&pool_conn, "PRAGMA synchronous = NORMAL", false);
-            apply_pragma(&pool_conn, "PRAGMA busy_timeout = 5000", false);
-        });
 
         Ok(Self {
             write_conn: Mutex::new(conn),

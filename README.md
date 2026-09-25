@@ -11,9 +11,9 @@
 
 <p align="center">
   <a href="https://github.com/hernataramadhan79-bit/Velco/releases/latest">
-    <img src="https://img.shields.io/badge/Release-v0.3.2-blue?style=for-the-badge&logo=github" alt="Version 0.3.2">
+    <img src="https://img.shields.io/badge/Release-v0.3.3-blue?style=for-the-badge&logo=github" alt="Version 0.3.3">
   </a>
-  <a href="#-multi-platform-downloads-v032">
+  <a href="#-multi-platform-downloads-v033">
     <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-10b981?style=for-the-badge&logo=apple" alt="Platforms">
   </a>
   <a href="https://v2.tauri.app">
@@ -32,20 +32,20 @@
 
 ---
 
-## 💾 Multi-Platform Downloads (v0.3.2)
+## 💾 Multi-Platform Downloads (v0.3.3)
 
 Official signed packages and portable binaries compiled via automated multi-architecture GitHub Actions:
 
 | Platform | Architecture | Format | Size | Direct Download |
 | :--- | :--- | :--- | :--- | :--- |
-| **macOS (Apple Silicon)** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_aarch64.dmg) |
-| **macOS (Intel Core)** | Intel 64-bit (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64.dmg) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64-setup.exe) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_x64_en-US.msi) |
-| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/velco.exe) |
-| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.AppImage) |
-| **Linux (Ubuntu / Debian)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco_0.3.2_amd64.deb) |
-| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.2/Velco-0.3.2-1.x86_64.rpm) |
+| **macOS (Apple Silicon)** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_aarch64.dmg) |
+| **macOS (Intel Core)** | Intel 64-bit (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64.dmg) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64-setup.exe) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64_en-US.msi) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/velco.exe) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_amd64.AppImage) |
+| **Linux (Ubuntu / Debian)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_amd64.deb) |
+| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco-0.3.3-1.x86_64.rpm) |
 
 > 📖 **Deep-Dive Audits & Technical Documentation**:
 > - [Comprehensive UI/UX Review & Design System Audit](docs/UI_UX_REVIEW.md)

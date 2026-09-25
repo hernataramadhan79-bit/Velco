@@ -205,3 +205,16 @@ export interface FilePreviewContent {
   lineCount?: number | null;
   charCount?: number | null;
 }
+
+/** Tautan item dua arah (wikilinks [[...]]) */
+export interface LinkedItemRef {
+  id: string;
+  title: string;
+  type: string;
+  linkText: string;
+}
+
+export interface ItemLinksPayload {
+  outlinks: LinkedItemRef[];
+  backlinks: LinkedItemRef[];
+}

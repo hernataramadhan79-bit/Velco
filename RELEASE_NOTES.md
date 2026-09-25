@@ -1,3 +1,61 @@
+# Velco v0.3.3 — Knowledge Graph, Task Calendar, Data Portability & Critical Security Hardening
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/hernataramadhan79-bit/Velco/main/docs/assets/logo.png" width="120" height="120" alt="Velco Logo" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/hernataramadhan79-bit/Velco/releases/tag/v0.3.3">
+    <img src="https://img.shields.io/badge/Release-v0.3.3-blue?style=for-the-badge&logo=github" alt="Version 0.3.3">
+  </a>
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-emerald?style=for-the-badge" alt="Production Ready">
+  <img src="https://img.shields.io/badge/Release%20Date-September%2025%2C%202026-black?style=for-the-badge" alt="Date">
+</p>
+
+---
+
+## 🌟 Executive Release Summary
+
+Velco **v0.3.3** is a landmark feature and security update that transforms Velco into a fully interconnected personal knowledge graph workstation:
+
+1. **Bidirectional Linking & Wikilinks (`[[...]]`)**:
+   - Introduced SQLite Schema Migration V8 with the `item_links` relation table and performance indexes.
+   - Built-in wikilink extractor that automatically indexes `[[Note Title]]` or `[[Note Title|Alias]]` upon saving notes.
+   - Enhanced `MarkdownViewer` to render interactive wikilink chips with one-click navigation to referenced notes.
+   - Added a **Linked Mentions (Backlinks)** and **Outgoing Links** drawer in note details, allowing users to trace relationships across their entire knowledge base.
+2. **Interactive Task Calendar & Timeline View**:
+   - Introduced a seamless **List / Calendar** view toggle in the Tasks workstation.
+   - Full monthly grid with color-coded priority dots, overdue deadline warnings, and an interactive day detail inspector with one-click task completion.
+3. **Multi-Format Data Portability (Markdown / JSON / CSV)**:
+   - Added a 1-click data export suite in **Settings → Backup & Safety Net**:
+     - **Markdown**: Formatted as individual documents with YAML frontmatter metadata.
+     - **JSON**: Complete relational snapshot with tasks, tags, and AI synthesis history.
+     - **CSV**: Spreadsheet-compatible export for tabular data processing and analysis.
+4. **Interactive 5-Step Onboarding Wizard**:
+   - Replaced static onboarding with an engaging 5-step wizard introducing Zero Telemetry, Quick Capture Spotlight (`Ctrl+Space`), Personal vs Bridge mode, Local & Cloud AI setup, and essential keyboard shortcuts.
+5. **Critical Security & Database Stability Fixes**:
+   - **P2P Privilege Escalation Guard**: Enforced strict capsule ownership checks (`capsule_items`) in `apply_remote_item_upsert` and guarded `TaskToggled` remote commands.
+   - **SQLite Connection Pool Pragma Fix**: Applied `SqliteConnectionManager::with_init(...)` so that all connection pool threads reliably inherit `busy_timeout = 5000`, `WAL` journal mode, and `foreign_keys = ON`, eliminating intermittent locked database errors.
+   - **PDF Text Extraction Fix**: Enhanced heuristic parser for uncompressed PDF text operators (`BT ... ET`) and transparent status reporting.
+   - **Store Rollback Race Guard**: Fixed rollback logic in `itemStore.ts` (`toggleTask`, `trashItem`, `restoreItem`, `permanentDeleteItem`) to only revert the targeted item ID without erasing concurrent state mutations.
+
+---
+
+## 💾 Native Platform Installers & Binaries (v0.3.3)
+
+| Operating System | Target Architecture | Distribution Type | File Size | Direct Download |
+| :--- | :--- | :--- | :--- | :--- |
+| **macOS Apple Silicon** | M1 / M2 / M3 / M4 (`aarch64`) | Apple Disk Image (`.dmg`) | **4.9 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_aarch64.dmg) |
+| **macOS Intel** | 64-bit Intel Core (`x86_64`) | Apple Disk Image (`.dmg`) | **5.3 MB** | [Download `.dmg`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64.dmg) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Setup Installer (`.exe`) | **3.9 MB** | [Download Setup `.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64-setup.exe) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | Enterprise Installer (`.msi`) | **5.3 MB** | [Download `.msi`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_x64_en-US.msi) |
+| **Windows 10 / 11** | 64-bit (`x86_64`) | **Portable Standalone** (`velco.exe`) | **11.7 MB** | [Download `velco.exe`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/velco.exe) |
+| **Linux (Universal)** | 64-bit (`x86_64`) | Standalone Package (`.AppImage`) | **82 MB** | [Download `.AppImage`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_amd64.AppImage) |
+| **Linux (Debian / Ubuntu)** | 64-bit (`amd64`) | Debian Package (`.deb`) | **6.6 MB** | [Download `.deb`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco_0.3.3_amd64.deb) |
+| **Linux (Fedora / RHEL)** | 64-bit (`x86_64`) | RedHat Package (`.rpm`) | **6.6 MB** | [Download `.rpm`](https://github.com/hernataramadhan79-bit/Velco/releases/download/v0.3.3/Velco-0.3.3-1.x86_64.rpm) |
+
+---
+
 # Velco v0.3.2 — Terminology Harmonization, Fluid Transitions & Performance Polish
 
 <p align="center">

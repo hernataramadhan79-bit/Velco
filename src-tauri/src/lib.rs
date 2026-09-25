@@ -232,6 +232,7 @@ pub fn run() {
             commands::items::empty_trash,
             commands::items::import_files_from_paths,
             commands::items::get_attachment_preview,
+            commands::items::get_item_links,
             // Tasks
             commands::tasks::toggle_task_complete,
             commands::tasks::reset_task_notified,

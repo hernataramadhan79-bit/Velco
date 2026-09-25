@@ -623,6 +623,137 @@ pub fn get_item_detail(db: State<'_, Database>, id: String) -> Result<ItemRecord
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LinkedItemRef {
+    pub id: String,
+    pub title: String,
+    pub r#type: String,
+    pub link_text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ItemLinksPayload {
+    pub outlinks: Vec<LinkedItemRef>,
+    pub backlinks: Vec<LinkedItemRef>,
+}
+
+/// Ekstrak semua [[link_target]] atau [[link_target|alias]] dari teks
+pub fn parse_wikilinks_from_text(content: &str) -> Vec<(String, String)> {
+    let mut links = Vec::new();
+    let mut cursor = 0;
+    while let Some(start) = content[cursor..].find("[[") {
+        let abs_start = cursor + start + 2;
+        if let Some(end) = content[abs_start..].find("]]") {
+            let inner = &content[abs_start..abs_start + end];
+            if !inner.trim().is_empty() {
+                if let Some((target, alias)) = inner.split_once('|') {
+                    links.push((target.trim().to_string(), alias.trim().to_string()));
+                } else {
+                    links.push((inner.trim().to_string(), inner.trim().to_string()));
+                }
+            }
+            cursor = abs_start + end + 2;
+        } else {
+            break;
+        }
+    }
+    links
+}
+
+/// Sinkronisasi tabel item_links untuk source_item_id berdasarkan content
+pub fn sync_item_links_raw(conn: &rusqlite::Connection, source_item_id: &str, content: &str) -> rusqlite::Result<()> {
+    let _ = conn.execute("DELETE FROM item_links WHERE source_item_id = ?1", params![source_item_id]);
+
+    let links = parse_wikilinks_from_text(content);
+    if links.is_empty() {
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now().to_rfc3339();
+    for (target_name, link_text) in links {
+        let target_id: Option<String> = conn
+            .query_row(
+                "SELECT id FROM items WHERE LOWER(title) = LOWER(?1) AND deleted_at IS NULL LIMIT 1",
+                params![target_name],
+                |r| r.get(0),
+            )
+            .ok();
+
+        if let Some(tid) = target_id {
+            if tid != source_item_id {
+                let link_id = uuid::Uuid::new_v4().to_string();
+                let _ = conn.execute(
+                    "INSERT OR REPLACE INTO item_links (id, source_item_id, target_item_id, link_text, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![link_id, source_item_id, tid, link_text, now],
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Ambil daftar tautan dua-arah (outlinks & backlinks) untuk sebuah item
+#[tauri::command]
+pub fn get_item_links(
+    db: State<'_, Database>,
+    item_id: String,
+) -> Result<ItemLinksPayload, String> {
+    let conn = db.read_pool.get().map_err(|e| e.to_string())?;
+
+    // 1. Outlinks (item yang ditautkan oleh note ini)
+    let mut outlinks = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        r#"
+        SELECT i.id, i.title, i.type, il.link_text
+        FROM item_links il
+        JOIN items i ON il.target_item_id = i.id
+        WHERE il.source_item_id = ?1 AND i.deleted_at IS NULL
+        ORDER BY i.title ASC
+        "#
+    ) {
+        if let Ok(rows) = stmt.query_map(params![item_id], |row| {
+            Ok(LinkedItemRef {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                r#type: row.get(2)?,
+                link_text: row.get(3)?,
+            })
+        }) {
+            for r in rows.flatten() {
+                outlinks.push(r);
+            }
+        }
+    }
+
+    // 2. Backlinks (item lain yang menautkan note ini)
+    let mut backlinks = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        r#"
+        SELECT i.id, i.title, i.type, il.link_text
+        FROM item_links il
+        JOIN items i ON il.source_item_id = i.id
+        WHERE il.target_item_id = ?1 AND i.deleted_at IS NULL
+        ORDER BY i.title ASC
+        "#
+    ) {
+        if let Ok(rows) = stmt.query_map(params![item_id], |row| {
+            Ok(LinkedItemRef {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                r#type: row.get(2)?,
+                link_text: row.get(3)?,
+            })
+        }) {
+            for r in rows.flatten() {
+                backlinks.push(r);
+            }
+        }
+    }
+
+    Ok(ItemLinksPayload { outlinks, backlinks })
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ItemCountsRecord {
     pub inbox: i64,
     pub tasks: i64,
@@ -993,6 +1124,7 @@ pub async fn create_item(
                 }
             }
         }
+        let _ = sync_item_links_raw(&tx, &id, &content);
         tx.commit().map_err(|e| e.to_string())?;
         (saved_tags, saved_attachments)
         // lock dilepas di sini
@@ -1045,6 +1177,7 @@ pub fn update_item(
     if let Some(content) = &payload.content {
         conn.execute("UPDATE items SET content = ?1, updated_at = ?2 WHERE id = ?3", params![content, now, payload.id])
             .map_err(|e| e.to_string())?;
+        let _ = sync_item_links_raw(&conn, &payload.id, content);
     }
     if let Some(favorite) = payload.favorite {
         conn.execute(
