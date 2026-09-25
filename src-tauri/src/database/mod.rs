@@ -35,14 +35,12 @@ impl Database {
 
         let manager = SqliteConnectionManager::file(path.as_ref())
             .with_init(|conn| {
-                conn.execute_batch("
-                    PRAGMA journal_mode = WAL;
-                    PRAGMA synchronous = NORMAL;
-                    PRAGMA busy_timeout = 5000;
-                    PRAGMA foreign_keys = ON;
-                    PRAGMA cache_size = -32000;
-                    PRAGMA temp_store = MEMORY;
-                ")
+                apply_pragma(conn, "PRAGMA synchronous = NORMAL", false);
+                apply_pragma(conn, "PRAGMA busy_timeout = 5000", false);
+                apply_pragma(conn, "PRAGMA foreign_keys = ON", false);
+                apply_pragma(conn, "PRAGMA cache_size = -32000", false);
+                apply_pragma(conn, "PRAGMA temp_store = MEMORY", false);
+                Ok(())
             });
         let pool = Pool::builder()
             .max_size(4)
@@ -72,5 +70,26 @@ fn apply_pragma(conn: &Connection, pragma_sql: &str, critical: bool) {
             eprintln!("Warning: PRAGMA prepare failed '{}': {}", pragma_sql, e);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_database_new_file_initialization() {
+        let temp_dir = std::env::temp_dir();
+        let db_file = temp_dir.join(format!("velco_test_{}.db", uuid::Uuid::new_v4()));
+
+        let db = Database::new(&db_file).expect("Database::new failed to initialize");
+        let pool_conn = db.read_pool.get().expect("Failed to acquire connection from pool");
+
+        let busy_timeout: i64 = pool_conn
+            .query_row("PRAGMA busy_timeout", [], |r| r.get(0))
+            .expect("Failed to read busy_timeout");
+        assert_eq!(busy_timeout, 5000);
+
+        let _ = std::fs::remove_file(&db_file);
     }
 }
